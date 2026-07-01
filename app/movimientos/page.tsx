@@ -35,11 +35,36 @@ export default function Movimientos() {
 
   const registrar = async () => {
     if (!tipoSel || !dstSel || !modelo) { alert('Completa todos los campos.'); return }
-    // Aquí va la lógica de inserción — próximo paso
-    setExito(`✅ ${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
-    setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel('')
+    
+    // 1. Crear o encontrar el producto
+    let productoId = ''
+    const { data: prodExist } = await supabase.from('productos').select('id').eq('tipo_id', tipoSel).eq('nombre', modelo).single()
+    
+    if (prodExist) {
+      productoId = prodExist.id
+    } else {
+      const { data: newProd } = await supabase.from('productos').insert({tipo_id: tipoSel, nombre: modelo, retornable: retornable==='1', unidad: retornable==='1'?'un':'un', revisado: false}).select('id').single()
+      productoId = newProd?.id
+    }
+
+    // 2. Registrar unidad o stock
+    if (retornable === '1') {
+      if (!codigo) { alert('Ingresa el código único.'); return }
+      await supabase.from('unidades').insert({producto_id: productoId, codigo, estado: 'bueno', ubicacion_id: dstSel})
+    } else {
+      const { data: stockEx } = await supabase.from('stock').select('id, cantidad').eq('producto_id', productoId).eq('ubicacion_id', dstSel).single()
+      if (stockEx) {
+        await supabase.from('stock').update({cantidad: stockEx.cantidad + cantidad}).eq('id', stockEx.id)
+      } else {
+        await supabase.from('stock').insert({producto_id: productoId, ubicacion_id: dstSel, cantidad})
+      }
+    }
+
+    setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
+    setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel(''); setCantidad(1)
     setTimeout(() => setExito(''), 4000)
   }
+    
 
   if (exito) return (
     <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto',textAlign:'center',paddingTop:'4rem'}}>

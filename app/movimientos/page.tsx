@@ -33,38 +33,69 @@ export default function Movimientos() {
   const bodegas = ubicaciones.filter(u => u.tipo === 'bodega')
   const faenas = ubicaciones.filter(u => u.tipo === 'faena' && u.activa)
 
+  const reset = () => { setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel(''); setCantidad(1) }
+
   const registrar = async () => {
     if (!tipoSel || !dstSel || !modelo) { alert('Completa todos los campos.'); return }
-    
-    // 1. Crear o encontrar el producto
     let productoId = ''
     const { data: prodExist } = await supabase.from('productos').select('id').eq('tipo_id', tipoSel).eq('nombre', modelo).single()
-    
-    if (prodExist) {
-      productoId = prodExist.id
-    } else {
-      const { data: newProd } = await supabase.from('productos').insert({tipo_id: tipoSel, nombre: modelo, retornable: retornable==='1', unidad: retornable==='1'?'un':'un', revisado: false}).select('id').single()
+    if (prodExist) { productoId = prodExist.id }
+    else {
+      const { data: newProd } = await supabase.from('productos').insert({tipo_id: tipoSel, nombre: modelo, retornable: retornable==='1', unidad: 'un', revisado: false}).select('id').single()
       productoId = newProd?.id
     }
-
-    // 2. Registrar unidad o stock
     if (retornable === '1') {
       if (!codigo) { alert('Ingresa el código único.'); return }
       await supabase.from('unidades').insert({producto_id: productoId, codigo, estado: 'bueno', ubicacion_id: dstSel})
     } else {
       const { data: stockEx } = await supabase.from('stock').select('id, cantidad').eq('producto_id', productoId).eq('ubicacion_id', dstSel).single()
-      if (stockEx) {
-        await supabase.from('stock').update({cantidad: stockEx.cantidad + cantidad}).eq('id', stockEx.id)
-      } else {
-        await supabase.from('stock').insert({producto_id: productoId, ubicacion_id: dstSel, cantidad})
-      }
+      if (stockEx) { await supabase.from('stock').update({cantidad: stockEx.cantidad + cantidad}).eq('id', stockEx.id) }
+      else { await supabase.from('stock').insert({producto_id: productoId, ubicacion_id: dstSel, cantidad}) }
     }
-
     setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
-    setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel(''); setCantidad(1)
+    reset()
     setTimeout(() => setExito(''), 4000)
   }
-    
+
+  const registrarArriendo = async () => {
+    const prov = (document.getElementById('arr-prov') as HTMLInputElement)?.value
+    const oc = (document.getElementById('arr-oc') as HTMLInputElement)?.value
+    const vd = Number((document.getElementById('arr-vd') as HTMLInputElement)?.value)
+    const fi = (document.getElementById('arr-fi') as HTMLInputElement)?.value
+    if (!modelo || !prov || !vd || !fi || !dstSel) { alert('Completa todos los campos.'); return }
+    await supabase.from('arriendos').insert({
+      descripcion: modelo, categoria_id: catSel||null, tipo_id: tipoSel||null,
+      proveedor: prov, orden_compra: oc, valor_dia: vd,
+      fecha_inicio: fi, ubicacion_id: dstSel, estado: 'activo', estado_fisico: 'bueno'
+    })
+    setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
+    reset()
+    setTimeout(() => setExito(''), 4000)
+  }
+
+  const selDst = <div style={{marginBottom:'14px'}}>
+    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Destino</label>
+    <select value={dstSel} onChange={e=>setDstSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+      <option value=''>Selecciona destino...</option>
+      <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
+      <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+    </select>
+  </div>
+
+  const catTipoSel = <><div style={{marginBottom:'10px'}}>
+    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Categoría</label>
+    <select value={catSel} onChange={e=>setCatSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+      <option value=''>Selecciona categoría...</option>
+      {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+    </select>
+  </div>
+  {catSel && <div style={{marginBottom:'10px'}}>
+    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label>
+    <select value={tipoSel} onChange={e=>setTipoSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+      <option value=''>Selecciona tipo...</option>
+      {tipos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+    </select>
+  </div>}</>
 
   if (exito) return (
     <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto',textAlign:'center',paddingTop:'4rem'}}>
@@ -84,79 +115,86 @@ export default function Movimientos() {
 
       <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1rem'}}>
         {tabs.map(t => (
-          <button key={t} onClick={()=>{setTab(t);setExito('')}} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?'#1a73e8':'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?'#1a73e8':'#ddd'}}>{t}</button>
+          <button key={t} onClick={()=>{setTab(t);reset()}} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?'#1a73e8':'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?'#1a73e8':'#ddd'}}>{t}</button>
         ))}
       </div>
 
       {tab !== 'Devolución' && (
         <div style={{display:'flex',gap:'8px',marginBottom:'1rem'}}>
           {['propio','arrendado'].map(c => (
-            <button key={c} onClick={()=>setClase(c)} style={{flex:1,padding:'8px',borderRadius:'8px',border:'0.5px solid',fontSize:'13px',cursor:'pointer',background:clase===c?'#e8f0fe':'#fff',color:clase===c?'#1a73e8':'#444',borderColor:clase===c?'#1a73e8':'#ddd'}}>
+            <button key={c} onClick={()=>{setClase(c);reset()}} style={{flex:1,padding:'8px',borderRadius:'8px',border:'0.5px solid',fontSize:'13px',cursor:'pointer',background:clase===c?'#e8f0fe':'#fff',color:clase===c?'#1a73e8':'#444',borderColor:clase===c?'#1a73e8':'#ddd'}}>
               {c === 'propio' ? '🔧 Herramienta propia' : '🏗 Equipo arrendado'}
             </button>
           ))}
         </div>
       )}
 
+      {/* INGRESO PROPIO */}
       {tab === 'Ingreso' && clase === 'propio' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Categoría</label>
-            <select value={catSel} onChange={e=>setCatSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-              <option value=''>Selecciona categoría...</option>
-              {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
-          </div>
-
-          {catSel && (
+          {catTipoSel}
+          {tipoSel && <>
             <div style={{marginBottom:'10px'}}>
-              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label>
-              <select value={tipoSel} onChange={e=>setTipoSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-                <option value=''>Selecciona tipo...</option>
-                {tipos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Modelo / descripción</label>
+              <input value={modelo} onChange={e=>setModelo(e.target.value)} placeholder="Ej: Taladro Bosch GSB 13" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>¿Retornable?</label>
+              <select value={retornable} onChange={e=>setRetornable(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+                <option value='1'>Sí — código único por unidad</option>
+                <option value='0'>No — consumible por cantidad</option>
               </select>
             </div>
-          )}
-
-          {tipoSel && (
-            <>
+            {retornable==='1' ? (
               <div style={{marginBottom:'10px'}}>
-                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Modelo / descripción</label>
-                <input value={modelo} onChange={e=>setModelo(e.target.value)} placeholder="Ej: Taladro Bosch GSB 13" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Código único</label>
+                <input value={codigo} onChange={e=>setCodigo(e.target.value)} placeholder="Ej: BSH-001" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
               </div>
+            ) : (
               <div style={{marginBottom:'10px'}}>
-                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>¿Retornable?</label>
-                <select value={retornable} onChange={e=>setRetornable(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-                  <option value='1'>Sí — código único por unidad</option>
-                  <option value='0'>No — consumible por cantidad</option>
-                </select>
+                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cantidad</label>
+                <input type='number' value={cantidad} onChange={e=>setCantidad(Number(e.target.value))} min={1} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
               </div>
-              {retornable==='1' ? (
-                <div style={{marginBottom:'10px'}}>
-                  <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Código único</label>
-                  <input value={codigo} onChange={e=>setCodigo(e.target.value)} placeholder="Ej: BSH-001" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
-                </div>
-              ) : (
-                <div style={{marginBottom:'10px'}}>
-                  <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cantidad</label>
-                  <input type='number' value={cantidad} onChange={e=>setCantidad(Number(e.target.value))} min={1} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
-                </div>
-              )}
-              <div style={{marginBottom:'14px'}}>
-                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Destino</label>
-                <select value={dstSel} onChange={e=>setDstSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-                  <option value=''>Selecciona destino...</option>
-                  <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-                  <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
-                </select>
-              </div>
-              <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
-            </>
-          )}
+            )}
+            {selDst}
+            <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
+          </>}
         </div>
       )}
 
-      {(tab !== 'Ingreso' || clase === 'arrendado') && (
+      {/* INGRESO ARRENDADO */}
+      {tab === 'Ingreso' && clase === 'arrendado' && (
+        <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
+          {catTipoSel}
+          {tipoSel && <>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Descripción / identificación única</label>
+              <input value={modelo} onChange={e=>setModelo(e.target.value)} placeholder="Ej: Hilti TE 70, N° serie 12345" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Proveedor</label>
+              <input id="arr-prov" placeholder="Ej: Rental SpA" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>N° OC</label>
+              <input id="arr-oc" placeholder="Ej: OC-4521" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Valor por día ($)</label>
+              <input id="arr-vd" type="number" placeholder="Ej: 15000" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Fecha de retiro</label>
+              <input id="arr-fi" type="date" defaultValue={new Date().toISOString().split('T')[0]} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+            </div>
+            {selDst}
+            <button onClick={registrarArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar arriendo</button>
+          </>}
+        </div>
+      )}
+
+      {/* RESTO EN CONSTRUCCIÓN */}
+      {tab !== 'Ingreso' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'24px',textAlign:'center'}}>
           <p style={{fontSize:'13px',color:'#999',margin:'0'}}>Esta sección está en construcción. Próximamente disponible.</p>
         </div>

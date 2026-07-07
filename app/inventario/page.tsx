@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { AZUL, fondoPagina } from '@/lib/theme'
 
 export default function Inventario() {
   const [ubicaciones, setUbicaciones] = useState<any[]>([])
@@ -75,13 +76,14 @@ export default function Inventario() {
     (!mostrarArrendado || arriendosFiltrados.length === 0)
 
   return (
-    <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'900px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+    <main style={fondoPagina}>
+    <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'900px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Inventario</h1>
       </div>
 
-      <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1.25rem'}}>
+      <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1.25rem',background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
         <div style={{minWidth:'220px'}}>
           <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Ubicación</label>
           <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
@@ -94,7 +96,7 @@ export default function Inventario() {
           <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Clase</label>
           <div style={{display:'flex',gap:'6px'}}>
             {[{v:'',l:'Todos'},{v:'propio',l:'🔧 Propio'},{v:'arrendado',l:'🏗 Arrendado'}].map(op => (
-              <button key={op.v} type="button" onClick={()=>setClaseSel(op.v)} style={{flex:1,padding:'8px',borderRadius:'8px',border:claseSel===op.v?'1.5px solid #1a73e8':'0.5px solid #ddd',background:claseSel===op.v?'#e8f0fe':'#fff',color:claseSel===op.v?'#1a73e8':'#444',fontSize:'12px',cursor:'pointer'}}>{op.l}</button>
+              <button key={op.v} type="button" onClick={()=>setClaseSel(op.v)} style={{flex:1,padding:'8px',borderRadius:'8px',border:claseSel===op.v?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:claseSel===op.v?'#e8f0fe':'#fff',color:claseSel===op.v?AZUL:'#444',fontSize:'12px',cursor:'pointer'}}>{op.l}</button>
             ))}
           </div>
         </div>
@@ -174,6 +176,7 @@ export default function Inventario() {
           </div>
         </div>
       )}
+    </div>
     </main>
   )
 }

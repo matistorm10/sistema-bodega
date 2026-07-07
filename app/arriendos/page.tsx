@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { AZUL, fondoPagina } from '@/lib/theme'
 
 export default function Arriendos() {
   const [todos, setTodos] = useState<any[]>([])
@@ -34,14 +35,15 @@ export default function Arriendos() {
   const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
 
   return (
-    <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+    <main style={fondoPagina}>
+    <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Arriendos</h1>
       </div>
 
-      <div style={{marginBottom:'1.25rem'}}>
-        <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Filtrar por ubicación</label>
+      <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',marginBottom:'1.25rem',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Filtrar por ubicación</label>
         <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
           <option value=''>Todas las ubicaciones</option>
           <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
@@ -83,9 +85,10 @@ export default function Arriendos() {
         </div>
       ))}
 
-      <Link href="/movimientos" style={{display:'block',marginTop:'1.5rem',padding:'12px',background:'#1a73e8',color:'#fff',borderRadius:'8px',textAlign:'center',textDecoration:'none',fontSize:'14px',fontWeight:'600'}}>
+      <Link href="/movimientos" style={{display:'block',marginTop:'1.5rem',padding:'12px',background:AZUL,color:'#fff',borderRadius:'8px',textAlign:'center',textDecoration:'none',fontSize:'14px',fontWeight:'600'}}>
         + Registrar arriendo
       </Link>
+    </div>
     </main>
   )
 }

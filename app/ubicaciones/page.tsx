@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { AZUL, fondoPagina } from '@/lib/theme'
 
 export default function Ubicaciones() {
   const [ubicaciones, setUbicaciones] = useState<any[]>([])
@@ -114,7 +115,7 @@ export default function Ubicaciones() {
             </div>
           </>}
           <div style={{display:'flex',gap:'6px'}}>
-            <button onClick={()=>guardarEdicion(u)} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'12px',fontWeight:'600',cursor:'pointer'}}>Guardar</button>
+            <button onClick={()=>guardarEdicion(u)} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'12px',fontWeight:'600',cursor:'pointer'}}>Guardar</button>
             <button onClick={cancelarEdicion} style={{padding:'8px 14px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer'}}>Cancelar</button>
           </div>
         </div>
@@ -141,9 +142,10 @@ export default function Ubicaciones() {
   )
 
   return (
-    <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+    <main style={fondoPagina}>
+    <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Ubicaciones</h1>
       </div>
 
@@ -153,7 +155,7 @@ export default function Ubicaciones() {
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 10px'}}>+ Nueva ubicación</p>
         <div style={{display:'flex',gap:'8px',marginBottom:'10px'}}>
           {[{v:'bodega',l:'Bodega'},{v:'faena',l:'Faena / Obra'}].map(op => (
-            <button key={op.v} type="button" onClick={()=>setTipoNuevo(op.v)} style={{flex:1,padding:'8px',borderRadius:'8px',border:tipoNuevo===op.v?'1.5px solid #1a73e8':'0.5px solid #ddd',background:tipoNuevo===op.v?'#e8f0fe':'#fff',color:tipoNuevo===op.v?'#1a73e8':'#444',fontSize:'13px',cursor:'pointer'}}>{op.l}</button>
+            <button key={op.v} type="button" onClick={()=>setTipoNuevo(op.v)} style={{flex:1,padding:'8px',borderRadius:'8px',border:tipoNuevo===op.v?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:tipoNuevo===op.v?'#e8f0fe':'#fff',color:tipoNuevo===op.v?AZUL:'#444',fontSize:'13px',cursor:'pointer'}}>{op.l}</button>
           ))}
         </div>
         <div style={{marginBottom:'10px'}}>
@@ -170,7 +172,7 @@ export default function Ubicaciones() {
             <input value={clienteNuevo} onChange={e=>setClienteNuevo(e.target.value)} placeholder="Ej: Inmobiliaria Sur" style={inputStyle}/>
           </div>
         </>}
-        <button onClick={crear} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Crear</button>
+        <button onClick={crear} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Crear</button>
       </div>
 
       {cargando && <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p>}
@@ -184,6 +186,7 @@ export default function Ubicaciones() {
         {faenas.length === 0 && <p style={{fontSize:'13px',color:'#999'}}>Sin faenas registradas.</p>}
         {faenas.map(tarjeta)}
       </>}
+    </div>
     </main>
   )
 }

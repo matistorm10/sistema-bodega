@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 
 export default function Usuarios() {
@@ -171,24 +172,27 @@ export default function Usuarios() {
 
   const nombreRolLegible = (r: string) => r === 'admin' ? 'Administrador' : r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g, ' ')
 
-  if (cargandoUsuario) return <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></main>
+  if (cargandoUsuario) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>
 
   if (usuario?.rol !== 'admin') {
     return (
-      <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-          <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+      <main style={fondoPagina}>
+      <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+          <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
           <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Usuarios</h1>
         </div>
         <p style={{fontSize:'13px',color:'#999'}}>Esta sección es solo para administradores.</p>
+      </div>
       </main>
     )
   }
 
   return (
-    <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'700px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+    <main style={fondoPagina}>
+    <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'700px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Usuarios</h1>
       </div>
 
@@ -206,7 +210,7 @@ export default function Usuarios() {
         </div>
         <div style={{display:'flex',gap:'8px'}}>
           <input value={nuevoRol} onChange={e=>setNuevoRol(e.target.value)} placeholder="Ej: Supervisor" style={{...inputStyle, flex:1}}/>
-          <button onClick={crearRol} disabled={creandoRol} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:creandoRol?0.6:1}}>
+          <button onClick={crearRol} disabled={creandoRol} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:creandoRol?0.6:1}}>
             {creandoRol ? 'Creando...' : '+ Rol'}
           </button>
         </div>
@@ -258,7 +262,7 @@ export default function Usuarios() {
 
         {error && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{error}</p>}
         {exito && <p style={{fontSize:'13px',color:'#137333',margin:'0 0 10px'}}>{exito}</p>}
-        <button onClick={crearUsuario} disabled={guardando} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardando?0.6:1}}>
+        <button onClick={crearUsuario} disabled={guardando} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardando?0.6:1}}>
           {guardando ? 'Creando...' : 'Crear usuario'}
         </button>
       </div>
@@ -300,7 +304,7 @@ export default function Usuarios() {
                   )}
                   {errorEdicion && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{errorEdicion}</p>}
                   <div style={{display:'flex',gap:'8px'}}>
-                    <button onClick={()=>guardarEdicion(u.id)} disabled={guardandoEdicion} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoEdicion?0.6:1}}>
+                    <button onClick={()=>guardarEdicion(u.id)} disabled={guardandoEdicion} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoEdicion?0.6:1}}>
                       {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
                     </button>
                     <button onClick={cancelarEdicion} style={{padding:'8px 16px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'13px',cursor:'pointer'}}>Cancelar</button>
@@ -313,7 +317,7 @@ export default function Usuarios() {
                       <p style={{fontWeight:'600',fontSize:'14px',margin:'0 0 2px'}}>{u.nombre} {u.cargo ? `· ${u.cargo}` : ''}</p>
                       <p style={{fontSize:'12px',color:'#666',margin:'0 0 1px'}}>{u.email}{u.telefono ? ' · '+u.telefono : ''}</p>
                     </div>
-                    <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'4px',background:u.rol==='admin'?'#fef7e0':'#e8f0fe',color:u.rol==='admin'?'#986a00':'#1a73e8',whiteSpace:'nowrap'}}>{nombreRolLegible(u.rol)}</span>
+                    <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'4px',background:u.rol==='admin'?'#fef7e0':'#e8f0fe',color:u.rol==='admin'?'#986a00':AZUL,whiteSpace:'nowrap'}}>{nombreRolLegible(u.rol)}</span>
                   </div>
                   {u.usuario_ubicaciones?.length > 0 && (
                     <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
@@ -331,6 +335,7 @@ export default function Usuarios() {
           ))}
         </>
       )}
+    </div>
     </main>
   )
 }

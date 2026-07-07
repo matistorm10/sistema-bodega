@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 
 const tabs = ['Ingreso', 'Traslado', 'Cambio estado', 'Devolución', 'Pérdida', 'Historial']
@@ -483,7 +484,7 @@ export default function Movimientos() {
       {lista.map(a => {
         const sel = seleccionado === a.id
         return (
-          <button key={a.id} type="button" onClick={()=>onSelect(a.id)} style={{textAlign:'left',cursor:'pointer',padding:'12px',borderRadius:'10px',border:sel?'1.5px solid #1a73e8':'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
+          <button key={a.id} type="button" onClick={()=>onSelect(a.id)} style={{textAlign:'left',cursor:'pointer',padding:'12px',borderRadius:'10px',border:sel?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
             <p style={{fontWeight:'700',fontSize:'13px',margin:'0 0 4px'}}>{a.tipos?.nombre ? a.tipos.nombre+' — ' : ''}{a.descripcion}</p>
             <p style={{fontSize:'11px',color:'#666',margin:'0 0 2px'}}>Proveedor: {a.proveedor || '—'}{a.orden_compra ? ' · OC ' + a.orden_compra : ''}</p>
             <p style={{fontSize:'11px',color:'#666',margin:'0'}}>Retiro: {a.fecha_inicio} · {fmtMoneda(a.valor_dia)}/día · estado: {a.estado_fisico}</p>
@@ -537,27 +538,28 @@ export default function Movimientos() {
       <div style={{fontSize:'48px',marginBottom:'12px'}}>✅</div>
       <p style={{fontSize:'16px',fontWeight:'600',margin:'0 0 8px',color:'#137333'}}>Movimiento registrado</p>
       <p style={{fontSize:'13px',color:'#666',margin:'0 0 24px'}}>{exito}</p>
-      <button onClick={()=>setExito('')} style={{padding:'10px 24px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar otro</button>
+      <button onClick={()=>setExito('')} style={{padding:'10px 24px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar otro</button>
     </main>
   )
 
   return (
-    <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
-        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+    <main style={fondoPagina}>
+    <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Movimientos</h1>
       </div>
 
       <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1rem'}}>
         {tabs.map(t => (
-          <button key={t} onClick={()=>{setTab(t);reset()}} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?'#1a73e8':'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?'#1a73e8':'#ddd'}}>{t}</button>
+          <button key={t} onClick={()=>{setTab(t);reset()}} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?AZUL:'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?AZUL:'#ddd'}}>{t}</button>
         ))}
       </div>
 
       {tab !== 'Devolución' && tab !== 'Historial' && (
         <div style={{display:'flex',gap:'8px',marginBottom:'1rem'}}>
           {['propio','arrendado'].map(c => (
-            <button key={c} onClick={()=>{setClase(c);reset()}} style={{flex:1,padding:'8px',borderRadius:'8px',border:'0.5px solid',fontSize:'13px',cursor:'pointer',background:clase===c?'#e8f0fe':'#fff',color:clase===c?'#1a73e8':'#444',borderColor:clase===c?'#1a73e8':'#ddd'}}>
+            <button key={c} onClick={()=>{setClase(c);reset()}} style={{flex:1,padding:'8px',borderRadius:'8px',border:'0.5px solid',fontSize:'13px',cursor:'pointer',background:clase===c?'#e8f0fe':'#fff',color:clase===c?AZUL:'#444',borderColor:clase===c?AZUL:'#ddd'}}>
               {c === 'propio' ? '🔧 Herramienta propia' : '🏗 Equipo arrendado'}
             </button>
           ))}
@@ -592,7 +594,7 @@ export default function Movimientos() {
               </div>
             )}
             {selDst}
-            <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
+            <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
           </>}
         </div>
       )}
@@ -623,7 +625,7 @@ export default function Movimientos() {
               <input id="arr-fi" type="date" defaultValue={new Date().toISOString().split('T')[0]} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
             </div>
             {selDst}
-            <button onClick={registrarArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar arriendo</button>
+            <button onClick={registrarArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar arriendo</button>
           </>}
         </div>
       )}
@@ -647,14 +649,14 @@ export default function Movimientos() {
                       const c = estadoColor(u.estado)
                       const sel = unidadSel === u.unidad_id
                       return (
-                        <button key={u.unidad_id} type="button" onClick={()=>setUnidadSel(u.unidad_id)} style={{textAlign:'left',cursor:'pointer',padding:'10px',borderRadius:'10px',border:sel?'1.5px solid #1a73e8':'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
+                        <button key={u.unidad_id} type="button" onClick={()=>setUnidadSel(u.unidad_id)} style={{textAlign:'left',cursor:'pointer',padding:'10px',borderRadius:'10px',border:sel?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
                           <p style={{fontWeight:'700',fontSize:'13px',margin:'0 0 4px'}}>{u.codigo}</p>
                           <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'4px',background:c.bg,color:c.fg}}>{u.estado}</span>
                         </button>
                       )
                     })}
                   </div>
-                  {unidadSel && <p style={{fontSize:'12px',color:'#1a73e8',margin:'8px 0 0'}}>Seleccionado: {unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo}</p>}
+                  {unidadSel && <p style={{fontSize:'12px',color:AZUL,margin:'8px 0 0'}}>Seleccionado: {unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo}</p>}
                 </div>
               )
             }
@@ -667,7 +669,7 @@ export default function Movimientos() {
           })()}
           {origSel && prodSel && ((prodInfo?.retornable && unidadSel) || (!prodInfo?.retornable && stockDelProducto > 0)) && <>
             {selDstSinOrigenTraslado}
-            <button onClick={registrarTraslado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
+            <button onClick={registrarTraslado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
           </>}
         </div>
       )}
@@ -687,7 +689,7 @@ export default function Movimientos() {
               {origSel && arriendosDeUbicacion.length > 0 && cardsArriendos(arriendosDeUbicacion, arriendoSel, setArriendoSel)}
               {arriendoSel && <>
                 {selDstSinOrigenTraslado}
-                <button onClick={registrarTrasladoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
+                <button onClick={registrarTrasladoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
               </>}
             </>
           )}
@@ -712,7 +714,7 @@ export default function Movimientos() {
                     const c = estadoColor(u.estado)
                     const sel = unidadSel === u.unidad_id
                     return (
-                      <button key={u.unidad_id} type="button" onClick={()=>setUnidadSel(u.unidad_id)} style={{textAlign:'left',cursor:'pointer',padding:'10px',borderRadius:'10px',border:sel?'1.5px solid #1a73e8':'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
+                      <button key={u.unidad_id} type="button" onClick={()=>setUnidadSel(u.unidad_id)} style={{textAlign:'left',cursor:'pointer',padding:'10px',borderRadius:'10px',border:sel?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:sel?'#e8f0fe':'#fff'}}>
                         <p style={{fontWeight:'700',fontSize:'13px',margin:'0 0 4px'}}>{u.codigo}</p>
                         <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'4px',background:c.bg,color:c.fg}}>Actual: {u.estado}</span>
                       </button>
@@ -730,7 +732,7 @@ export default function Movimientos() {
                 <button type="button" onClick={()=>setEstadoNuevo('malo')} style={{flex:1,padding:'10px',borderRadius:'8px',border:estadoNuevo==='malo'?'1.5px solid #c5221f':'0.5px solid #ddd',background:estadoNuevo==='malo'?'#fce8e6':'#fff',color:'#c5221f',fontWeight:'600',fontSize:'13px',cursor:'pointer'}}>⚠️ Malo</button>
               </div>
             </div>
-            {estadoNuevo && <button onClick={guardarCambioEstado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
+            {estadoNuevo && <button onClick={guardarCambioEstado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
           </>}
         </div>
       )}
@@ -755,7 +757,7 @@ export default function Movimientos() {
                     <button type="button" onClick={()=>setEstadoNuevo('malo')} style={{flex:1,padding:'10px',borderRadius:'8px',border:estadoNuevo==='malo'?'1.5px solid #c5221f':'0.5px solid #ddd',background:estadoNuevo==='malo'?'#fce8e6':'#fff',color:'#c5221f',fontWeight:'600',fontSize:'13px',cursor:'pointer'}}>⚠️ Malo</button>
                   </div>
                 </div>
-                {estadoNuevo && <button onClick={guardarCambioEstadoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
+                {estadoNuevo && <button onClick={guardarCambioEstadoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
               </>}
             </>
           )}
@@ -795,7 +797,7 @@ export default function Movimientos() {
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Fecha de devolución</label>
                       <input type="date" value={fechaDevolucion} onChange={e=>setFechaDevolucion(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
                     </div>
-                    <button onClick={registrarDevolucion} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#1a73e8',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar devolución</button>
+                    <button onClick={registrarDevolucion} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar devolución</button>
                   </>
                 )
               })()}
@@ -870,7 +872,7 @@ export default function Movimientos() {
       {tab === 'Historial' && (() => {
         const tipoInfo: Record<string, {label:string, fg:string, bg:string}> = {
           ingreso: {label:'Ingreso', fg:'#137333', bg:'#e6f4ea'},
-          traslado: {label:'Traslado', fg:'#1a73e8', bg:'#e8f0fe'},
+          traslado: {label:'Traslado', fg:AZUL, bg:'#e8f0fe'},
           cambio_estado: {label:'Cambio de estado', fg:'#986a00', bg:'#fef7e0'},
           devolucion: {label:'Devolución', fg:'#8430ce', bg:'#f3e8fd'},
           perdida: {label:'Pérdida', fg:'#c5221f', bg:'#fce8e6'},
@@ -926,7 +928,7 @@ export default function Movimientos() {
 
         return (
         <div>
-          <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1.25rem'}}>
+          <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1.25rem',background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
             <div style={{minWidth:'220px'}}>
               <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Filtrar por ubicación</label>
               <select value={logUbicacionSel} onChange={e=>setLogUbicacionSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
@@ -989,6 +991,7 @@ export default function Movimientos() {
           <p style={{fontSize:'13px',color:'#999',margin:'0'}}>Esta sección está en construcción. Próximamente disponible.</p>
         </div>
       )}
+    </div>
     </main>
   )
 }

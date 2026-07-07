@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
 export default async function Catalogo() {
@@ -8,10 +9,11 @@ export default async function Catalogo() {
 
   return (
     <main style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'600px',margin:'0 auto'}}>
-      <div style={{marginBottom:'1.5rem'}}>
-        <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0 0 4px'}}>Catálogo</h1>
-        <p style={{fontSize:'13px',color:'#666',margin:'0'}}>{categorias?.length} categorías · {categorias?.reduce((s,c)=>s+(c.tipos?.length||0),0)} tipos</p>
+      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem'}}>
+        <Link href="/" style={{fontSize:'13px',color:'#1a73e8',textDecoration:'none'}}>← Inicio</Link>
+        <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Catálogo</h1>
       </div>
+      <p style={{fontSize:'13px',color:'#666',margin:'0 0 1.5rem'}}>{categorias?.length} categorías · {categorias?.reduce((s,c)=>s+(c.tipos?.length||0),0)} tipos</p>
 
       {categorias?.map(cat => (
         <div key={cat.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'12px 14px',marginBottom:'8px'}}>

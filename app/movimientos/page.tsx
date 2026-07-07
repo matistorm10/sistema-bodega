@@ -38,10 +38,17 @@ export default function Movimientos() {
   // --- Devolución ---
   const [fechaDevolucion, setFechaDevolucion] = useState(new Date().toISOString().split('T')[0])
 
+  // --- Foto/archivo adjunto (opcional, para cualquier tipo de movimiento) ---
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false)
+
   // --- Historial ---
   const [logAll, setLogAll] = useState<any[]>([])
+  const [agregarArchivoId, setAgregarArchivoId] = useState('')
+  const [subiendoAdjuntoPosterior, setSubiendoAdjuntoPosterior] = useState(false)
   const [logUbicacionSel, setLogUbicacionSel] = useState('')
   const [logTipoSel, setLogTipoSel] = useState('')
+  const [logClaseSel, setLogClaseSel] = useState('')
   const [cargandoLog, setCargandoLog] = useState(false)
 
   useEffect(() => {
@@ -102,12 +109,13 @@ export default function Movimientos() {
     })
   }, [tab])
 
-  // Filtra el historial por ubicación (si el movimiento tuvo esa ubicación como origen o destino)
+  // Filtra el historial por ubicación (si el movimiento tuvo esa ubicación como origen o destino), tipo de movimiento y clase
   const logFiltrado = logAll
     .filter(l => !logUbicacionSel || l.ubicacion_origen_id === logUbicacionSel || l.ubicacion_destino_id === logUbicacionSel)
     .filter(l => !logTipoSel || l.tipo === logTipoSel)
+    .filter(l => !logClaseSel || l.clase === logClaseSel)
   const etiquetasLog: Record<string, string> = { ingreso: 'Ingresos', traslado: 'Traslados', cambio_estado: 'Cambios de estado', devolucion: 'Devoluciones', perdida: 'Pérdidas' }
-  const logStats = Object.keys(etiquetasLog).map(k => ({ tipo: k, etiqueta: etiquetasLog[k], total: logAll.filter(l => (!logUbicacionSel || l.ubicacion_origen_id === logUbicacionSel || l.ubicacion_destino_id === logUbicacionSel) && l.tipo === k).length }))
+  const logStats = Object.keys(etiquetasLog).map(k => ({ tipo: k, etiqueta: etiquetasLog[k], total: logAll.filter(l => (!logUbicacionSel || l.ubicacion_origen_id === logUbicacionSel || l.ubicacion_destino_id === logUbicacionSel) && (!logClaseSel || l.clase === logClaseSel) && l.tipo === k).length }))
   const logItems = logFiltrado.slice(0, 100)
 
   // Categorías, tipos y productos disponibles EN EL ORIGEN elegido (solo lo que realmente hay ahí)
@@ -141,6 +149,19 @@ export default function Movimientos() {
     setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel(''); setCantidad(1)
     setOrigSel(''); setProdSel(''); setUnidadSel(''); setCantTraslado(1); setArriendoSel(''); setEstadoNuevo('')
     setFechaDevolucion(new Date().toISOString().split('T')[0])
+    setArchivo(null)
+  }
+
+  const subirArchivoSiHay = async (): Promise<{ url: string, nombre: string } | null> => {
+    if (!archivo) return null
+    setSubiendoArchivo(true)
+    const ext = archivo.name.includes('.') ? archivo.name.split('.').pop() : 'dat'
+    const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('movimientos').upload(ruta, archivo)
+    setSubiendoArchivo(false)
+    if (error) { alert('No se pudo subir el archivo adjunto: ' + error.message); return null }
+    const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
+    return { url: data.publicUrl, nombre: archivo.name }
   }
 
   const registrarLog = async (opts: {
@@ -149,14 +170,42 @@ export default function Movimientos() {
     ubOrigenId?: string, ubDestinoId?: string,
     detalle?: Record<string, any>
   }) => {
+    const adjunto = await subirArchivoSiHay()
     const { error } = await supabase.from('movimientos_log').insert({
       tipo: opts.tipo, clase: opts.clase, descripcion: opts.descripcion,
       categoria: opts.categoria || null, tipo_item: opts.tipoItem || null, nombre_item: opts.nombreItem || null,
       ubicacion_origen_id: opts.ubOrigenId || null, ubicacion_destino_id: opts.ubDestinoId || null,
-      detalle: opts.detalle || null
+      detalle: opts.detalle || null,
+      archivo_url: adjunto?.url || null, archivo_nombre: adjunto?.nombre || null
     })
     if (error) console.error('No se pudo guardar en el historial:', error.message)
   }
+
+  const agregarArchivoPosterior = async (itemId: string, file: File) => {
+    setSubiendoAdjuntoPosterior(true)
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'dat'
+    const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error: errUp } = await supabase.storage.from('movimientos').upload(ruta, file)
+    if (errUp) { setSubiendoAdjuntoPosterior(false); alert('No se pudo subir el archivo: ' + errUp.message); return }
+    const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
+    const { error: errUpd } = await supabase.from('movimientos_log').update({ archivo_url: data.publicUrl, archivo_nombre: file.name }).eq('id', itemId)
+    setSubiendoAdjuntoPosterior(false)
+    if (errUpd) { alert('No se pudo guardar el archivo: ' + errUpd.message); return }
+    setAgregarArchivoId('')
+    setLogAll(prev => prev.map(l => l.id === itemId ? { ...l, archivo_url: data.publicUrl, archivo_nombre: file.name } : l))
+  }
+
+  const selArchivo = (
+    <div style={{marginBottom:'14px'}}>
+      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Foto o archivo (opcional)</label>
+      <input
+        type="file" accept="image/*,application/pdf"
+        onChange={e=>setArchivo(e.target.files?.[0] || null)}
+        style={{width:'100%',fontSize:'12px'}}
+      />
+      {archivo && <p style={{fontSize:'11px',color:'#137333',margin:'4px 0 0'}}>📎 {archivo.name}</p>}
+    </div>
+  )
 
   const registrar = async () => {
     if (!tipoSel || !dstSel || !modelo) { alert('Completa todos los campos.'); return }
@@ -594,6 +643,7 @@ export default function Movimientos() {
               </div>
             )}
             {selDst}
+            {selArchivo}
             <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
           </>}
         </div>
@@ -625,6 +675,7 @@ export default function Movimientos() {
               <input id="arr-fi" type="date" defaultValue={new Date().toISOString().split('T')[0]} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
             </div>
             {selDst}
+            {selArchivo}
             <button onClick={registrarArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar arriendo</button>
           </>}
         </div>
@@ -669,6 +720,7 @@ export default function Movimientos() {
           })()}
           {origSel && prodSel && ((prodInfo?.retornable && unidadSel) || (!prodInfo?.retornable && stockDelProducto > 0)) && <>
             {selDstSinOrigenTraslado}
+            {selArchivo}
             <button onClick={registrarTraslado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
           </>}
         </div>
@@ -689,6 +741,7 @@ export default function Movimientos() {
               {origSel && arriendosDeUbicacion.length > 0 && cardsArriendos(arriendosDeUbicacion, arriendoSel, setArriendoSel)}
               {arriendoSel && <>
                 {selDstSinOrigenTraslado}
+                {selArchivo}
                 <button onClick={registrarTrasladoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar traslado</button>
               </>}
             </>
@@ -732,6 +785,7 @@ export default function Movimientos() {
                 <button type="button" onClick={()=>setEstadoNuevo('malo')} style={{flex:1,padding:'10px',borderRadius:'8px',border:estadoNuevo==='malo'?'1.5px solid #c5221f':'0.5px solid #ddd',background:estadoNuevo==='malo'?'#fce8e6':'#fff',color:'#c5221f',fontWeight:'600',fontSize:'13px',cursor:'pointer'}}>⚠️ Malo</button>
               </div>
             </div>
+            {selArchivo}
             {estadoNuevo && <button onClick={guardarCambioEstado} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
           </>}
         </div>
@@ -757,6 +811,7 @@ export default function Movimientos() {
                     <button type="button" onClick={()=>setEstadoNuevo('malo')} style={{flex:1,padding:'10px',borderRadius:'8px',border:estadoNuevo==='malo'?'1.5px solid #c5221f':'0.5px solid #ddd',background:estadoNuevo==='malo'?'#fce8e6':'#fff',color:'#c5221f',fontWeight:'600',fontSize:'13px',cursor:'pointer'}}>⚠️ Malo</button>
                   </div>
                 </div>
+                {selArchivo}
                 {estadoNuevo && <button onClick={guardarCambioEstadoArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Guardar cambio de estado</button>}
               </>}
             </>
@@ -797,6 +852,7 @@ export default function Movimientos() {
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Fecha de devolución</label>
                       <input type="date" value={fechaDevolucion} onChange={e=>setFechaDevolucion(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
                     </div>
+                    {selArchivo}
                     <button onClick={registrarDevolucion} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar devolución</button>
                   </>
                 )
@@ -842,9 +898,10 @@ export default function Movimientos() {
               </div>
             )
           })()}
-          {origSel && prodSel && ((prodInfo?.retornable && unidadSel) || (!prodInfo?.retornable && stockDelProducto > 0)) && (
+          {origSel && prodSel && ((prodInfo?.retornable && unidadSel) || (!prodInfo?.retornable && stockDelProducto > 0)) && (<>
+            {selArchivo}
             <button onClick={registrarPerdidaPropio} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#c5221f',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar pérdida</button>
-          )}
+          </>)}
         </div>
       )}
 
@@ -860,9 +917,10 @@ export default function Movimientos() {
                 <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene equipos arrendados.</p>
               )}
               {origSel && arriendosDeUbicacion.length > 0 && cardsArriendos(arriendosDeUbicacion, arriendoSel, setArriendoSel)}
-              {arriendoSel && (
+              {arriendoSel && (<>
+                {selArchivo}
                 <button onClick={registrarPerdidaArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'#c5221f',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar pérdida</button>
-              )}
+              </>)}
             </>
           )}
         </div>
@@ -944,6 +1002,14 @@ export default function Movimientos() {
                 {Object.entries(tipoInfo).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
+            <div style={{minWidth:'220px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Filtrar por clase</label>
+              <div style={{display:'flex',gap:'6px'}}>
+                {[{v:'',l:'Todos'},{v:'propio',l:'🔧 Propio'},{v:'arrendado',l:'🏗 Arrendado'}].map(op => (
+                  <button key={op.v} type="button" onClick={()=>setLogClaseSel(op.v)} style={{flex:1,padding:'8px',borderRadius:'8px',border:logClaseSel===op.v?`1.5px solid ${AZUL}`:'0.5px solid #ddd',background:logClaseSel===op.v?'#e8f0fe':'#fff',color:logClaseSel===op.v?AZUL:'#444',fontSize:'12px',cursor:'pointer'}}>{op.l}</button>
+                ))}
+              </div>
+            </div>
           </div>
           {cargandoLog && <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p>}
           {!cargandoLog && <>
@@ -975,6 +1041,22 @@ export default function Movimientos() {
                         {' '}<span style={{fontWeight:'400',fontSize:'12px',color:'#999'}}>{item.clase === 'propio' ? '🔧' : '🏗'}</span>
                       </p>
                       {renderDetalle(item)}
+                      {item.archivo_url ? (
+                        <a href={item.archivo_url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,display:'inline-flex',alignItems:'center',gap:'4px',marginTop:'8px',textDecoration:'none'}}>
+                          📎 {item.archivo_nombre || 'Ver adjunto'}
+                        </a>
+                      ) : agregarArchivoId === item.id ? (
+                        <div style={{marginTop:'8px',display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                          <input
+                            type="file" accept="image/*,application/pdf" disabled={subiendoAdjuntoPosterior}
+                            onChange={e=>{ const f = e.target.files?.[0]; if (f) agregarArchivoPosterior(item.id, f) }}
+                            style={{fontSize:'11px'}}
+                          />
+                          <button onClick={()=>setAgregarArchivoId('')} style={{fontSize:'11px',color:'#999',background:'none',border:'none',cursor:'pointer',padding:'0'}}>Cancelar</button>
+                        </div>
+                      ) : (
+                        <button onClick={()=>setAgregarArchivoId(item.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',marginTop:'8px'}}>+ Adjuntar foto/archivo</button>
+                      )}
                     </div>
                   )
                 })}

@@ -62,7 +62,7 @@ export default function Arriendos() {
         {activos.map(a => (
           <div key={a.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'12px'}}>
             <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px'}}>{a.tipos?.nombre || '—'}</p>
-            <p style={{fontSize:'12px',color:'#555',margin:'0 0 6px'}}>{a.descripcion}</p>
+            <p style={{fontSize:'12px',color:'#555',margin:'0 0 6px'}}>{a.descripcion}{a.orden_compra ? ` · OC ${a.orden_compra}` : ''}</p>
             <p style={{fontSize:'11px',color:'#888',margin:'0 0 2px'}}>📍 {a.ubicacion?.nombre || '—'}</p>
             <p style={{fontSize:'11px',color:'#888',margin:'0 0 6px'}}>Retiro: {a.fecha_inicio}</p>
             <div style={{borderTop:'0.5px solid #eee',paddingTop:'6px',display:'flex',justifyContent:'space-between',fontSize:'12px'}}>
@@ -79,7 +79,7 @@ export default function Arriendos() {
         <div key={a.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'8px',padding:'10px 12px',marginBottom:'6px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div>
             <p style={{fontSize:'13px',fontWeight:'600',margin:'0 0 1px'}}>{a.tipos?.nombre || '—'}</p>
-            <p style={{fontSize:'12px',color:'#666',margin:'0'}}>{a.descripcion} · 📍 {a.ubicacion?.nombre || '—'} · {a.fecha_inicio} → {a.fecha_devolucion}</p>
+            <p style={{fontSize:'12px',color:'#666',margin:'0'}}>{a.descripcion}{a.orden_compra ? ` · OC ${a.orden_compra}` : ''} · 📍 {a.ubicacion?.nombre || '—'} · {a.fecha_inicio} → {a.fecha_devolucion}</p>
           </div>
           <span style={{fontSize:'13px',fontWeight:'600',color:'#333'}}>{fmt(costo(a))}</span>
         </div>

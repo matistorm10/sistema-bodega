@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
@@ -38,9 +38,11 @@ export default function Movimientos() {
   // --- Devolución ---
   const [fechaDevolucion, setFechaDevolucion] = useState(new Date().toISOString().split('T')[0])
 
-  // --- Foto/archivo adjunto (opcional, para cualquier tipo de movimiento) ---
-  const [archivo, setArchivo] = useState<File | null>(null)
+  // --- Fotos/archivos adjuntos (opcional, para cualquier tipo de movimiento) ---
+  const [archivos, setArchivos] = useState<File[]>([])
   const [subiendoArchivo, setSubiendoArchivo] = useState(false)
+  const [arrastrando, setArrastrando] = useState(false)
+  const inputArchivoRef = useRef<HTMLInputElement>(null)
 
   // --- Historial ---
   const [logAll, setLogAll] = useState<any[]>([])
@@ -149,19 +151,23 @@ export default function Movimientos() {
     setCatSel(''); setTipoSel(''); setModelo(''); setCodigo(''); setDstSel(''); setCantidad(1)
     setOrigSel(''); setProdSel(''); setUnidadSel(''); setCantTraslado(1); setArriendoSel(''); setEstadoNuevo('')
     setFechaDevolucion(new Date().toISOString().split('T')[0])
-    setArchivo(null)
+    setArchivos([])
   }
 
-  const subirArchivoSiHay = async (): Promise<{ url: string, nombre: string } | null> => {
-    if (!archivo) return null
+  const subirArchivosSiHay = async (): Promise<{ url: string, nombre: string }[]> => {
+    if (archivos.length === 0) return []
     setSubiendoArchivo(true)
-    const ext = archivo.name.includes('.') ? archivo.name.split('.').pop() : 'dat'
-    const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('movimientos').upload(ruta, archivo)
+    const resultados: { url: string, nombre: string }[] = []
+    for (const file of archivos) {
+      const ext = file.name.includes('.') ? file.name.split('.').pop() : 'dat'
+      const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('movimientos').upload(ruta, file)
+      if (error) { alert(`No se pudo subir "${file.name}": ` + error.message); continue }
+      const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
+      resultados.push({ url: data.publicUrl, nombre: file.name })
+    }
     setSubiendoArchivo(false)
-    if (error) { alert('No se pudo subir el archivo adjunto: ' + error.message); return null }
-    const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
-    return { url: data.publicUrl, nombre: archivo.name }
+    return resultados
   }
 
   const registrarLog = async (opts: {
@@ -170,40 +176,87 @@ export default function Movimientos() {
     ubOrigenId?: string, ubDestinoId?: string,
     detalle?: Record<string, any>
   }) => {
-    const adjunto = await subirArchivoSiHay()
+    const subidos = await subirArchivosSiHay()
     const { error } = await supabase.from('movimientos_log').insert({
       tipo: opts.tipo, clase: opts.clase, descripcion: opts.descripcion,
       categoria: opts.categoria || null, tipo_item: opts.tipoItem || null, nombre_item: opts.nombreItem || null,
       ubicacion_origen_id: opts.ubOrigenId || null, ubicacion_destino_id: opts.ubDestinoId || null,
       detalle: opts.detalle || null,
-      archivo_url: adjunto?.url || null, archivo_nombre: adjunto?.nombre || null
+      archivos: subidos.length > 0 ? subidos : null,
+      archivo_url: subidos[0]?.url || null, archivo_nombre: subidos[0]?.nombre || null
     })
     if (error) console.error('No se pudo guardar en el historial:', error.message)
   }
 
-  const agregarArchivoPosterior = async (itemId: string, file: File) => {
-    setSubiendoAdjuntoPosterior(true)
-    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'dat'
-    const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { error: errUp } = await supabase.storage.from('movimientos').upload(ruta, file)
-    if (errUp) { setSubiendoAdjuntoPosterior(false); alert('No se pudo subir el archivo: ' + errUp.message); return }
-    const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
-    const { error: errUpd } = await supabase.from('movimientos_log').update({ archivo_url: data.publicUrl, archivo_nombre: file.name }).eq('id', itemId)
-    setSubiendoAdjuntoPosterior(false)
-    if (errUpd) { alert('No se pudo guardar el archivo: ' + errUpd.message); return }
-    setAgregarArchivoId('')
-    setLogAll(prev => prev.map(l => l.id === itemId ? { ...l, archivo_url: data.publicUrl, archivo_nombre: file.name } : l))
+  const listaArchivosDe = (item: any): { url: string, nombre: string }[] => {
+    if (item.archivos && item.archivos.length > 0) return item.archivos
+    if (item.archivo_url) return [{ url: item.archivo_url, nombre: item.archivo_nombre || 'archivo' }]
+    return []
   }
+
+  const agregarArchivosPosterior = async (item: any, files: File[]) => {
+    setSubiendoAdjuntoPosterior(true)
+    const nuevos: { url: string, nombre: string }[] = []
+    for (const file of files) {
+      const ext = file.name.includes('.') ? file.name.split('.').pop() : 'dat'
+      const ruta = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('movimientos').upload(ruta, file)
+      if (error) { alert(`No se pudo subir "${file.name}": ` + error.message); continue }
+      const { data } = supabase.storage.from('movimientos').getPublicUrl(ruta)
+      nuevos.push({ url: data.publicUrl, nombre: file.name })
+    }
+    const combinados = [...listaArchivosDe(item), ...nuevos]
+    const { error: errUpd } = await supabase.from('movimientos_log').update({
+      archivos: combinados, archivo_url: combinados[0]?.url || null, archivo_nombre: combinados[0]?.nombre || null
+    }).eq('id', item.id)
+    setSubiendoAdjuntoPosterior(false)
+    if (errUpd) { alert('No se pudo guardar: ' + errUpd.message); return }
+    setAgregarArchivoId('')
+    setLogAll(prev => prev.map(l => l.id === item.id ? { ...l, archivos: combinados, archivo_url: combinados[0]?.url, archivo_nombre: combinados[0]?.nombre } : l))
+  }
+
+  const quitarArchivoSeleccionado = (idx: number) => setArchivos(prev => prev.filter((_, i) => i !== idx))
 
   const selArchivo = (
     <div style={{marginBottom:'14px'}}>
-      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Foto o archivo (opcional)</label>
-      <input
-        type="file" accept="image/*,application/pdf"
-        onChange={e=>setArchivo(e.target.files?.[0] || null)}
-        style={{width:'100%',fontSize:'12px'}}
-      />
-      {archivo && <p style={{fontSize:'11px',color:'#137333',margin:'4px 0 0'}}>📎 {archivo.name}</p>}
+      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Fotos o archivos (opcional)</label>
+      <div
+        onClick={()=>inputArchivoRef.current?.click()}
+        onDragOver={e=>{ e.preventDefault(); setArrastrando(true) }}
+        onDragLeave={()=>setArrastrando(false)}
+        onDrop={e=>{
+          e.preventDefault(); setArrastrando(false)
+          const files = Array.from(e.dataTransfer.files || [])
+          if (files.length > 0) setArchivos(prev => [...prev, ...files])
+        }}
+        style={{
+          border: arrastrando ? `2px dashed ${AZUL}` : '2px dashed #c7d3e6',
+          background: arrastrando ? 'rgba(27,79,156,0.07)' : '#f8f9fb',
+          borderRadius:'10px', padding:'18px 12px', textAlign:'center', cursor:'pointer', transition:'background .15s, border-color .15s',
+        }}
+      >
+        <p style={{fontSize:'13px',fontWeight:'700',color:AZUL,margin:'0 0 2px'}}>Arrastra archivos aquí, o haz clic para elegir</p>
+        <p style={{fontSize:'11px',color:'#8a94a6',margin:'0'}}>Puedes agregar más de uno · fotos o PDF</p>
+        <input
+          ref={inputArchivoRef} type="file" multiple accept="image/*,application/pdf"
+          onChange={e=>{
+            const files = Array.from(e.target.files || [])
+            if (files.length > 0) setArchivos(prev => [...prev, ...files])
+            e.target.value = ''
+          }}
+          style={{display:'none'}}
+        />
+      </div>
+      {archivos.length > 0 && (
+        <div style={{marginTop:'8px',display:'flex',flexDirection:'column',gap:'4px'}}>
+          {archivos.map((f, i) => (
+            <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'11px',color:'#137333',background:'#e6f4ea',padding:'5px 10px',borderRadius:'6px'}}>
+              <span>📎 {f.name}</span>
+              <button type="button" onClick={()=>quitarArchivoSeleccionado(i)} style={{border:'none',background:'none',color:'#c5221f',cursor:'pointer',fontSize:'14px',padding:'0 4px',fontWeight:'700'}}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 
@@ -1041,22 +1094,36 @@ export default function Movimientos() {
                         {' '}<span style={{fontWeight:'400',fontSize:'12px',color:'#999'}}>{item.clase === 'propio' ? '🔧' : '🏗'}</span>
                       </p>
                       {renderDetalle(item)}
-                      {item.archivo_url ? (
-                        <a href={item.archivo_url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,display:'inline-flex',alignItems:'center',gap:'4px',marginTop:'8px',textDecoration:'none'}}>
-                          📎 {item.archivo_nombre || 'Ver adjunto'}
-                        </a>
-                      ) : agregarArchivoId === item.id ? (
-                        <div style={{marginTop:'8px',display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                          <input
-                            type="file" accept="image/*,application/pdf" disabled={subiendoAdjuntoPosterior}
-                            onChange={e=>{ const f = e.target.files?.[0]; if (f) agregarArchivoPosterior(item.id, f) }}
-                            style={{fontSize:'11px'}}
-                          />
-                          <button onClick={()=>setAgregarArchivoId('')} style={{fontSize:'11px',color:'#999',background:'none',border:'none',cursor:'pointer',padding:'0'}}>Cancelar</button>
-                        </div>
-                      ) : (
-                        <button onClick={()=>setAgregarArchivoId(item.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',marginTop:'8px'}}>+ Adjuntar foto/archivo</button>
-                      )}
+                      {(() => {
+                        const adjuntos = listaArchivosDe(item)
+                        return (
+                          <>
+                            {adjuntos.length > 0 && (
+                              <div style={{marginTop:'8px',display:'flex',flexWrap:'wrap',gap:'6px'}}>
+                                {adjuntos.map((f, i) => (
+                                  <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,display:'inline-flex',alignItems:'center',gap:'4px',textDecoration:'none',background:'rgba(27,79,156,0.08)',padding:'3px 9px',borderRadius:'20px'}}>
+                                    📎 {f.nombre || 'archivo'}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                            {agregarArchivoId === item.id ? (
+                              <div style={{marginTop:'8px',display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                                <input
+                                  type="file" multiple accept="image/*,application/pdf" disabled={subiendoAdjuntoPosterior}
+                                  onChange={e=>{ const files = Array.from(e.target.files || []); if (files.length > 0) agregarArchivosPosterior(item, files) }}
+                                  style={{fontSize:'11px'}}
+                                />
+                                <button onClick={()=>setAgregarArchivoId('')} style={{fontSize:'11px',color:'#999',background:'none',border:'none',cursor:'pointer',padding:'0'}}>Cancelar</button>
+                              </div>
+                            ) : (
+                              <button onClick={()=>setAgregarArchivoId(item.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',marginTop:'8px',fontWeight:'600'}}>
+                                {adjuntos.length > 0 ? '+ Agregar más' : '+ Adjuntar foto/archivo'}
+                              </button>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   )
                 })}

@@ -42,6 +42,7 @@ export default function Movimientos() {
   const [archivos, setArchivos] = useState<File[]>([])
   const [subiendoArchivo, setSubiendoArchivo] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
+  const [arrastrandoId, setArrastrandoId] = useState('')
   const inputArchivoRef = useRef<HTMLInputElement>(null)
 
   // --- Historial ---
@@ -52,6 +53,17 @@ export default function Movimientos() {
   const [logTipoSel, setLogTipoSel] = useState('')
   const [logClaseSel, setLogClaseSel] = useState('')
   const [cargandoLog, setCargandoLog] = useState(false)
+
+  // Seguro: si el archivo se suelta fuera de una zona de arrastre, evita que el navegador lo abra y pierda la página
+  useEffect(() => {
+    const evitar = (e: DragEvent) => e.preventDefault()
+    window.addEventListener('dragover', evitar)
+    window.addEventListener('drop', evitar)
+    return () => {
+      window.removeEventListener('dragover', evitar)
+      window.removeEventListener('drop', evitar)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.from('categorias').select('*').order('orden').then(({data}) => setCategorias(data||[]))
@@ -1108,13 +1120,31 @@ export default function Movimientos() {
                               </div>
                             )}
                             {agregarArchivoId === item.id ? (
-                              <div style={{marginTop:'8px',display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                                <input
-                                  type="file" multiple accept="image/*,application/pdf" disabled={subiendoAdjuntoPosterior}
-                                  onChange={e=>{ const files = Array.from(e.target.files || []); if (files.length > 0) agregarArchivosPosterior(item, files) }}
-                                  style={{fontSize:'11px'}}
-                                />
-                                <button onClick={()=>setAgregarArchivoId('')} style={{fontSize:'11px',color:'#999',background:'none',border:'none',cursor:'pointer',padding:'0'}}>Cancelar</button>
+                              <div style={{marginTop:'8px'}}>
+                                <div
+                                  onClick={()=>document.getElementById(`file-posterior-${item.id}`)?.click()}
+                                  onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); setArrastrandoId(item.id) }}
+                                  onDragLeave={()=>setArrastrandoId('')}
+                                  onDrop={e=>{
+                                    e.preventDefault(); e.stopPropagation(); setArrastrandoId('')
+                                    const files = Array.from(e.dataTransfer.files || [])
+                                    if (files.length > 0) agregarArchivosPosterior(item, files)
+                                  }}
+                                  style={{
+                                    border: arrastrandoId === item.id ? `2px dashed ${AZUL}` : '1.5px dashed #c7d3e6',
+                                    background: arrastrandoId === item.id ? 'rgba(27,79,156,0.07)' : '#f8f9fb',
+                                    borderRadius:'8px', padding:'10px', textAlign:'center', cursor:'pointer',
+                                  }}
+                                >
+                                  <p style={{fontSize:'11px',fontWeight:'700',color:AZUL,margin:'0'}}>{subiendoAdjuntoPosterior ? 'Subiendo...' : 'Arrastra aquí o haz clic para elegir'}</p>
+                                  <input
+                                    id={`file-posterior-${item.id}`}
+                                    type="file" multiple accept="image/*,application/pdf" disabled={subiendoAdjuntoPosterior}
+                                    onChange={e=>{ const files = Array.from(e.target.files || []); if (files.length > 0) agregarArchivosPosterior(item, files); e.target.value = '' }}
+                                    style={{display:'none'}}
+                                  />
+                                </div>
+                                <button onClick={()=>setAgregarArchivoId('')} style={{fontSize:'11px',color:'#999',background:'none',border:'none',cursor:'pointer',padding:'6px 0 0'}}>Cancelar</button>
                               </div>
                             ) : (
                               <button onClick={()=>setAgregarArchivoId(item.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',marginTop:'8px',fontWeight:'600'}}>

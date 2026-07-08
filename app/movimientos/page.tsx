@@ -206,6 +206,23 @@ export default function Movimientos() {
     return []
   }
 
+  const eliminarArchivoDe = async (item: any, index: number) => {
+    const actuales = listaArchivosDe(item)
+    const objetivo = actuales[index]
+    if (!confirm(`¿Eliminar "${objetivo?.nombre || 'este archivo'}"? No se puede deshacer.`)) return
+    const restantes = actuales.filter((_, i) => i !== index)
+    const { error } = await supabase.from('movimientos_log').update({
+      archivos: restantes, archivo_url: restantes[0]?.url || null, archivo_nombre: restantes[0]?.nombre || null
+    }).eq('id', item.id)
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    setLogAll(prev => prev.map(l => l.id === item.id ? { ...l, archivos: restantes, archivo_url: restantes[0]?.url || null, archivo_nombre: restantes[0]?.nombre || null } : l))
+    // Intenta borrar el archivo del almacenamiento también, para no dejar basura (si falla, no es grave: solo queda un archivo huérfano)
+    if (objetivo?.url) {
+      const partes = objetivo.url.split('/movimientos/')
+      if (partes[1]) supabase.storage.from('movimientos').remove([partes[1]]).catch(() => {})
+    }
+  }
+
   const agregarArchivosPosterior = async (item: any, files: File[]) => {
     setSubiendoAdjuntoPosterior(true)
     const nuevos: { url: string, nombre: string }[] = []
@@ -1113,9 +1130,16 @@ export default function Movimientos() {
                             {adjuntos.length > 0 && (
                               <div style={{marginTop:'8px',display:'flex',flexWrap:'wrap',gap:'6px'}}>
                                 {adjuntos.map((f, i) => (
-                                  <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,display:'inline-flex',alignItems:'center',gap:'4px',textDecoration:'none',background:'rgba(27,79,156,0.08)',padding:'3px 9px',borderRadius:'20px'}}>
-                                    📎 {f.nombre || 'archivo'}
-                                  </a>
+                                  <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'2px',background:'rgba(27,79,156,0.08)',borderRadius:'20px',paddingRight:'4px'}}>
+                                    <a href={f.url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,textDecoration:'none',padding:'3px 4px 3px 9px'}}>
+                                      📎 {f.nombre || 'archivo'}
+                                    </a>
+                                    <button
+                                      onClick={()=>eliminarArchivoDe(item, i)}
+                                      title="Eliminar archivo"
+                                      style={{border:'none',background:'none',color:'#c5221f',cursor:'pointer',fontSize:'13px',fontWeight:'700',padding:'0 5px',lineHeight:1}}
+                                    >×</button>
+                                  </span>
                                 ))}
                               </div>
                             )}

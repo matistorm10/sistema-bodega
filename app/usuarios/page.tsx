@@ -215,7 +215,7 @@ export default function Usuarios() {
           </button>
         </div>
         {errorRol && <p style={{fontSize:'12px',color:'#c5221f',margin:'8px 0 0'}}>{errorRol}</p>}
-        <p style={{fontSize:'11px',color:'#999',margin:'8px 0 0'}}>Un rol nuevo se comporta igual que "Bodeguero": queda restringido a las ubicaciones que le asignes. Solo "admin" tiene acceso total.</p>
+        <p style={{fontSize:'11px',color:'#999',margin:'8px 0 0'}}>Un rol nuevo se comporta igual que “Bodeguero”: queda restringido a las ubicaciones que le asignes. Solo “admin” tiene acceso total.</p>
       </div>
 
       <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1.5rem'}}>

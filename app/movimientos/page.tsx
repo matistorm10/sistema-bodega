@@ -264,7 +264,7 @@ export default function Movimientos() {
           borderRadius:'10px', padding:'18px 12px', textAlign:'center', cursor:'pointer', transition:'background .15s, border-color .15s',
         }}
       >
-        <p style={{fontSize:'13px',fontWeight:'700',color:AZUL,margin:'0 0 2px'}}>Arrastra archivos aquí, o haz clic para elegir</p>
+        <p style={{fontSize:'13px',fontWeight:'700',color:AZUL,margin:'0 0 2px'}}>{subiendoArchivo ? 'Subiendo...' : 'Arrastra archivos aquí, o haz clic para elegir'}</p>
         <p style={{fontSize:'11px',color:'#8a94a6',margin:'0'}}>Puedes agregar más de uno · fotos o PDF</p>
         <input
           ref={inputArchivoRef} type="file" multiple accept="image/*,application/pdf"
@@ -507,33 +507,6 @@ export default function Movimientos() {
     setTimeout(() => setExito(''), 4000)
   }
 
-  const selDst = <div style={{marginBottom:'14px'}}>
-    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Destino</label>
-    <select value={dstSel} onChange={e=>setDstSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-      <option value=''>Selecciona destino...</option>
-      <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-      <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
-    </select>
-  </div>
-
-  const selOrigen = <div style={{marginBottom:'10px'}}>
-    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Origen</label>
-    <select value={origSel} onChange={e=>{setOrigSel(e.target.value); setDstSel('')}} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-      <option value=''>Selecciona origen...</option>
-      <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-      <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
-    </select>
-  </div>
-
-  const selDstSinOrigen = <div style={{marginBottom:'14px'}}>
-    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Destino</label>
-    <select value={dstSel} onChange={e=>setDstSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-      <option value=''>Selecciona destino...</option>
-      <optgroup label='Bodegas'>{bodegas.filter(b=>b.id!==origSel).map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-      <optgroup label='Faenas'>{faenas.filter(f=>f.id!==origSel).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
-    </select>
-  </div>
-
   // Solo para Traslado: origen/destino limitados a lo que el admin le asignó a este bodeguero
   const selOrigenTraslado = <div style={{marginBottom:'10px'}}>
     <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Origen</label>
@@ -586,14 +559,6 @@ export default function Movimientos() {
   // Solo las ubicaciones que realmente tienen algún equipo arrendado activo
   const ubicacionesConArriendo = Array.from(new Map(arriendosActivos.map(a => [a.ubicacion_id, a.ubicacion?.nombre || '—'])).entries())
   const arriendosDeUbicacion = arriendosActivos.filter(a => a.ubicacion_id === origSel)
-
-  const selUbicacionArriendo = <div style={{marginBottom:'10px'}}>
-    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Ubicación</label>
-    <select value={origSel} onChange={e=>setOrigSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
-      <option value=''>Selecciona ubicación...</option>
-      {ubicacionesConArriendo.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
-    </select>
-  </div>
 
   // Solo para Traslado: mismo filtro, pero limitado a las ubicaciones permitidas del bodeguero
   const ubicacionesConArriendoTraslado = esAdmin ? ubicacionesConArriendo : ubicacionesConArriendo.filter(([id]) => idsOrigenPermitidos.has(id))
@@ -724,7 +689,7 @@ export default function Movimientos() {
                 <input type='number' value={cantidad} onChange={e=>setCantidad(Number(e.target.value))} min={1} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
               </div>
             )}
-            {selDst}
+            {selDstSinOrigenTraslado}
             {selArchivo}
             <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
           </>}
@@ -756,7 +721,7 @@ export default function Movimientos() {
               <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Fecha de retiro</label>
               <input id="arr-fi" type="date" defaultValue={new Date().toISOString().split('T')[0]} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
             </div>
-            {selDst}
+            {selDstSinOrigenTraslado}
             {selArchivo}
             <button onClick={registrarArriendo} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar arriendo</button>
           </>}
@@ -834,7 +799,7 @@ export default function Movimientos() {
       {/* CAMBIO DE ESTADO PROPIO */}
       {tab === 'Cambio estado' && clase === 'propio' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          {selOrigen}
+          {selOrigenTraslado}
           {origSel && categoriasConCodigo.length === 0 && (
             <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene herramientas con código registradas.</p>
           )}
@@ -876,11 +841,11 @@ export default function Movimientos() {
       {/* CAMBIO DE ESTADO ARRENDADO */}
       {tab === 'Cambio estado' && clase === 'arrendado' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          {ubicacionesConArriendo.length === 0 ? (
-            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>No hay equipos arrendados activos.</p>
+          {ubicacionesConArriendoTraslado.length === 0 ? (
+            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>{esAdmin ? 'No hay equipos arrendados activos.' : 'No tienes ubicaciones asignadas con equipos arrendados.'}</p>
           ) : (
             <>
-              {selUbicacionArriendo}
+              {selUbicacionArriendoTraslado}
               {origSel && arriendosDeUbicacion.length === 0 && (
                 <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene equipos arrendados.</p>
               )}
@@ -904,11 +869,11 @@ export default function Movimientos() {
       {/* DEVOLUCIÓN */}
       {tab === 'Devolución' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          {ubicacionesConArriendo.length === 0 ? (
-            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>No hay equipos arrendados activos.</p>
+          {ubicacionesConArriendoTraslado.length === 0 ? (
+            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>{esAdmin ? 'No hay equipos arrendados activos.' : 'No tienes ubicaciones asignadas con equipos arrendados.'}</p>
           ) : (
             <>
-              {selUbicacionArriendo}
+              {selUbicacionArriendoTraslado}
               {origSel && arriendosDeUbicacion.length === 0 && (
                 <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene equipos arrendados.</p>
               )}
@@ -947,7 +912,7 @@ export default function Movimientos() {
       {/* PÉRDIDA PROPIO */}
       {tab === 'Pérdida' && clase === 'propio' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          {selOrigen}
+          {selOrigenTraslado}
           {origSel && categoriasOrigen.length === 0 && (
             <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene herramientas propias registradas.</p>
           )}
@@ -990,11 +955,11 @@ export default function Movimientos() {
       {/* PÉRDIDA ARRENDADO */}
       {tab === 'Pérdida' && clase === 'arrendado' && (
         <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
-          {ubicacionesConArriendo.length === 0 ? (
-            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>No hay equipos arrendados activos.</p>
+          {ubicacionesConArriendoTraslado.length === 0 ? (
+            <p style={{fontSize:'13px',color:'#999',margin:'0'}}>{esAdmin ? 'No hay equipos arrendados activos.' : 'No tienes ubicaciones asignadas con equipos arrendados.'}</p>
           ) : (
             <>
-              {selUbicacionArriendo}
+              {selUbicacionArriendoTraslado}
               {origSel && arriendosDeUbicacion.length === 0 && (
                 <p style={{fontSize:'13px',color:'#c5221f',margin:'0'}}>Esta ubicación no tiene equipos arrendados.</p>
               )}

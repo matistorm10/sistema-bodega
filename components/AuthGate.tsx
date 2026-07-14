@@ -7,7 +7,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { usuario, cargando, sinSesion } = useUsuarioActual()
   const pathname = usePathname()
   const router = useRouter()
-  const esLogin = pathname === '/login'
+  const esLogin = pathname === '/login' || pathname === '/reset-password'
 
   useEffect(() => {
     if (!cargando && sinSesion && !esLogin) router.push('/login')

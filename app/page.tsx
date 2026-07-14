@@ -20,7 +20,7 @@ export default function Home() {
     {href:'/inventario',icon:'📋',label:'Inventario',desc:'Qué hay en cada bodega/faena, con su estado'},
     {href:'/movimientos',icon:'🔄',label:'Movimientos',desc:'Ingresos, traslados y pérdidas'},
     {href:'/arriendos',icon:'🏗',label:'Arriendos',desc:'Equipos arrendados activos'},
-    {href:'/ubicaciones',icon:'📍',label:'Ubicaciones',desc:'Bodegas y faenas'},
+    ...(usuario?.rol === 'admin' ? [{href:'/ubicaciones',icon:'📍',label:'Ubicaciones',desc:'Bodegas y faenas'}] : []),
     ...(usuario?.rol === 'admin' ? [{href:'/usuarios',icon:'👥',label:'Usuarios',desc:'Personas y sus permisos de acceso'}] : []),
   ]
 

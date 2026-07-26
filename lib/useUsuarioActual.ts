@@ -4,7 +4,8 @@ import { supabase } from './supabase'
 
 export type Permiso = { ubicacion_id: string, puede_origen: boolean, puede_destino: boolean }
 export type UsuarioActual = {
-  id: string, nombre: string, cargo: string | null, telefono: string | null, email: string, rol: 'admin' | 'bodeguero',
+  id: string, nombre: string, cargo: string | null, telefono: string | null, email: string, rol: string,
+  accesoBodega: boolean, accesoVehiculos: boolean, accesoLicitaciones: boolean,
   permisos: Permiso[]
 }
 
@@ -25,6 +26,7 @@ export function useUsuarioActual() {
     if (error || !perfil) { setUsuario(null); setSinSesion(true); setCargando(false); return }
     setUsuario({
       id: perfil.id, nombre: perfil.nombre, cargo: perfil.cargo, telefono: perfil.telefono, email: perfil.email, rol: perfil.rol,
+      accesoBodega: perfil.acceso_bodega !== false, accesoVehiculos: !!perfil.acceso_vehiculos, accesoLicitaciones: !!perfil.acceso_licitaciones,
       permisos: perfil.usuario_ubicaciones || []
     })
     setSinSesion(false)

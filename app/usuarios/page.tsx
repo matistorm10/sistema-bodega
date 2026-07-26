@@ -19,6 +19,9 @@ export default function Usuarios() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rol, setRol] = useState('bodeguero')
+  const [accesoBodega, setAccesoBodega] = useState(true)
+  const [accesoVehiculos, setAccesoVehiculos] = useState(false)
+  const [accesoLicitaciones, setAccesoLicitaciones] = useState(false)
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -30,6 +33,9 @@ export default function Usuarios() {
   const [editCargo, setEditCargo] = useState('')
   const [editTelefono, setEditTelefono] = useState('')
   const [editRol, setEditRol] = useState('bodeguero')
+  const [editAccesoBodega, setEditAccesoBodega] = useState(true)
+  const [editAccesoVehiculos, setEditAccesoVehiculos] = useState(false)
+  const [editAccesoLicitaciones, setEditAccesoLicitaciones] = useState(false)
   const [editPermisos, setEditPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
@@ -81,13 +87,14 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`)
-    setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero'); setPermisos({})
+    setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
+    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setPermisos({})
     cargar()
   }
 
@@ -97,6 +104,9 @@ export default function Usuarios() {
     setEditCargo(u.cargo || '')
     setEditTelefono(u.telefono || '')
     setEditRol(u.rol)
+    setEditAccesoBodega(u.acceso_bodega !== false)
+    setEditAccesoVehiculos(!!u.acceso_vehiculos)
+    setEditAccesoLicitaciones(!!u.acceso_licitaciones)
     const p: Record<string, {origen:boolean, destino:boolean}> = {}
     ;(u.usuario_ubicaciones || []).forEach((x: any) => { p[x.ubicacion_id] = { origen: x.puede_origen, destino: x.puede_destino } })
     setEditPermisos(p)
@@ -111,7 +121,8 @@ export default function Usuarios() {
     setErrorEdicion('')
 
     const { error: errPerfil } = await supabase.from('usuarios').update({
-      nombre: editNombre.trim(), cargo: editCargo || null, telefono: editTelefono || null, rol: editRol
+      nombre: editNombre.trim(), cargo: editCargo || null, telefono: editTelefono || null, rol: editRol,
+      acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
@@ -154,6 +165,7 @@ export default function Usuarios() {
   }
 
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}
+  const checkboxLabel: React.CSSProperties = {display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'#333',cursor:'pointer',background:'#f8f9fa',padding:'10px 12px',borderRadius:'8px'}
 
   const tablaPermisos = (valores: Record<string, {origen:boolean, destino:boolean}>, onToggle: (id: string, campo: 'origen'|'destino') => void) => (
     <div style={{border:'0.5px solid #eee',borderRadius:'8px',overflow:'hidden'}}>
@@ -255,7 +267,18 @@ export default function Usuarios() {
 
         {rol !== 'admin' && (
           <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas (marca si puede usarla como origen y/o destino en Traslado)</label>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Acceso a módulos</label>
+            <div style={{display:'grid',gap:'8px'}}>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoBodega} onChange={e=>setAccesoBodega(e.target.checked)}/>📦 Bodega</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
+            </div>
+          </div>
+        )}
+
+        {rol !== 'admin' && accesoBodega && (
+          <div style={{marginBottom:'10px'}}>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas dentro de Bodega (marca si puede usarla como origen y/o destino en Traslado)</label>
             {tablaPermisos(permisos, togglePermiso)}
           </div>
         )}
@@ -298,7 +321,17 @@ export default function Usuarios() {
                   </div>
                   {editRol !== 'admin' && (
                     <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas</label>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Acceso a módulos</label>
+                      <div style={{display:'grid',gap:'8px'}}>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoBodega} onChange={e=>setEditAccesoBodega(e.target.checked)}/>📦 Bodega</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
+                      </div>
+                    </div>
+                  )}
+                  {editRol !== 'admin' && editAccesoBodega && (
+                    <div style={{marginBottom:'10px'}}>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas dentro de Bodega</label>
                       {tablaPermisos(editPermisos, toggleEditPermiso)}
                     </div>
                   )}
@@ -319,6 +352,13 @@ export default function Usuarios() {
                     </div>
                     <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'4px',background:u.rol==='admin'?'#fef7e0':'#e8f0fe',color:u.rol==='admin'?'#986a00':AZUL,whiteSpace:'nowrap'}}>{nombreRolLegible(u.rol)}</span>
                   </div>
+                  {u.rol !== 'admin' && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
+                      {u.acceso_bodega !== false && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>📦 Bodega</span>}
+                      {u.acceso_vehiculos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fce8e6',color:'#c5221f'}}>🚚 Vehículos</span>}
+                      {u.acceso_licitaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e8f0fe',color:AZUL}}>📋 Licitaciones</span>}
+                    </div>
+                  )}
                   {u.usuario_ubicaciones?.length > 0 && (
                     <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
                       {u.usuario_ubicaciones.map((p: any) => (

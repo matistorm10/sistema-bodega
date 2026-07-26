@@ -25,6 +25,7 @@ jobs:
           secret_access_key = ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
           endpoint = ${{ secrets.SUPABASE_S3_ENDPOINT }}
           region = ${{ secrets.SUPABASE_S3_REGION }}
+          force_path_style = true
 
           [b2]
           type = s3
@@ -33,8 +34,9 @@ jobs:
           secret_access_key = ${{ secrets.B2_APP_KEY }}
           endpoint = ${{ secrets.B2_ENDPOINT }}
           region = ${{ secrets.B2_REGION }}
+          force_path_style = true
           EOF
 
       - name: Copiar archivos nuevos/modificados hacia el respaldo
         run: |
-          rclone copy supabase:movimientos b2:${{ secrets.B2_BUCKET_NAME }}/movimientos --progress
+          rclone copy supabase:movimientos b2:${{ secrets.B2_BUCKET_NAME }}/movimientos --progress -vv

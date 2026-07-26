@@ -39,4 +39,4 @@ jobs:
 
       - name: Copiar archivos nuevos/modificados hacia el respaldo
         run: |
-          rclone copy supabase:movimientos b2:${{ secrets.B2_BUCKET_NAME }}/movimientos --progress -vv
+          rclone copy supabase:movimientos b2:${{ secrets.B2_BUCKET_NAME }}/movimientos --progress

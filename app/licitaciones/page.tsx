@@ -15,6 +15,8 @@ export default function Licitaciones() {
   const [cargando, setCargando] = useState(true)
 
   const [filtroCliente, setFiltroCliente] = useState('')
+  const [filtroEventoLicitacion, setFiltroEventoLicitacion] = useState('')
+  const [filtroEventoTipo, setFiltroEventoTipo] = useState('')
   const [filtroGoNoGo, setFiltroGoNoGo] = useState('')
   const [filtroEstadoFinal, setFiltroEstadoFinal] = useState('')
 
@@ -98,8 +100,15 @@ export default function Licitaciones() {
   })
   eventos.sort((a, b) => a.fecha.localeCompare(b.fecha))
   const hoyStr = new Date().toISOString().split('T')[0]
-  const eventosVencidos = eventos.filter(ev => ev.fecha < hoyStr)
-  const eventosProximos = eventos.filter(ev => ev.fecha >= hoyStr)
+
+  const licitacionesConEvento = licitaciones.filter(l => eventos.some(ev => ev.licitacion.id === l.id))
+  const tiposDeEvento = Object.keys(coloresPorTipo)
+
+  const eventosFiltrados = eventos
+    .filter(ev => !filtroEventoLicitacion || ev.licitacion.id === filtroEventoLicitacion)
+    .filter(ev => !filtroEventoTipo || ev.tipo === filtroEventoTipo)
+  const eventosVencidos = eventosFiltrados.filter(ev => ev.fecha < hoyStr)
+  const eventosProximos = eventosFiltrados.filter(ev => ev.fecha >= hoyStr)
 
   const formatFecha = (iso: string) => {
     const [y, m, d] = iso.split('-')
@@ -183,6 +192,25 @@ export default function Licitaciones() {
               <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>En proceso</p>
             </div>
           </div>
+
+          {eventos.length > 0 && (
+            <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1rem',background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+              <div style={{minWidth:'200px',flex:1}}>
+                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Filtrar fechas por proyecto</label>
+                <select value={filtroEventoLicitacion} onChange={e=>setFiltroEventoLicitacion(e.target.value)} style={inputStyle}>
+                  <option value=''>Todos los proyectos</option>
+                  {licitacionesConEvento.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                </select>
+              </div>
+              <div style={{minWidth:'200px',flex:1}}>
+                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Filtrar fechas por etapa</label>
+                <select value={filtroEventoTipo} onChange={e=>setFiltroEventoTipo(e.target.value)} style={inputStyle}>
+                  <option value=''>Todas las etapas</option>
+                  {tiposDeEvento.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
 
           {eventosVencidos.length > 0 && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',marginBottom:'1.25rem',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)',border:'1px solid #f5c6c2'}}>

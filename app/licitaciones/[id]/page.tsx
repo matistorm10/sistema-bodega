@@ -167,11 +167,14 @@ export default function DetalleLicitacion() {
     cargar()
   }
 
+  const [fechaCierreElegida, setFechaCierreElegida] = useState(new Date().toISOString().split('T')[0])
+
   const cerrarProceso = async (resultado: 'adjudicada' | 'no_adjudicada' | 'desierta') => {
     const texto = resultado === 'adjudicada' ? 'ADJUDICAR' : resultado === 'desierta' ? 'marcar como DESIERTA' : 'marcar como NO ADJUDICADA'
-    if (!confirm(`¿Confirmas ${texto} esta licitación?`)) return
+    if (!fechaCierreElegida) { alert('Elige la fecha de cierre.'); return }
+    if (!confirm(`¿Confirmas ${texto} esta licitación con fecha de cierre ${fechaCierreElegida}?`)) return
     setGuardando(true)
-    const { error } = await supabase.from('licitaciones').update({ estado_final: resultado, fecha_cierre: new Date().toISOString().split('T')[0] }).eq('id', id)
+    const { error } = await supabase.from('licitaciones').update({ estado_final: resultado, fecha_cierre: fechaCierreElegida }).eq('id', id)
     setGuardando(false)
     if (error) { alert('No se pudo guardar: ' + error.message); return }
     cargar()
@@ -497,6 +500,10 @@ export default function DetalleLicitacion() {
         <div style={card}>
           <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 4px'}}>Cerrar proceso</p>
           <p style={{fontSize:'12px',color:'#999',margin:'0 0 12px'}}>Cuando se resuelva la licitación, marca el resultado final. Guarda los cambios primero.</p>
+          <div style={{marginBottom:'12px'}}>
+            <label style={label}>Fecha de cierre</label>
+            <input type="date" value={fechaCierreElegida} onChange={e=>setFechaCierreElegida(e.target.value)} style={inputStyle}/>
+          </div>
           <div style={{display:'flex',gap:'8px'}}>
             <button onClick={()=>cerrarProceso('adjudicada')} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#137333',color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>✅ Adjudicada</button>
             <button onClick={()=>cerrarProceso('no_adjudicada')} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#c5221f',color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>❌ No adjudicada</button>

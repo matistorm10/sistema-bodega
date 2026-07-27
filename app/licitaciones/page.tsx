@@ -185,7 +185,7 @@ export default function Licitaciones() {
           </div>
 
           <p style={{fontSize:'12px',fontWeight:'700',color:'#8a94a6',textTransform:'uppercase',letterSpacing:'0.5px',margin:'0 0 8px'}}>Resultado final</p>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'10px',marginBottom:'1.25rem'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'1.25rem'}}>
             <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
               <p style={{fontSize:'24px',fontWeight:'700',margin:'0 0 2px',color:'#137333'}}>{totalAdjudicadas}</p>
               <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>Adjudicadas</p>

@@ -39,13 +39,23 @@ export default function DetalleLicitacion() {
   // Campo de fecha y hora + su estado (Pendiente / Realizada / No realizada), con alerta si ya venció y sigue pendiente
   const campoFecha = (tituloTexto: string, campoFechaKey: string, campoEstadoKey: string) => {
     const fechaCompleta = f[campoFechaKey] || ''
-    const fecha = fechaCompleta ? fechaCompleta.slice(0, 16) : '' // recorta a formato "YYYY-MM-DDTHH:mm" para el input
+    const [fechaParte, horaParteRaw] = fechaCompleta.split('T')
+    const horaParte = horaParteRaw ? horaParteRaw.slice(0, 5) : ''
     const estado = f[campoEstadoKey] || 'pendiente'
     const vencidaSinResolver = fechaCompleta && new Date(fechaCompleta) < ahora && estado === 'pendiente'
+
+    const actualizar = (nuevaFecha: string, nuevaHora: string) => {
+      if (!nuevaFecha) { set(campoFechaKey, ''); return }
+      set(campoFechaKey, nuevaHora ? `${nuevaFecha}T${nuevaHora}` : nuevaFecha)
+    }
+
     return (
       <div>
         <label style={label}>{tituloTexto}</label>
-        <input disabled={cerradaRef} type="datetime-local" value={fecha} onChange={e=>set(campoFechaKey, e.target.value)} style={{...inputStyle, marginBottom:'6px'}}/>
+        <div style={{display:'flex',gap:'6px',marginBottom:'6px'}}>
+          <input disabled={cerradaRef} type="date" value={fechaParte || ''} onChange={e=>actualizar(e.target.value, horaParte)} style={{...inputStyle, flex:1}}/>
+          <input disabled={cerradaRef} type="time" value={horaParte} onChange={e=>actualizar(fechaParte || '', e.target.value)} style={{...inputStyle, width:'90px'}}/>
+        </div>
         <select disabled={cerradaRef} value={estado} onChange={e=>set(campoEstadoKey, e.target.value)} style={{
           ...inputStyle, fontSize:'11px', padding:'5px 8px',
           color: vencidaSinResolver ? '#c5221f' : estado === 'realizada' ? '#137333' : estado === 'no_realizada' ? '#986a00' : '#666',
@@ -57,6 +67,23 @@ export default function DetalleLicitacion() {
           <option value='no_realizada'>No realizada</option>
           <option value='no_aplica'>No aplica</option>
         </select>
+      </div>
+    )
+  }
+
+  // Igual que campoFecha, pero sin selector de estado (para las ofertas)
+  const campoFechaSimple = (campoFechaKey: string) => {
+    const fechaCompleta = f[campoFechaKey] || ''
+    const [fechaParte, horaParteRaw] = fechaCompleta.split('T')
+    const horaParte = horaParteRaw ? horaParteRaw.slice(0, 5) : ''
+    const actualizar = (nuevaFecha: string, nuevaHora: string) => {
+      if (!nuevaFecha) { set(campoFechaKey, ''); return }
+      set(campoFechaKey, nuevaHora ? `${nuevaFecha}T${nuevaHora}` : nuevaFecha)
+    }
+    return (
+      <div style={{display:'flex',gap:'6px'}}>
+        <input disabled={cerrada} type="date" value={fechaParte || ''} onChange={e=>actualizar(e.target.value, horaParte)} style={{...inputStyle, flex:1}}/>
+        <input disabled={cerrada} type="time" value={horaParte} onChange={e=>actualizar(fechaParte || '', e.target.value)} style={{...inputStyle, width:'90px'}}/>
       </div>
     )
   }
@@ -236,16 +263,16 @@ export default function DetalleLicitacion() {
   return (
     <main style={fondoPagina}>
     <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'700px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',marginBottom:'1.25rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-          <Link href="/licitaciones" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Licitaciones</Link>
-          <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0'}}>{lic.nombre}</h1>
+      <div style={{marginBottom:'1.25rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',marginBottom:'8px'}}>
+          <Link href="/licitaciones" style={{fontSize:'13px',color:AZUL,textDecoration:'none',whiteSpace:'nowrap',flexShrink:0}}>← Licitaciones</Link>
+          {esAdmin && (
+            <button onClick={eliminarLicitacion} disabled={eliminando} style={{fontSize:'12px',color:'#c5221f',background:'none',border:'0.5px solid #f5c6c2',borderRadius:'6px',padding:'6px 12px',cursor:'pointer',opacity:eliminando?0.6:1,whiteSpace:'nowrap',flexShrink:0}}>
+              {eliminando ? 'Eliminando...' : '🗑 Eliminar'}
+            </button>
+          )}
         </div>
-        {esAdmin && (
-          <button onClick={eliminarLicitacion} disabled={eliminando} style={{fontSize:'12px',color:'#c5221f',background:'none',border:'0.5px solid #f5c6c2',borderRadius:'6px',padding:'6px 12px',cursor:'pointer',opacity:eliminando?0.6:1,whiteSpace:'nowrap'}}>
-            {eliminando ? 'Eliminando...' : '🗑 Eliminar licitación'}
-          </button>
-        )}
+        <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0',wordBreak:'break-word'}}>{lic.nombre}</h1>
       </div>
 
       {cerrada && (
@@ -399,7 +426,7 @@ export default function DetalleLicitacion() {
             </div>
           </div>
           {f.oferta_tecnica_decision === 'elaborar' && <>
-            <div style={{marginBottom:'10px'}}><label style={label}>Fecha de envío</label><input disabled={cerrada} type="datetime-local" value={f.fecha_oferta_tecnica ? f.fecha_oferta_tecnica.slice(0,16) : ''} onChange={e=>set('fecha_oferta_tecnica', e.target.value)} style={inputStyle}/></div>
+            <div style={{marginBottom:'10px'}}><label style={label}>Fecha de envío</label>{campoFechaSimple('fecha_oferta_tecnica')}</div>
             <label style={checkboxLabel}><input disabled={cerrada} type="checkbox" checked={!!f.oferta_tecnica_enviada} onChange={e=>set('oferta_tecnica_enviada', e.target.checked)}/>Ya enviada</label>
           </>}
         </>}
@@ -409,7 +436,7 @@ export default function DetalleLicitacion() {
       <div style={card}>
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 12px'}}>Oferta económica</p>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-          <div><label style={label}>Fecha de envío</label><input disabled={cerrada} type="datetime-local" value={f.fecha_oferta_economica ? f.fecha_oferta_economica.slice(0,16) : ''} onChange={e=>set('fecha_oferta_economica', e.target.value)} style={inputStyle}/></div>
+          <div><label style={label}>Fecha de envío</label>{campoFechaSimple('fecha_oferta_economica')}</div>
           <div>
             <label style={label}>Monto ofertado ($)</label>
             <input disabled={cerrada} type="text" inputMode="numeric" value={formatMiles(f.monto_oferta)} onChange={e=>set('monto_oferta', parseMiles(e.target.value))} style={inputStyle}/>

@@ -51,9 +51,9 @@ export default function Home() {
           <div style={{display:'flex', alignItems:'center', gap:'14px'}}>
             <img src="/logo-indeli.jpg" alt="Grupo Indeli" style={{height:'34px', width:'auto', borderRadius:'4px', border:'1px solid #e2e6ed', flexShrink:0}}/>
             <div style={{width:'1px', height:'30px', background:'#e2e6ed', flexShrink:0}}/>
-            <div style={{minWidth:0}}>
-              <h1 style={{fontSize:'16px',fontWeight:'700',margin:'0 0 2px',color:'#16213E',whiteSpace:'nowrap'}}>Sistema INDELI</h1>
-              <p style={{fontSize:'11px',color:AZUL,margin:'0',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.5px',whiteSpace:'nowrap'}}>Bodega · Vehículos · Licitaciones</p>
+            <div style={{minWidth:0, flex:1, overflow:'hidden'}}>
+              <h1 style={{fontSize:'16px',fontWeight:'700',margin:'0 0 2px',color:'#16213E',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>Sistema INDELI</h1>
+              <p style={{fontSize:'11px',color:AZUL,margin:'0',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.5px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>Bodega · Vehículos · Licitaciones</p>
             </div>
           </div>
           {!cargando && usuario && (

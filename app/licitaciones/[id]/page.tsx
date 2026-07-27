@@ -153,6 +153,16 @@ export default function DetalleLicitacion() {
     cargar()
   }
 
+  const [eliminando, setEliminando] = useState(false)
+  const eliminarLicitacion = async () => {
+    if (!confirm(`¿Eliminar por completo la licitación "${lic.nombre}"? Se borrará también su historial e iteraciones. No se puede deshacer.`)) return
+    setEliminando(true)
+    const { error } = await supabase.from('licitaciones').delete().eq('id', id)
+    setEliminando(false)
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    router.push('/licitaciones')
+  }
+
   const [mostrarNuevaIteracion, setMostrarNuevaIteracion] = useState(false)
   const [itFecha, setItFecha] = useState(new Date().toISOString().split('T')[0])
   const [itMonto, setItMonto] = useState('')
@@ -196,9 +206,16 @@ export default function DetalleLicitacion() {
   return (
     <main style={fondoPagina}>
     <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'700px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.25rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
-        <Link href="/licitaciones" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Licitaciones</Link>
-        <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0'}}>{lic.nombre}</h1>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',marginBottom:'1.25rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <Link href="/licitaciones" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Licitaciones</Link>
+          <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0'}}>{lic.nombre}</h1>
+        </div>
+        {esAdmin && (
+          <button onClick={eliminarLicitacion} disabled={eliminando} style={{fontSize:'12px',color:'#c5221f',background:'none',border:'0.5px solid #f5c6c2',borderRadius:'6px',padding:'6px 12px',cursor:'pointer',opacity:eliminando?0.6:1,whiteSpace:'nowrap'}}>
+            {eliminando ? 'Eliminando...' : '🗑 Eliminar licitación'}
+          </button>
+        )}
       </div>
 
       {cerrada && (

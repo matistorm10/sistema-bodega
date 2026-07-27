@@ -81,7 +81,7 @@ export default function Login() {
             fontSize: '11px', fontWeight: '700', color: AZUL, textAlign: 'center',
             textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 2rem',
           }}>
-            Sistema de Inventario · Bodegas
+            Sistema integral INDELI
           </p>
 
           {modo === 'login' ? (

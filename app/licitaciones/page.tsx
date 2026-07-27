@@ -121,8 +121,8 @@ export default function Licitaciones() {
   const filaEvento = (ev: { fecha: string, tipo: string, licitacion: any }, i: number, vencido: boolean) => {
     const { fecha, hora } = formatFecha(ev.fecha)
     return (
-      <Link key={i} href={`/licitaciones/${ev.licitacion.id}`} style={{textDecoration:'none'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: vencido ? '#fce8e6' : '#f8f9fb',borderLeft:`3px solid ${coloresPorTipo[ev.tipo] || '#999'}`}}>
+      <Link key={i} href={`/licitaciones/${ev.licitacion.id}`} style={{textDecoration:'none',display:'block',minWidth:0,width:'100%'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: vencido ? '#fce8e6' : '#f8f9fb',borderLeft:`3px solid ${coloresPorTipo[ev.tipo] || '#999'}`,width:'100%',boxSizing:'border-box'}}>
           <span style={{color:'#333',flex:1,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
             <span style={{fontWeight:700,color:coloresPorTipo[ev.tipo] || '#666'}}>{ev.tipo}</span> · {ev.licitacion.nombre}
           </span>
@@ -322,13 +322,13 @@ export default function Licitaciones() {
                 const goNoGo = etiquetaGoNoGo(l.go_no_go)
                 const final = etiquetaFinal(l.estado_final)
                 return (
-                  <Link key={l.id} href={`/licitaciones/${l.id}`} style={{textDecoration:'none'}}>
-                    <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <div>
-                        <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px',color:'#16213E'}}>{l.codigo_interno ? `[${l.codigo_interno}] ` : ''}{l.nombre}</p>
-                        <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>{[l.clientes?.nombre, l.cliente_lugares?.nombre].filter(Boolean).join(' · ') || 'Sin cliente asignado'}</p>
+                  <Link key={l.id} href={`/licitaciones/${l.id}`} style={{textDecoration:'none',display:'block',minWidth:0,width:'100%'}}>
+                    <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',width:'100%',boxSizing:'border-box'}}>
+                      <div style={{flex:1,minWidth:0,overflow:'hidden'}}>
+                        <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px',color:'#16213E',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{l.codigo_interno ? `[${l.codigo_interno}] ` : ''}{l.nombre}</p>
+                        <p style={{fontSize:'12px',color:'#667085',margin:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[l.clientes?.nombre, l.cliente_lugares?.nombre].filter(Boolean).join(' · ') || 'Sin cliente asignado'}</p>
                       </div>
-                      <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
                         <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:goNoGo.bg,color:goNoGo.c}}>{goNoGo.t}</span>
                         <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:final.bg,color:final.c}}>{final.t}</span>
                       </div>

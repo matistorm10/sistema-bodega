@@ -31,6 +31,11 @@ export default function DetalleVehiculo() {
   const [cargando, setCargando] = useState(true)
 
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}
+  const formatFecha = (iso: string) => {
+    if (!iso) return '—'
+    const [y, m, d] = iso.split('-')
+    return `${d}-${m}-${y}`
+  }
 
   const cargar = () => {
     setCargando(true)
@@ -547,7 +552,7 @@ export default function DetalleVehiculo() {
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                       <p style={{fontSize:'13px',fontWeight:'600',margin:'0'}}>{d.tipo_documento}{d.numero_documento ? ` · ${d.numero_documento}` : ''}</p>
                       <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:vencido?'#fce8e6':porVencer?'#fef7e0':'#e6f4ea',color:vencido?'#c5221f':porVencer?'#986a00':'#137333'}}>
-                        {vencido?'Vencido':porVencer?'Por vencer':'Vigente'}: {d.fecha_vencimiento}
+                        {vencido?'Vencido':porVencer?'Por vencer':'Vigente'}: {formatFecha(d.fecha_vencimiento)}
                       </span>
                     </div>
                     {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noopener noreferrer" style={{fontSize:'11px',color:AZUL,textDecoration:'none'}}>📎 {d.archivo_nombre || 'Ver archivo'}</a>}
@@ -586,7 +591,7 @@ export default function DetalleVehiculo() {
                         ) : (
                           historialDocs[d.id].map(h => (
                             <p key={h.id} style={{fontSize:'11px',color:'#666',margin:'0 0 4px'}}>
-                              Vencía el {h.fecha_vencimiento_anterior}{h.numero_documento_anterior ? ` (N° ${h.numero_documento_anterior})` : ''} · cambiado por {h.cambiado_por || '—'} el {new Date(h.created_at).toLocaleDateString('es-CL')}
+                              Vencía el {formatFecha(h.fecha_vencimiento_anterior)}{h.numero_documento_anterior ? ` (N° ${h.numero_documento_anterior})` : ''} · cambiado por {h.cambiado_por || '—'} el {new Date(h.created_at).toLocaleDateString('es-CL')}
                               {h.archivo_url_anterior && <> · <a href={h.archivo_url_anterior} target="_blank" rel="noopener noreferrer" style={{color:AZUL}}>ver archivo anterior</a></>}
                             </p>
                           ))
@@ -639,7 +644,7 @@ export default function DetalleVehiculo() {
             <div style={{display:'grid',gap:'6px'}}>
               {[...lecturas].reverse().map(l => (
                 <div key={l.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'10px',padding:'8px 14px',display:'flex',justifyContent:'space-between'}}>
-                  <span style={{fontSize:'12px',color:'#666'}}>{l.fecha} {l.registrado_por ? `· ${l.registrado_por}` : ''}</span>
+                  <span style={{fontSize:'12px',color:'#666'}}>{formatFecha(l.fecha)} {l.registrado_por ? `· ${l.registrado_por}` : ''}</span>
                   <span style={{fontSize:'13px',fontWeight:'600'}}>{Number(l.valor).toLocaleString('es-CL')} {vehiculo.tipo_medicion}</span>
                 </div>
               ))}
@@ -715,7 +720,7 @@ export default function DetalleVehiculo() {
                     <>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
                         <span style={{fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'20px',background: m.tipo==='correctiva'?'#fce8e6':'#e6f4ea', color: m.tipo==='correctiva'?'#c5221f':'#137333'}}>{m.tipo === 'correctiva' ? 'Correctiva' : 'Preventiva'}</span>
-                        <span style={{fontSize:'11px',color:'#999'}}>{m.fecha}</span>
+                        <span style={{fontSize:'11px',color:'#999'}}>{formatFecha(m.fecha)}</span>
                       </div>
                       <p style={{fontSize:'13px',margin:'0 0 4px'}}>{m.descripcion}</p>
                       <p style={{fontSize:'11px',color:'#666',margin:'0'}}>{[m.taller, m.costo ? `$${Number(m.costo).toLocaleString('es-CL')}` : null, m.kilometraje ? `${Number(m.kilometraje).toLocaleString('es-CL')} ${vehiculo.tipo_medicion}` : null].filter(Boolean).join(' · ')}</p>

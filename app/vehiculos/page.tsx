@@ -126,6 +126,10 @@ export default function Vehiculos() {
   const documentosVigentes = documentos.filter(d => new Date(d.fecha_vencimiento) > en30dias)
 
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}
+  const formatFecha = (iso: string) => {
+    const [y, m, d] = iso.split('-')
+    return `${d}-${m}-${y}`
+  }
 
   const vehiculosFiltrados = vehiculos
     .filter(v => !filtroUbicacion || v.ubicacion_id === filtroUbicacion)
@@ -180,7 +184,7 @@ export default function Vehiculos() {
                   <Link key={d.id} href={`/vehiculos/${d.vehiculo_id}?tab=Documentos`} style={{textDecoration:'none'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: new Date(d.fecha_vencimiento) < hoy ? '#fce8e6' : '#fef7e0'}}>
                       <span style={{color:'#333'}}>{d.vehiculos?.tipo} · {d.vehiculos?.patente || d.vehiculos?.codigo_interno} · {d.tipo_documento}</span>
-                      <span style={{fontWeight:'600',color: new Date(d.fecha_vencimiento) < hoy ? '#c5221f' : '#986a00'}}>{d.fecha_vencimiento}</span>
+                      <span style={{fontWeight:'600',color: new Date(d.fecha_vencimiento) < hoy ? '#c5221f' : '#986a00'}}>{formatFecha(d.fecha_vencimiento)}</span>
                     </div>
                   </Link>
                 ))}

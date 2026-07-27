@@ -326,7 +326,10 @@ export default function Licitaciones() {
                     <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',width:'100%',boxSizing:'border-box'}}>
                       <div style={{flex:1,minWidth:0,overflow:'hidden'}}>
                         <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px',color:'#16213E',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{l.codigo_interno ? `[${l.codigo_interno}] ` : ''}{l.nombre}</p>
-                        <p style={{fontSize:'12px',color:'#667085',margin:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{[l.clientes?.nombre, l.cliente_lugares?.nombre].filter(Boolean).join(' · ') || 'Sin cliente asignado'}</p>
+                        <p style={{fontSize:'12px',color:'#667085',margin:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {[l.clientes?.nombre, l.cliente_lugares?.nombre].filter(Boolean).join(' · ') || 'Sin cliente asignado'}
+                          {l.estado_final !== 'en_proceso' && l.fecha_cierre ? ` · Cierre: ${formatFecha(l.fecha_cierre).fecha}` : ''}
+                        </p>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
                         <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:goNoGo.bg,color:goNoGo.c}}>{goNoGo.t}</span>

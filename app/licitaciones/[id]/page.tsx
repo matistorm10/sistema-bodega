@@ -17,6 +17,7 @@ export default function DetalleLicitacion() {
   const [lic, setLic] = useState<any>(null)
   const [clientes, setClientes] = useState<any[]>([])
   const [iteraciones, setIteraciones] = useState<any[]>([])
+  const [consultasIteraciones, setConsultasIteraciones] = useState<any[]>([])
   const [historial, setHistorial] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
@@ -33,17 +34,18 @@ export default function DetalleLicitacion() {
   const formatMiles = (v: any) => v === '' || v == null ? '' : Number(v).toLocaleString('es-CL')
   const parseMiles = (v: string) => v.replace(/\D/g, '')
 
-  const hoyStr = new Date().toISOString().split('T')[0]
+  const ahora = new Date()
 
-  // Campo de fecha + su estado (Pendiente / Realizada / No realizada), con alerta si ya venció y sigue pendiente
+  // Campo de fecha y hora + su estado (Pendiente / Realizada / No realizada), con alerta si ya venció y sigue pendiente
   const campoFecha = (tituloTexto: string, campoFechaKey: string, campoEstadoKey: string) => {
-    const fecha = f[campoFechaKey] || ''
+    const fechaCompleta = f[campoFechaKey] || ''
+    const fecha = fechaCompleta ? fechaCompleta.slice(0, 16) : '' // recorta a formato "YYYY-MM-DDTHH:mm" para el input
     const estado = f[campoEstadoKey] || 'pendiente'
-    const vencidaSinResolver = fecha && fecha < hoyStr && estado === 'pendiente'
+    const vencidaSinResolver = fechaCompleta && new Date(fechaCompleta) < ahora && estado === 'pendiente'
     return (
       <div>
         <label style={label}>{tituloTexto}</label>
-        <input disabled={cerradaRef} type="date" value={fecha} onChange={e=>set(campoFechaKey, e.target.value)} style={{...inputStyle, marginBottom:'6px'}}/>
+        <input disabled={cerradaRef} type="datetime-local" value={fecha} onChange={e=>set(campoFechaKey, e.target.value)} style={{...inputStyle, marginBottom:'6px'}}/>
         <select disabled={cerradaRef} value={estado} onChange={e=>set(campoEstadoKey, e.target.value)} style={{
           ...inputStyle, fontSize:'11px', padding:'5px 8px',
           color: vencidaSinResolver ? '#c5221f' : estado === 'realizada' ? '#137333' : estado === 'no_realizada' ? '#986a00' : '#666',
@@ -66,13 +68,15 @@ export default function DetalleLicitacion() {
       supabase.from('clientes').select('*, cliente_lugares(id, nombre)').order('nombre'),
       supabase.from('licitacion_iteraciones').select('*').eq('licitacion_id', id).order('numero'),
       supabase.from('licitacion_historial').select('*').eq('licitacion_id', id).order('created_at', { ascending: false }),
-    ]).then(([licRes, clRes, itRes, hRes]) => {
+      supabase.from('licitacion_consultas_iteraciones').select('*').eq('licitacion_id', id).order('numero'),
+    ]).then(([licRes, clRes, itRes, hRes, ciRes]) => {
       if (licRes.error) console.error('Error licitacion:', licRes.error.message)
       setLic(licRes.data || null)
       setF(licRes.data || {})
       setClientes(clRes.data || [])
       setIteraciones(itRes.data || [])
       setHistorial(hRes.data || [])
+      setConsultasIteraciones(ciRes.data || [])
       setCargando(false)
     })
   }
@@ -185,6 +189,32 @@ export default function DetalleLicitacion() {
   const eliminarIteracion = async (itId: string) => {
     if (!confirm('¿Eliminar esta iteración?')) return
     const { error } = await supabase.from('licitacion_iteraciones').delete().eq('id', itId)
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    cargar()
+  }
+
+  const [mostrarNuevaConsulta, setMostrarNuevaConsulta] = useState(false)
+  const [ciFechaEnvio, setCiFechaEnvio] = useState(new Date().toISOString().split('T')[0])
+  const [ciFechaRecepcion, setCiFechaRecepcion] = useState('')
+  const [ciNotas, setCiNotas] = useState('')
+  const [guardandoCi, setGuardandoCi] = useState(false)
+
+  const agregarConsultaIteracion = async () => {
+    setGuardandoCi(true)
+    const numero = consultasIteraciones.length + 1
+    const { error } = await supabase.from('licitacion_consultas_iteraciones').insert({
+      licitacion_id: id, numero, fecha_envio: ciFechaEnvio || null, fecha_recepcion: ciFechaRecepcion || null, notas: ciNotas.trim() || null
+    })
+    setGuardandoCi(false)
+    if (error) { alert('No se pudo guardar: ' + error.message); return }
+    setCiFechaEnvio(new Date().toISOString().split('T')[0]); setCiFechaRecepcion(''); setCiNotas('')
+    setMostrarNuevaConsulta(false)
+    cargar()
+  }
+
+  const eliminarConsultaIteracion = async (ciId: string) => {
+    if (!confirm('¿Eliminar esta ronda de consultas?')) return
+    const { error } = await supabase.from('licitacion_consultas_iteraciones').delete().eq('id', ciId)
     if (error) { alert('No se pudo eliminar: ' + error.message); return }
     cargar()
   }
@@ -316,10 +346,43 @@ export default function DetalleLicitacion() {
           <div><label style={label}>Quién fue / irá</label><input disabled={cerrada} value={f.visita_responsable || ''} onChange={e=>set('visita_responsable', e.target.value)} style={inputStyle}/></div>
         </div>
         <label style={{...checkboxLabel, marginBottom:'12px'}}><input disabled={cerrada} type="checkbox" checked={!!f.carta_excusa} onChange={e=>set('carta_excusa', e.target.checked)}/>Se envió carta excusa (no asistimos)</label>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}}>
           {campoFecha('Envío de consultas', 'fecha_envio_consultas', 'estado_envio_consultas')}
           {campoFecha('Recepción de respuestas', 'fecha_recepcion_respuestas', 'estado_recepcion_respuestas')}
         </div>
+
+        <p style={{fontSize:'11px',fontWeight:'700',color:'#8a94a6',textTransform:'uppercase',letterSpacing:'0.5px',margin:'0 0 8px'}}>Rondas adicionales de consultas (si hubo más de una)</p>
+        {consultasIteraciones.length === 0 ? (
+          <p style={{fontSize:'12px',color:'#999',margin:'0 0 10px'}}>Sin rondas adicionales registradas.</p>
+        ) : (
+          <div style={{display:'grid',gap:'6px',marginBottom:'10px'}}>
+            {consultasIteraciones.map(ci => (
+              <div key={ci.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#f8f9fb',borderRadius:'8px',padding:'8px 12px'}}>
+                <span style={{fontSize:'12px',color:'#444'}}>
+                  Ronda {ci.numero} · Envío: {ci.fecha_envio || '—'} · Respuesta: {ci.fecha_recepcion || '—'}{ci.notas ? ` · ${ci.notas}` : ''}
+                </span>
+                {!cerrada && <button onClick={()=>eliminarConsultaIteracion(ci.id)} style={{border:'none',background:'none',color:'#c5221f',cursor:'pointer',fontSize:'13px'}}>×</button>}
+              </div>
+            ))}
+          </div>
+        )}
+        {!cerrada && (
+          mostrarNuevaConsulta ? (
+            <div style={{border:'1px solid #eee',borderRadius:'8px',padding:'12px'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+                <div><label style={label}>Fecha de envío</label><input type="date" value={ciFechaEnvio} onChange={e=>setCiFechaEnvio(e.target.value)} style={inputStyle}/></div>
+                <div><label style={label}>Fecha de respuesta</label><input type="date" value={ciFechaRecepcion} onChange={e=>setCiFechaRecepcion(e.target.value)} style={inputStyle}/></div>
+              </div>
+              <div style={{marginBottom:'10px'}}><label style={label}>Notas (opcional)</label><input value={ciNotas} onChange={e=>setCiNotas(e.target.value)} style={inputStyle}/></div>
+              <div style={{display:'flex',gap:'8px'}}>
+                <button onClick={agregarConsultaIteracion} disabled={guardandoCi} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'12px',fontWeight:'600',cursor:'pointer',opacity:guardandoCi?0.6:1}}>{guardandoCi?'Guardando...':'Guardar ronda'}</button>
+                <button onClick={()=>setMostrarNuevaConsulta(false)} style={{padding:'8px 14px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer'}}>Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={()=>setMostrarNuevaConsulta(true)} style={{fontSize:'12px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>+ Agregar nueva ronda de consultas</button>
+          )
+        )}
       </div>
 
       {/* OFERTA TÉCNICA */}
@@ -336,7 +399,7 @@ export default function DetalleLicitacion() {
             </div>
           </div>
           {f.oferta_tecnica_decision === 'elaborar' && <>
-            <div style={{marginBottom:'10px'}}><label style={label}>Fecha de envío</label><input disabled={cerrada} type="date" value={f.fecha_oferta_tecnica || ''} onChange={e=>set('fecha_oferta_tecnica', e.target.value)} style={inputStyle}/></div>
+            <div style={{marginBottom:'10px'}}><label style={label}>Fecha de envío</label><input disabled={cerrada} type="datetime-local" value={f.fecha_oferta_tecnica ? f.fecha_oferta_tecnica.slice(0,16) : ''} onChange={e=>set('fecha_oferta_tecnica', e.target.value)} style={inputStyle}/></div>
             <label style={checkboxLabel}><input disabled={cerrada} type="checkbox" checked={!!f.oferta_tecnica_enviada} onChange={e=>set('oferta_tecnica_enviada', e.target.checked)}/>Ya enviada</label>
           </>}
         </>}
@@ -346,7 +409,7 @@ export default function DetalleLicitacion() {
       <div style={card}>
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 12px'}}>Oferta económica</p>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-          <div><label style={label}>Fecha de envío</label><input disabled={cerrada} type="date" value={f.fecha_oferta_economica || ''} onChange={e=>set('fecha_oferta_economica', e.target.value)} style={inputStyle}/></div>
+          <div><label style={label}>Fecha de envío</label><input disabled={cerrada} type="datetime-local" value={f.fecha_oferta_economica ? f.fecha_oferta_economica.slice(0,16) : ''} onChange={e=>set('fecha_oferta_economica', e.target.value)} style={inputStyle}/></div>
           <div>
             <label style={label}>Monto ofertado ($)</label>
             <input disabled={cerrada} type="text" inputMode="numeric" value={formatMiles(f.monto_oferta)} onChange={e=>set('monto_oferta', parseMiles(e.target.value))} style={inputStyle}/>

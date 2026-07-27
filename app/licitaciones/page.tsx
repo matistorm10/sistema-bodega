@@ -98,8 +98,8 @@ export default function Licitaciones() {
     if (l.requiere_oferta_tecnica && l.oferta_tecnica_decision === 'elaborar' && l.fecha_oferta_tecnica && !l.oferta_tecnica_enviada) eventos.push({ fecha: l.fecha_oferta_tecnica, tipo: 'Envío oferta técnica', licitacion: l })
     if (l.fecha_oferta_economica && !l.oferta_economica_enviada) eventos.push({ fecha: l.fecha_oferta_economica, tipo: 'Envío oferta económica', licitacion: l })
   })
-  eventos.sort((a, b) => a.fecha.localeCompare(b.fecha))
-  const hoyStr = new Date().toISOString().split('T')[0]
+  eventos.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+  const ahora = new Date()
 
   const licitacionesConEvento = licitaciones.filter(l => eventos.some(ev => ev.licitacion.id === l.id))
   const tiposDeEvento = Object.keys(coloresPorTipo)
@@ -107,22 +107,33 @@ export default function Licitaciones() {
   const eventosFiltrados = eventos
     .filter(ev => !filtroEventoLicitacion || ev.licitacion.id === filtroEventoLicitacion)
     .filter(ev => !filtroEventoTipo || ev.tipo === filtroEventoTipo)
-  const eventosVencidos = eventosFiltrados.filter(ev => ev.fecha < hoyStr)
-  const eventosProximos = eventosFiltrados.filter(ev => ev.fecha >= hoyStr)
+  const eventosVencidos = eventosFiltrados.filter(ev => new Date(ev.fecha) < ahora)
+  const eventosProximos = eventosFiltrados.filter(ev => new Date(ev.fecha) >= ahora)
 
   const formatFecha = (iso: string) => {
-    const [y, m, d] = iso.split('-')
-    return `${d}-${m}-${y}`
+    const tieneHora = iso.includes('T')
+    const [fechaParte, horaParte] = iso.split('T')
+    const [y, m, d] = fechaParte.split('-')
+    const hora = tieneHora ? horaParte.slice(0, 5) : null
+    return { fecha: `${d}-${m}-${y}`, hora: hora && hora !== '00:00' ? hora : null }
   }
 
-  const filaEvento = (ev: { fecha: string, tipo: string, licitacion: any }, i: number, vencido: boolean) => (
-    <Link key={i} href={`/licitaciones/${ev.licitacion.id}`} style={{textDecoration:'none'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: vencido ? '#fce8e6' : '#f8f9fb',borderLeft:`3px solid ${coloresPorTipo[ev.tipo] || '#999'}`}}>
-        <span style={{color:'#333'}}><span style={{fontWeight:700,color:coloresPorTipo[ev.tipo] || '#666'}}>{ev.tipo}</span> · {ev.licitacion.nombre}</span>
-        <span style={{fontWeight:'600',color: vencido ? '#c5221f' : '#444'}}>{formatFecha(ev.fecha)}</span>
-      </div>
-    </Link>
-  )
+  const filaEvento = (ev: { fecha: string, tipo: string, licitacion: any }, i: number, vencido: boolean) => {
+    const { fecha, hora } = formatFecha(ev.fecha)
+    return (
+      <Link key={i} href={`/licitaciones/${ev.licitacion.id}`} style={{textDecoration:'none'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: vencido ? '#fce8e6' : '#f8f9fb',borderLeft:`3px solid ${coloresPorTipo[ev.tipo] || '#999'}`}}>
+          <span style={{color:'#333',flex:1,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+            <span style={{fontWeight:700,color:coloresPorTipo[ev.tipo] || '#666'}}>{ev.tipo}</span> · {ev.licitacion.nombre}
+          </span>
+          <span style={{display:'flex',alignItems:'center',flexShrink:0}}>
+            <span style={{fontWeight:'600',color: vencido ? '#c5221f' : '#444'}}>{fecha}</span>
+            <span style={{fontWeight:'400',color:'#999',marginLeft:'6px',width:'34px',textAlign:'left',visibility: hora ? 'visible' : 'hidden'}}>{hora || '00:00'}</span>
+          </span>
+        </div>
+      </Link>
+    )
+  }
 
   const etiquetaGoNoGo = (v: string) => v === 'go' ? { t: 'Go', bg: '#e6f4ea', c: '#137333' } : v === 'no_go' ? { t: 'No Go', bg: '#fce8e6', c: '#c5221f' } : { t: 'Sin decidir', bg: '#f1f3f4', c: '#666' }
   const etiquetaFinal = (v: string) => v === 'adjudicada' ? { t: 'Adjudicada', bg: '#e6f4ea', c: '#137333' } : v === 'no_adjudicada' ? { t: 'No adjudicada', bg: '#fce8e6', c: '#c5221f' } : v === 'desierta' ? { t: 'Desierta', bg: '#f1f3f4', c: '#666' } : { t: 'En proceso', bg: '#e8f0fe', c: AZUL }

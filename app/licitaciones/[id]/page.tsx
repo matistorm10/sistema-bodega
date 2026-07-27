@@ -364,19 +364,13 @@ export default function DetalleLicitacion() {
       {/* FECHAS DEL PROCESO */}
       <div style={card}>
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 12px'}}>Fechas del proceso</p>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-          {campoFecha('Invitación a participar', 'fecha_invitacion', 'estado_invitacion')}
-          {campoFecha('Reunión aclaratoria', 'fecha_reunion_aclaratoria', 'estado_reunion_aclaratoria')}
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-          {campoFecha('Visita técnica', 'fecha_visita_tecnica', 'estado_visita_tecnica')}
-          <div><label style={label}>Quién fue / irá</label><input disabled={cerrada} value={f.visita_responsable || ''} onChange={e=>set('visita_responsable', e.target.value)} style={inputStyle}/></div>
-        </div>
+        <div style={{marginBottom:'14px'}}>{campoFecha('Invitación a participar', 'fecha_invitacion', 'estado_invitacion')}</div>
+        <div style={{marginBottom:'14px'}}>{campoFecha('Reunión aclaratoria', 'fecha_reunion_aclaratoria', 'estado_reunion_aclaratoria')}</div>
+        <div style={{marginBottom:'10px'}}>{campoFecha('Visita técnica', 'fecha_visita_tecnica', 'estado_visita_tecnica')}</div>
+        <div style={{marginBottom:'14px'}}><label style={label}>Quién fue / irá</label><input disabled={cerrada} value={f.visita_responsable || ''} onChange={e=>set('visita_responsable', e.target.value)} style={inputStyle}/></div>
         <label style={{...checkboxLabel, marginBottom:'12px'}}><input disabled={cerrada} type="checkbox" checked={!!f.carta_excusa} onChange={e=>set('carta_excusa', e.target.checked)}/>Se envió carta excusa (no asistimos)</label>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}}>
-          {campoFecha('Envío de consultas', 'fecha_envio_consultas', 'estado_envio_consultas')}
-          {campoFecha('Recepción de respuestas', 'fecha_recepcion_respuestas', 'estado_recepcion_respuestas')}
-        </div>
+        <div style={{marginBottom:'14px'}}>{campoFecha('Envío de consultas', 'fecha_envio_consultas', 'estado_envio_consultas')}</div>
+        <div style={{marginBottom:'12px'}}>{campoFecha('Recepción de respuestas', 'fecha_recepcion_respuestas', 'estado_recepcion_respuestas')}</div>
 
         <p style={{fontSize:'11px',fontWeight:'700',color:'#8a94a6',textTransform:'uppercase',letterSpacing:'0.5px',margin:'0 0 8px'}}>Rondas adicionales de consultas (si hubo más de una)</p>
         {consultasIteraciones.length === 0 ? (
@@ -435,12 +429,10 @@ export default function DetalleLicitacion() {
       {/* OFERTA ECONÓMICA */}
       <div style={card}>
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 12px'}}>Oferta económica</p>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-          <div><label style={label}>Fecha de envío</label>{campoFechaSimple('fecha_oferta_economica')}</div>
-          <div>
-            <label style={label}>Monto ofertado ($)</label>
-            <input disabled={cerrada} type="text" inputMode="numeric" value={formatMiles(f.monto_oferta)} onChange={e=>set('monto_oferta', parseMiles(e.target.value))} style={inputStyle}/>
-          </div>
+        <div style={{marginBottom:'10px'}}><label style={label}>Fecha de envío</label>{campoFechaSimple('fecha_oferta_economica')}</div>
+        <div style={{marginBottom:'10px'}}>
+          <label style={label}>Monto ofertado ($)</label>
+          <input disabled={cerrada} type="text" inputMode="numeric" value={formatMiles(f.monto_oferta)} onChange={e=>set('monto_oferta', parseMiles(e.target.value))} style={inputStyle}/>
         </div>
         <label style={{...checkboxLabel, marginBottom:'14px'}}><input disabled={cerrada} type="checkbox" checked={!!f.oferta_economica_enviada} onChange={e=>set('oferta_economica_enviada', e.target.checked)}/>Ya enviada</label>
 

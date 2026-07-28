@@ -283,7 +283,7 @@ export default function DetalleLicitacion() {
           <p style={{fontSize:'13px',fontWeight:'700',margin:'0',color: etiquetaCierre[lic.estado_final]?.c}}>
             {etiquetaCierre[lic.estado_final]?.t} — cerrada el {lic.fecha_cierre}
           </p>
-          {esAdmin && <button onClick={reabrirProceso} style={{fontSize:'12px',color:'#555',background:'none',border:'0.5px solid #ccc',borderRadius:'6px',padding:'4px 10px',cursor:'pointer'}}>Reabrir</button>}
+          {puedeAcceder && <button onClick={reabrirProceso} style={{fontSize:'12px',color:'#555',background:'none',border:'0.5px solid #ccc',borderRadius:'6px',padding:'4px 10px',cursor:'pointer'}}>Reabrir</button>}
         </div>
       )}
 

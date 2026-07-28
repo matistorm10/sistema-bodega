@@ -141,7 +141,7 @@ export default function DetalleLicitacion() {
     }).eq('id', id)
     setGuardando(false)
     if (error) { alert('No se pudo guardar: ' + error.message); return }
-    cargar()
+    router.push('/licitaciones')
   }
 
   const [pidiendoComentario, setPidiendoComentario] = useState(false)

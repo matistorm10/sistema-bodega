@@ -123,7 +123,9 @@ export default function Licitaciones() {
     return (
       <Link key={i} href={`/licitaciones/${ev.licitacion.id}`} style={{textDecoration:'none',display:'block',minWidth:0,width:'100%'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',fontSize:'12px',padding:'8px 10px',borderRadius:'8px',background: vencido ? '#fce8e6' : '#f8f9fb',borderLeft:`3px solid ${coloresPorTipo[ev.tipo] || '#999'}`,width:'100%',boxSizing:'border-box'}}>
-          <span style={{color:'#333',flex:1,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+          <span
+            style={{color:'#333',flex:1,minWidth:0,whiteSpace:'nowrap',overflowX:'auto',overflowY:'hidden',WebkitOverflowScrolling:'touch',display:'block'}}
+          >
             <span style={{fontWeight:700,color:coloresPorTipo[ev.tipo] || '#666'}}>{ev.tipo}</span> · {ev.licitacion.nombre}
           </span>
           <span style={{display:'flex',alignItems:'center',flexShrink:0}}>

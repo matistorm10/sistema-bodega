@@ -74,7 +74,8 @@ export default function Licitaciones() {
   const totalAdjudicadas = licitaciones.filter(l => l.estado_final === 'adjudicada').length
   const totalNoAdjudicadas = licitaciones.filter(l => l.estado_final === 'no_adjudicada').length
   const totalDesiertas = licitaciones.filter(l => l.estado_final === 'desierta').length
-  const totalEnProceso = licitaciones.filter(l => l.estado_final === 'en_proceso').length
+  const totalEnProceso = licitaciones.filter(l => l.estado_final === 'en_proceso' && !l.oferta_economica_enviada).length
+  const totalEsperandoResultados = licitaciones.filter(l => l.estado_final === 'en_proceso' && l.oferta_economica_enviada).length
 
   // Colores distintos por tipo de fecha, para diferenciarlas de un vistazo
   const coloresPorTipo: Record<string, string> = {
@@ -138,12 +139,17 @@ export default function Licitaciones() {
   }
 
   const etiquetaGoNoGo = (v: string) => v === 'go' ? { t: 'Go', bg: '#e6f4ea', c: '#137333' } : v === 'no_go' ? { t: 'No Go', bg: '#fce8e6', c: '#c5221f' } : { t: 'Sin decidir', bg: '#f1f3f4', c: '#666' }
-  const etiquetaFinal = (v: string) => v === 'adjudicada' ? { t: 'Adjudicada', bg: '#e6f4ea', c: '#137333' } : v === 'no_adjudicada' ? { t: 'No adjudicada', bg: '#fce8e6', c: '#c5221f' } : v === 'desierta' ? { t: 'Desierta', bg: '#f1f3f4', c: '#666' } : { t: 'En proceso', bg: '#e8f0fe', c: AZUL }
+  const etiquetaFinal = (l: any) => l.estado_final === 'adjudicada' ? { t: 'Adjudicada', bg: '#e6f4ea', c: '#137333' } : l.estado_final === 'no_adjudicada' ? { t: 'No adjudicada', bg: '#fce8e6', c: '#c5221f' } : l.estado_final === 'desierta' ? { t: 'Desierta', bg: '#f1f3f4', c: '#666' } : l.oferta_economica_enviada ? { t: 'Esperando resultados', bg: '#fef7e0', c: '#986a00' } : { t: 'En proceso', bg: '#e8f0fe', c: AZUL }
 
   const licitacionesFiltradas = licitaciones
     .filter(l => !filtroCliente || l.cliente_id === filtroCliente)
     .filter(l => !filtroGoNoGo || l.go_no_go === filtroGoNoGo)
-    .filter(l => !filtroEstadoFinal || l.estado_final === filtroEstadoFinal)
+    .filter(l => {
+      if (!filtroEstadoFinal) return true
+      if (filtroEstadoFinal === 'en_proceso') return l.estado_final === 'en_proceso' && !l.oferta_economica_enviada
+      if (filtroEstadoFinal === 'esperando_resultados') return l.estado_final === 'en_proceso' && l.oferta_economica_enviada
+      return l.estado_final === filtroEstadoFinal
+    })
 
   if (cargandoUsuario) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>
 
@@ -187,7 +193,7 @@ export default function Licitaciones() {
           </div>
 
           <p style={{fontSize:'12px',fontWeight:'700',color:'#8a94a6',textTransform:'uppercase',letterSpacing:'0.5px',margin:'0 0 8px'}}>Resultado final</p>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'1.25rem'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'10px'}}>
             <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
               <p style={{fontSize:'24px',fontWeight:'700',margin:'0 0 2px',color:'#137333'}}>{totalAdjudicadas}</p>
               <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>Adjudicadas</p>
@@ -200,9 +206,15 @@ export default function Licitaciones() {
               <p style={{fontSize:'24px',fontWeight:'700',margin:'0 0 2px',color:'#666'}}>{totalDesiertas}</p>
               <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>Desiertas</p>
             </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'1.25rem'}}>
             <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
               <p style={{fontSize:'24px',fontWeight:'700',margin:'0 0 2px',color:AZUL}}>{totalEnProceso}</p>
               <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>En proceso</p>
+            </div>
+            <div style={{background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+              <p style={{fontSize:'24px',fontWeight:'700',margin:'0 0 2px',color:'#986a00'}}>{totalEsperandoResultados}</p>
+              <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>Esperando resultados</p>
             </div>
           </div>
 
@@ -264,6 +276,7 @@ export default function Licitaciones() {
               <select value={filtroEstadoFinal} onChange={e=>setFiltroEstadoFinal(e.target.value)} style={inputStyle}>
                 <option value=''>Todos</option>
                 <option value='en_proceso'>En proceso</option>
+                <option value='esperando_resultados'>Esperando resultados</option>
                 <option value='adjudicada'>Adjudicada</option>
                 <option value='no_adjudicada'>No adjudicada</option>
                 <option value='desierta'>Desierta</option>
@@ -322,7 +335,7 @@ export default function Licitaciones() {
             <div style={{display:'grid',gap:'8px'}}>
               {licitacionesFiltradas.map(l => {
                 const goNoGo = etiquetaGoNoGo(l.go_no_go)
-                const final = etiquetaFinal(l.estado_final)
+                const final = etiquetaFinal(l)
                 return (
                   <Link key={l.id} href={`/licitaciones/${l.id}`} style={{textDecoration:'none',display:'block',minWidth:0,width:'100%'}}>
                     <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',width:'100%',boxSizing:'border-box'}}>

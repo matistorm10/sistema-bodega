@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
@@ -14,6 +14,7 @@ const TABS = ['Datos', 'Documentos', 'Kilometraje', 'Mantenciones', 'Generación
 
 export default function DetalleVehiculo() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
   const { usuario } = useUsuarioActual()
   const esAdmin = usuario?.rol === 'admin'
@@ -74,6 +75,7 @@ export default function DetalleVehiculo() {
   const [fPatente, setFPatente] = useState('')
   const [fCodigo, setFCodigo] = useState('')
   const [fTipo, setFTipo] = useState('')
+  const [fPropiedad, setFPropiedad] = useState('propio')
   const [fMarca, setFMarca] = useState('')
   const [fModelo, setFModelo] = useState('')
   const [fAnio, setFAnio] = useState('')
@@ -88,6 +90,7 @@ export default function DetalleVehiculo() {
   const iniciarEdicionDatos = () => {
     if (!vehiculo) return
     setFPatente(vehiculo.patente || ''); setFCodigo(vehiculo.codigo_interno || ''); setFTipo(vehiculo.tipo || '')
+    setFPropiedad(vehiculo.propiedad || 'propio')
     setFMarca(vehiculo.marca || ''); setFModelo(vehiculo.modelo || ''); setFAnio(vehiculo.anio || '')
     setFCodigoMotor(vehiculo.codigo_motor || ''); setFChasis(vehiculo.chasis || '')
     setFUbicacion(vehiculo.ubicacion_id || ''); setFEstado(vehiculo.estado || 'activo')
@@ -99,6 +102,7 @@ export default function DetalleVehiculo() {
     setGuardandoDatos(true)
     const { error } = await supabase.from('vehiculos').update({
       patente: fPatente.trim() || null, codigo_interno: fCodigo.trim() || null, tipo: fTipo.trim(),
+      propiedad: fPropiedad,
       marca: fMarca.trim() || null, modelo: fModelo.trim() || null, anio: fAnio ? Number(fAnio) : null,
       codigo_motor: fCodigoMotor.trim() || null, chasis: fChasis.trim() || null,
       ubicacion_id: fUbicacion || null, estado: fEstado,
@@ -108,6 +112,16 @@ export default function DetalleVehiculo() {
     if (error) { alert('No se pudo guardar: ' + error.message); return }
     setEditando(false)
     cargar()
+  }
+
+  const [eliminandoVehiculo, setEliminandoVehiculo] = useState(false)
+  const eliminarVehiculo = async () => {
+    if (!confirm(`¿Eliminar por completo este vehículo (${vehiculo.patente || vehiculo.codigo_interno || vehiculo.tipo})? Se borrará también su historial de documentos, mantenciones y kilometraje. No se puede deshacer.`)) return
+    setEliminandoVehiculo(true)
+    const { error } = await supabase.from('vehiculos').delete().eq('id', id)
+    setEliminandoVehiculo(false)
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    router.push('/vehiculos')
   }
 
   // ================= CERTIFICADO DE OPERATIVIDAD + PROGRAMA DE MANTENCIÓN =================
@@ -549,9 +563,16 @@ export default function DetalleVehiculo() {
   return (
     <main style={fondoPagina}>
     <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'700px',margin:'0 auto'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
-        <Link href="/vehiculos" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Vehículos</Link>
-        <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0'}}>{vehiculo.patente || vehiculo.codigo_interno} · {vehiculo.tipo}</h1>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <Link href="/vehiculos" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Vehículos</Link>
+          <h1 style={{fontSize:'18px',fontWeight:'600',margin:'0'}}>{vehiculo.patente || vehiculo.codigo_interno} · {vehiculo.tipo}</h1>
+        </div>
+        {esAdmin && (
+          <button onClick={eliminarVehiculo} disabled={eliminandoVehiculo} style={{fontSize:'12px',color:'#c5221f',background:'none',border:'0.5px solid #f5c6c2',borderRadius:'6px',padding:'6px 12px',cursor:'pointer',opacity:eliminandoVehiculo?0.6:1,whiteSpace:'nowrap'}}>
+            {eliminandoVehiculo ? 'Eliminando...' : '🗑 Eliminar vehículo'}
+          </button>
+        )}
       </div>
 
       <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.25rem'}}>
@@ -572,6 +593,7 @@ export default function DetalleVehiculo() {
                 <p style={{fontSize:'13px',margin:'0'}}><b>Patente:</b> {vehiculo.patente || '—'}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Código interno:</b> {vehiculo.codigo_interno || '—'}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Tipo:</b> {vehiculo.tipo}</p>
+                <p style={{fontSize:'13px',margin:'0'}}><b>Propiedad:</b> {vehiculo.propiedad === 'tercero' ? 'Tercero' : 'Propio'}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Marca / Modelo:</b> {[vehiculo.marca, vehiculo.modelo].filter(Boolean).join(' ') || '—'}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Año:</b> {vehiculo.anio || '—'}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Código de motor:</b> {vehiculo.codigo_motor || '—'}</p>
@@ -592,6 +614,13 @@ export default function DetalleVehiculo() {
                 <div><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Código interno</label><input value={fCodigo} onChange={e=>setFCodigo(e.target.value)} style={inputStyle}/></div>
               </div>
               <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label><input value={fTipo} onChange={e=>setFTipo(e.target.value)} style={inputStyle}/></div>
+              <div style={{marginBottom:'10px'}}>
+                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Propiedad</label>
+                <select value={fPropiedad} onChange={e=>setFPropiedad(e.target.value)} style={inputStyle}>
+                  <option value='propio'>Propio</option>
+                  <option value='tercero'>Tercero</option>
+                </select>
+              </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
                 <div><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Marca</label><input value={fMarca} onChange={e=>setFMarca(e.target.value)} style={inputStyle}/></div>
                 <div><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Modelo</label><input value={fModelo} onChange={e=>setFModelo(e.target.value)} style={inputStyle}/></div>

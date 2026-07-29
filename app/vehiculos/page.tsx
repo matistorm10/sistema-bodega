@@ -19,6 +19,7 @@ export default function Vehiculos() {
   // Filtros
   const [filtroUbicacion, setFiltroUbicacion] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroPropiedad, setFiltroPropiedad] = useState('')
 
   // Gestión de tipos de vehículo (solo admin)
   const [mostrarTipos, setMostrarTipos] = useState(false)
@@ -31,6 +32,7 @@ export default function Vehiculos() {
   const [patente, setPatente] = useState('')
   const [codigoInterno, setCodigoInterno] = useState('')
   const [tipo, setTipo] = useState('')
+  const [propiedad, setPropiedad] = useState('propio')
   const [marca, setMarca] = useState('')
   const [modelo, setModelo] = useState('')
   const [anio, setAnio] = useState('')
@@ -95,6 +97,7 @@ export default function Vehiculos() {
       patente: patente.trim() || null,
       codigo_interno: codigoInterno.trim() || null,
       tipo,
+      propiedad,
       marca: marca.trim() || null,
       modelo: modelo.trim() || null,
       anio: anio ? Number(anio) : null,
@@ -109,7 +112,7 @@ export default function Vehiculos() {
     if (lecturaInicial && data) {
       await supabase.from('vehiculo_lecturas').insert({ vehiculo_id: data.id, valor: Number(lecturaInicial), registrado_por: usuario?.nombre })
     }
-    setPatente(''); setCodigoInterno(''); setTipo(''); setMarca(''); setModelo(''); setAnio('')
+    setPatente(''); setCodigoInterno(''); setTipo(''); setPropiedad('propio'); setMarca(''); setModelo(''); setAnio('')
     setTipoMedicion('km'); setLecturaInicial(''); setUbicacionId(''); setLimiteKm(''); setLimiteAnios('')
     setMostrarForm(false)
     cargar()
@@ -134,6 +137,7 @@ export default function Vehiculos() {
   const vehiculosFiltrados = vehiculos
     .filter(v => !filtroUbicacion || v.ubicacion_id === filtroUbicacion)
     .filter(v => !filtroEstado || v.estado === filtroEstado)
+    .filter(v => !filtroPropiedad || v.propiedad === filtroPropiedad)
 
   if (cargandoUsuario) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>
 
@@ -209,6 +213,14 @@ export default function Vehiculos() {
                 <option value='fuera_servicio'>Fuera de servicio</option>
               </select>
             </div>
+            <div style={{minWidth:'160px'}}>
+              <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Propiedad</label>
+              <select value={filtroPropiedad} onChange={e=>setFiltroPropiedad(e.target.value)} style={inputStyle}>
+                <option value=''>Todos</option>
+                <option value='propio'>Propios</option>
+                <option value='tercero'>Terceros</option>
+              </select>
+            </div>
           </div>
 
           {esAdmin && (
@@ -254,12 +266,21 @@ export default function Vehiculos() {
                   <input value={codigoInterno} onChange={e=>setCodigoInterno(e.target.value)} placeholder="Ej: EXC-03" style={inputStyle}/>
                 </div>
               </div>
-              <div style={{marginBottom:'10px'}}>
-                <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label>
-                <select value={tipo} onChange={e=>setTipo(e.target.value)} style={inputStyle}>
-                  <option value=''>Selecciona un tipo...</option>
-                  {tiposVehiculo.map(t => <option key={t.nombre} value={t.nombre}>{t.nombre}</option>)}
-                </select>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+                <div>
+                  <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label>
+                  <select value={tipo} onChange={e=>setTipo(e.target.value)} style={inputStyle}>
+                    <option value=''>Selecciona un tipo...</option>
+                    {tiposVehiculo.map(t => <option key={t.nombre} value={t.nombre}>{t.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Propiedad</label>
+                  <select value={propiedad} onChange={e=>setPropiedad(e.target.value)} style={inputStyle}>
+                    <option value='propio'>Propio</option>
+                    <option value='tercero'>Tercero</option>
+                  </select>
+                </div>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
                 <div>
@@ -325,7 +346,7 @@ export default function Vehiculos() {
                 const tienePorVencer = docsVehiculo.some(d => { const f = new Date(d.fecha_vencimiento); return f >= hoy && f <= en30dias })
                 return (
                   <Link key={v.id} href={`/vehiculos/${v.id}`} style={{textDecoration:'none'}}>
-                    <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div className="tile" style={{background: v.propiedad === 'tercero' ? '#FEF7E0' : '#E8F0FE',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                       <div>
                         <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px',color:'#16213E'}}>
                           {v.patente || v.codigo_interno || 'Sin identificar'} · {v.tipo}

@@ -346,7 +346,7 @@ export default function Vehiculos() {
                 const tienePorVencer = docsVehiculo.some(d => { const f = new Date(d.fecha_vencimiento); return f >= hoy && f <= en30dias })
                 return (
                   <Link key={v.id} href={`/vehiculos/${v.id}`} style={{textDecoration:'none'}}>
-                    <div className="tile" style={{background: v.propiedad === 'tercero' ? '#FEF7E0' : '#E8F0FE',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div className="tile" style={{background: v.propiedad === 'tercero' ? '#FEF7E0' : '#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                       <div>
                         <p style={{fontWeight:'700',fontSize:'14px',margin:'0 0 2px',color:'#16213E'}}>
                           {v.patente || v.codigo_interno || 'Sin identificar'} · {v.tipo}

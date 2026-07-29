@@ -9,6 +9,7 @@ import { generarCertificadoOperatividad } from '@/lib/generarCertificadoOperativ
 import { generarChecklistPDF } from '@/lib/generarChecklistPDF'
 import { generarProgramaMantencion } from '@/lib/generarProgramaMantencion'
 
+const VERDE = '#137333'
 const TABS = ['Datos', 'Documentos', 'Kilometraje', 'Mantenciones', 'Generación Certificados']
 
 export default function DetalleVehiculo() {
@@ -554,9 +555,12 @@ export default function DetalleVehiculo() {
       </div>
 
       <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.25rem'}}>
-        {TABS.map(t => (
-          <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?AZUL:'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?AZUL:'#ddd'}}>{t}</button>
-        ))}
+        {TABS.map(t => {
+          const colorTab = t === 'Generación Certificados' ? VERDE : AZUL
+          return (
+            <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'12px',cursor:'pointer',background:tab===t?colorTab:'#fff',color:tab===t?'#fff':'#444',borderColor:tab===t?colorTab:'#ddd'}}>{t}</button>
+          )
+        })}
       </div>
 
       {/* DATOS */}
@@ -887,7 +891,7 @@ export default function DetalleVehiculo() {
         <div>
           <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1rem'}}>
             {['Checklist', 'Programa Mantención', 'Certificado Operatividad'].map(t => (
-              <button key={t} onClick={()=>setSubTabGeneracion(t)} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'11px',cursor:'pointer',background:subTabGeneracion===t?AZUL:'#fff',color:subTabGeneracion===t?'#fff':'#444',borderColor:subTabGeneracion===t?AZUL:'#ddd'}}>{t}</button>
+              <button key={t} onClick={()=>setSubTabGeneracion(t)} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'11px',cursor:'pointer',background:subTabGeneracion===t?VERDE:'#fff',color:subTabGeneracion===t?'#fff':'#444',borderColor:subTabGeneracion===t?VERDE:'#ddd'}}>{t}</button>
             ))}
           </div>
 
@@ -895,7 +899,7 @@ export default function DetalleVehiculo() {
             <div>
               {esAdmin && (
                 <div style={{marginBottom:'1rem'}}>
-                  <button onClick={()=>setMostrarGestionItems(!mostrarGestionItems)} style={{fontSize:'12px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>
+                  <button onClick={()=>setMostrarGestionItems(!mostrarGestionItems)} style={{fontSize:'12px',color:VERDE,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>
                     {mostrarGestionItems ? '– Ocultar gestión de ítems' : `⚙️ Gestionar ítems de este checklist (${checklistItems.length}/${MAX_ITEMS_CHECKLIST})`}
                   </button>
                   {mostrarGestionItems && (
@@ -906,13 +910,13 @@ export default function DetalleVehiculo() {
                             {editandoItemId === it.id ? (
                               <>
                                 <input value={editandoItemTexto} onChange={e=>setEditandoItemTexto(e.target.value)} style={{...inputStyle, flex:1, fontSize:'12px'}} autoFocus/>
-                                <button onClick={()=>guardarEdicionItem(it.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Guardar</button>
+                                <button onClick={()=>guardarEdicionItem(it.id)} style={{fontSize:'11px',color:VERDE,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Guardar</button>
                                 <button onClick={()=>setEditandoItemId('')} style={{fontSize:'11px',color:'#666',background:'none',border:'none',cursor:'pointer'}}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 <span style={{fontSize:'12px',color:'#333',flex:1}}>{it.numero}. {it.texto}</span>
-                                <button onClick={()=>iniciarEdicionItem(it)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Editar</button>
+                                <button onClick={()=>iniciarEdicionItem(it)} style={{fontSize:'11px',color:VERDE,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Editar</button>
                                 <button onClick={()=>eliminarItemChecklist(it)} style={{fontSize:'11px',color:'#c5221f',background:'none',border:'none',cursor:'pointer'}}>Eliminar</button>
                               </>
                             )}
@@ -924,7 +928,7 @@ export default function DetalleVehiculo() {
                       ) : (
                         <div style={{display:'flex',gap:'8px'}}>
                           <input value={nuevoItemTexto} onChange={e=>setNuevoItemTexto(e.target.value)} placeholder="Texto del nuevo ítem" style={{...inputStyle, flex:1}}/>
-                          <button onClick={agregarItemChecklist} disabled={guardandoItem} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoItem?0.6:1}}>
+                          <button onClick={agregarItemChecklist} disabled={guardandoItem} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:VERDE,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoItem?0.6:1}}>
                             {guardandoItem ? 'Agregando...' : '+ Ítem'}
                           </button>
                         </div>
@@ -964,7 +968,7 @@ export default function DetalleVehiculo() {
                         </div>
                       ))}
                     </div>
-                    <button onClick={guardarYGenerarChecklist} disabled={guardandoChecklist} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardandoChecklist?0.6:1}}>
+                    <button onClick={guardarYGenerarChecklist} disabled={guardandoChecklist} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:VERDE,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardandoChecklist?0.6:1}}>
                       {guardandoChecklist ? 'Guardando...' : '📋 Guardar y descargar PDF'}
                     </button>
                   </div>
@@ -977,7 +981,7 @@ export default function DetalleVehiculo() {
                       {checklistRegistros.map(r => (
                         <div key={r.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'10px',padding:'8px 14px'}}>
                           <span style={{fontSize:'12px',color:'#666'}}>{r.fecha} · {r.realizado_por}</span>
-                          <button onClick={()=>redescargarChecklist(r)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>Descargar PDF</button>
+                          <button onClick={()=>redescargarChecklist(r)} style={{fontSize:'11px',color:VERDE,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>Descargar PDF</button>
                         </div>
                       ))}
                     </div>
@@ -1003,16 +1007,16 @@ export default function DetalleVehiculo() {
               </div>
               <div style={{display:'grid',gap:'8px'}}>
                 {subTabGeneracion === 'Certificado Operatividad' && (
-                  <button onClick={confirmarGenerarCertificado} disabled={generandoCertificado} style={{padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoCertificado?0.6:1}}>
+                  <button onClick={confirmarGenerarCertificado} disabled={generandoCertificado} style={{padding:'10px',borderRadius:'8px',border:'none',background:VERDE,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoCertificado?0.6:1}}>
                     {generandoCertificado ? 'Generando...' : '📄 Descargar Certificado de Operatividad'}
                   </button>
                 )}
                 {subTabGeneracion === 'Programa Mantención' && (
-                  <button onClick={confirmarGenerarPrograma} disabled={generandoPrograma} style={{padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoPrograma?0.6:1}}>
+                  <button onClick={confirmarGenerarPrograma} disabled={generandoPrograma} style={{padding:'10px',borderRadius:'8px',border:'none',background:VERDE,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoPrograma?0.6:1}}>
                     {generandoPrograma ? 'Generando...' : '📋 Descargar Programa de Mantención'}
                   </button>
                 )}
-                <button onClick={confirmarGenerarAmbos} disabled={generandoAmbos} style={{padding:'10px',borderRadius:'8px',border:`1.5px solid ${AZUL}`,background:'#fff',color:AZUL,fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoAmbos?0.6:1}}>
+                <button onClick={confirmarGenerarAmbos} disabled={generandoAmbos} style={{padding:'10px',borderRadius:'8px',border:`1.5px solid ${VERDE}`,background:'#fff',color:VERDE,fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoAmbos?0.6:1}}>
                   {generandoAmbos ? 'Generando...' : '📄📋 Descargar ambos documentos'}
                 </button>
               </div>

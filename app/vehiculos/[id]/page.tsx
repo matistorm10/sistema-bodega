@@ -5,8 +5,11 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import { generarCertificadoOperatividad } from '@/lib/generarCertificadoOperatividad'
+import { generarChecklistPDF } from '@/lib/generarChecklistPDF'
+import { generarProgramaMantencion } from '@/lib/generarProgramaMantencion'
 
-const TABS = ['Datos', 'Documentos', 'Kilometraje', 'Mantenciones']
+const TABS = ['Datos', 'Documentos', 'Kilometraje', 'Mantenciones', 'Generación Certificados']
 
 export default function DetalleVehiculo() {
   const params = useParams()
@@ -31,6 +34,8 @@ export default function DetalleVehiculo() {
   const [cargando, setCargando] = useState(true)
 
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}
+  const formatMiles = (v: any) => v === '' || v == null ? '' : Number(v).toLocaleString('es-CL')
+  const parseMiles = (v: string) => v.replace(/\D/g, '')
   const formatFecha = (iso: string) => {
     if (!iso) return '—'
     const [y, m, d] = iso.split('-')
@@ -104,7 +109,142 @@ export default function DetalleVehiculo() {
     cargar()
   }
 
-  // ================= DOCUMENTOS =================
+  // ================= CERTIFICADO DE OPERATIVIDAD + PROGRAMA DE MANTENCIÓN =================
+  // (comparten los mismos datos de horas/km actuales y próxima mantención)
+  const [docValorActual, setDocValorActual] = useState('')
+  const [docValorProximo, setDocValorProximo] = useState('')
+  const [generandoCertificado, setGenerandoCertificado] = useState(false)
+  const [generandoPrograma, setGenerandoPrograma] = useState(false)
+  const [generandoAmbos, setGenerandoAmbos] = useState(false)
+
+  const inicializarValoresDocs = () => {
+    if (docValorActual === '' && vehiculo?.lectura_actual != null) setDocValorActual(String(vehiculo.lectura_actual))
+    if (docValorProximo === '' && vehiculo?.limite_km != null) setDocValorProximo(String(vehiculo.limite_km))
+  }
+
+  const confirmarGenerarCertificado = async () => {
+    setGenerandoCertificado(true)
+    try {
+      await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+    } catch (e: any) {
+      alert('No se pudo generar el certificado: ' + e.message)
+    }
+    setGenerandoCertificado(false)
+  }
+
+  const confirmarGenerarPrograma = async () => {
+    setGenerandoPrograma(true)
+    try {
+      await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+    } catch (e: any) {
+      alert('No se pudo generar el programa: ' + e.message)
+    }
+    setGenerandoPrograma(false)
+  }
+
+  const confirmarGenerarAmbos = async () => {
+    setGenerandoAmbos(true)
+    try {
+      await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+    } catch (e: any) {
+      alert('No se pudo generar alguno de los documentos: ' + e.message)
+    }
+    setGenerandoAmbos(false)
+  }
+
+  // ================= CHECKLIST =================
+  const [checklistItems, setChecklistItems] = useState<any[]>([])
+  const [checklistEstados, setChecklistEstados] = useState<Record<string, 'bueno'|'regular'|'malo'>>({})
+  const [checklistRealizadoPor, setChecklistRealizadoPor] = useState('')
+  const [checklistFecha, setChecklistFecha] = useState(new Date().toISOString().split('T')[0])
+  const [checklistRegistros, setChecklistRegistros] = useState<any[]>([])
+  const [guardandoChecklist, setGuardandoChecklist] = useState(false)
+  const [cargandoChecklist, setCargandoChecklist] = useState(true)
+
+  const cargarChecklist = () => {
+    setCargandoChecklist(true)
+    Promise.all([
+      supabase.from('vehiculo_checklist_items').select('*').eq('tipo', vehiculo.tipo).order('numero'),
+      supabase.from('vehiculo_checklist_registros').select('*').eq('vehiculo_id', id).order('created_at', { ascending: false }),
+    ]).then(([itemsRes, regRes]) => {
+      const items = itemsRes.data || []
+      setChecklistItems(items)
+      const inicial: Record<string, 'bueno'|'regular'|'malo'> = {}
+      items.forEach((it: any) => { inicial[it.id] = 'bueno' })
+      setChecklistEstados(inicial)
+      setChecklistRegistros(regRes.data || [])
+      setChecklistRealizadoPor(usuario?.nombre || '')
+      setCargandoChecklist(false)
+    })
+  }
+
+  useEffect(() => { if (tab === 'Generación Certificados' && vehiculo) { cargarChecklist(); inicializarValoresDocs() } }, [tab, vehiculo?.id])
+  const [subTabGeneracion, setSubTabGeneracion] = useState('Checklist')
+
+  // ---- Gestión de ítems del checklist (solo admin) ----
+  const MAX_ITEMS_CHECKLIST = 30
+  const [mostrarGestionItems, setMostrarGestionItems] = useState(false)
+  const [nuevoItemTexto, setNuevoItemTexto] = useState('')
+  const [guardandoItem, setGuardandoItem] = useState(false)
+  const [editandoItemId, setEditandoItemId] = useState('')
+  const [editandoItemTexto, setEditandoItemTexto] = useState('')
+
+  const agregarItemChecklist = async () => {
+    if (!nuevoItemTexto.trim()) { alert('Escribe el texto del ítem.'); return }
+    if (checklistItems.length >= MAX_ITEMS_CHECKLIST) { alert(`Ya se alcanzó el máximo de ${MAX_ITEMS_CHECKLIST} ítems, para que el PDF no se pase a una segunda hoja.`); return }
+    setGuardandoItem(true)
+    const siguienteNumero = checklistItems.length > 0 ? Math.max(...checklistItems.map((it: any) => it.numero)) + 1 : 1
+    const { error } = await supabase.from('vehiculo_checklist_items').insert({ tipo: vehiculo.tipo, numero: siguienteNumero, texto: nuevoItemTexto.trim() })
+    setGuardandoItem(false)
+    if (error) { alert('No se pudo agregar: ' + error.message); return }
+    setNuevoItemTexto('')
+    cargarChecklist()
+  }
+
+  const iniciarEdicionItem = (it: any) => { setEditandoItemId(it.id); setEditandoItemTexto(it.texto) }
+
+  const guardarEdicionItem = async (itId: string) => {
+    if (!editandoItemTexto.trim()) { alert('El texto no puede estar vacío.'); return }
+    const { error } = await supabase.from('vehiculo_checklist_items').update({ texto: editandoItemTexto.trim() }).eq('id', itId)
+    if (error) { alert('No se pudo guardar: ' + error.message); return }
+    setEditandoItemId('')
+    cargarChecklist()
+  }
+
+  const eliminarItemChecklist = async (it: any) => {
+    if (!confirm(`¿Eliminar el ítem "${it.texto}"?`)) return
+    const { error } = await supabase.from('vehiculo_checklist_items').delete().eq('id', it.id)
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    cargarChecklist()
+  }
+
+  const guardarYGenerarChecklist = async () => {
+    if (!checklistRealizadoPor.trim()) { alert('Indica quién lo realizó.'); return }
+    setGuardandoChecklist(true)
+    const itemsParaGuardar = checklistItems.map(it => ({ numero: it.numero, texto: it.texto, estado: checklistEstados[it.id] || 'bueno' }))
+    const { error } = await supabase.from('vehiculo_checklist_registros').insert({
+      vehiculo_id: id, fecha: checklistFecha, realizado_por: checklistRealizadoPor.trim(), items: itemsParaGuardar
+    })
+    if (error) { setGuardandoChecklist(false); alert('No se pudo guardar: ' + error.message); return }
+    try {
+      await generarChecklistPDF({ vehiculo, items: itemsParaGuardar, realizadoPor: checklistRealizadoPor.trim(), fecha: checklistFecha })
+    } catch (e: any) {
+      alert('Se guardó, pero no se pudo generar el PDF: ' + e.message)
+    }
+    setGuardandoChecklist(false)
+    cargarChecklist()
+  }
+
+  const redescargarChecklist = async (registro: any) => {
+    try {
+      await generarChecklistPDF({ vehiculo, items: registro.items, realizadoPor: registro.realizado_por, fecha: registro.fecha })
+    } catch (e: any) {
+      alert('No se pudo generar el PDF: ' + e.message)
+    }
+  }
+
+
   const [mostrarTiposDoc, setMostrarTiposDoc] = useState(false)
   const [nuevoTipoDoc, setNuevoTipoDoc] = useState('')
   const [creandoTipoDoc, setCreandoTipoDoc] = useState(false)
@@ -437,7 +577,9 @@ export default function DetalleVehiculo() {
                 <p style={{fontSize:'13px',margin:'0'}}><b>Lectura actual:</b> {Number(vehiculo.lectura_actual).toLocaleString('es-CL')} {vehiculo.tipo_medicion}</p>
                 <p style={{fontSize:'13px',margin:'0'}}><b>Límite estándar:</b> {vehiculo.limite_km ? `${Number(vehiculo.limite_km).toLocaleString('es-CL')} km` : '—'}{vehiculo.limite_anios ? ` · ${vehiculo.limite_anios} años` : ''}</p>
               </div>
-              <button onClick={iniciarEdicionDatos} style={{padding:'8px 14px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer'}}>Editar datos</button>
+              <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                <button onClick={iniciarEdicionDatos} style={{padding:'8px 14px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer'}}>Editar datos</button>
+              </div>
             </>
           ) : (
             <>
@@ -739,7 +881,147 @@ export default function DetalleVehiculo() {
           )}
         </div>
       )}
+
+      {/* GENERACIÓN CERTIFICADOS */}
+      {tab === 'Generación Certificados' && (
+        <div>
+          <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1rem'}}>
+            {['Checklist', 'Programa Mantención', 'Certificado Operatividad'].map(t => (
+              <button key={t} onClick={()=>setSubTabGeneracion(t)} style={{padding:'6px 12px',borderRadius:'20px',border:'0.5px solid',fontSize:'11px',cursor:'pointer',background:subTabGeneracion===t?AZUL:'#fff',color:subTabGeneracion===t?'#fff':'#444',borderColor:subTabGeneracion===t?AZUL:'#ddd'}}>{t}</button>
+            ))}
+          </div>
+
+          {subTabGeneracion === 'Checklist' && (
+            <div>
+              {esAdmin && (
+                <div style={{marginBottom:'1rem'}}>
+                  <button onClick={()=>setMostrarGestionItems(!mostrarGestionItems)} style={{fontSize:'12px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>
+                    {mostrarGestionItems ? '– Ocultar gestión de ítems' : `⚙️ Gestionar ítems de este checklist (${checklistItems.length}/${MAX_ITEMS_CHECKLIST})`}
+                  </button>
+                  {mostrarGestionItems && (
+                    <div style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'12px',padding:'14px 16px',marginTop:'8px'}}>
+                      <div style={{display:'grid',gap:'6px',marginBottom:'12px'}}>
+                        {checklistItems.map((it: any) => (
+                          <div key={it.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'6px 8px',background:'#f8f9fb',borderRadius:'6px'}}>
+                            {editandoItemId === it.id ? (
+                              <>
+                                <input value={editandoItemTexto} onChange={e=>setEditandoItemTexto(e.target.value)} style={{...inputStyle, flex:1, fontSize:'12px'}} autoFocus/>
+                                <button onClick={()=>guardarEdicionItem(it.id)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Guardar</button>
+                                <button onClick={()=>setEditandoItemId('')} style={{fontSize:'11px',color:'#666',background:'none',border:'none',cursor:'pointer'}}>Cancelar</button>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{fontSize:'12px',color:'#333',flex:1}}>{it.numero}. {it.texto}</span>
+                                <button onClick={()=>iniciarEdicionItem(it)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',fontWeight:'600'}}>Editar</button>
+                                <button onClick={()=>eliminarItemChecklist(it)} style={{fontSize:'11px',color:'#c5221f',background:'none',border:'none',cursor:'pointer'}}>Eliminar</button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {checklistItems.length >= MAX_ITEMS_CHECKLIST ? (
+                        <p style={{fontSize:'11px',color:'#986a00',margin:'0'}}>Se alcanzó el máximo de {MAX_ITEMS_CHECKLIST} ítems (para que el PDF no se pase a una segunda hoja). Elimina alguno para agregar otro.</p>
+                      ) : (
+                        <div style={{display:'flex',gap:'8px'}}>
+                          <input value={nuevoItemTexto} onChange={e=>setNuevoItemTexto(e.target.value)} placeholder="Texto del nuevo ítem" style={{...inputStyle, flex:1}}/>
+                          <button onClick={agregarItemChecklist} disabled={guardandoItem} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoItem?0.6:1}}>
+                            {guardandoItem ? 'Agregando...' : '+ Ítem'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {cargandoChecklist ? <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p> : checklistItems.length === 0 ? (
+                <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
+                  <p style={{fontSize:'13px',color:'#999',margin:'0'}}>No hay un checklist configurado para el tipo "{vehiculo.tipo}". Pídele al administrador que lo cargue.</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1rem'}}>
+                    <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 12px'}}>Nueva inspección</p>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+                      <div><label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'4px'}}>Realizado por</label><input value={checklistRealizadoPor} onChange={e=>setChecklistRealizadoPor(e.target.value)} style={inputStyle}/></div>
+                      <div><label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'4px'}}>Fecha</label><input type="date" value={checklistFecha} onChange={e=>setChecklistFecha(e.target.value)} style={inputStyle}/></div>
+                    </div>
+                    <div style={{display:'grid',gap:'6px',marginBottom:'14px'}}>
+                      {checklistItems.map(it => (
+                        <div key={it.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',padding:'8px 10px',background:'#f8f9fb',borderRadius:'8px'}}>
+                          <span style={{fontSize:'12px',color:'#333',flex:1}}>{it.numero}. {it.texto}</span>
+                          <div style={{display:'flex',gap:'4px',flexShrink:0}}>
+                            {(['bueno','regular','malo'] as const).map(op => (
+                              <button key={op} onClick={()=>setChecklistEstados(prev=>({...prev, [it.id]: op}))} style={{
+                                fontSize:'10px', padding:'4px 8px', borderRadius:'6px', cursor:'pointer',
+                                border: checklistEstados[it.id]===op ? '1.5px solid' : '0.5px solid #ddd',
+                                borderColor: checklistEstados[it.id]===op ? (op==='bueno'?'#137333':op==='regular'?'#986a00':'#c5221f') : '#ddd',
+                                background: checklistEstados[it.id]===op ? (op==='bueno'?'#e6f4ea':op==='regular'?'#fef7e0':'#fce8e6') : '#fff',
+                                color: checklistEstados[it.id]===op ? (op==='bueno'?'#137333':op==='regular'?'#986a00':'#c5221f') : '#666',
+                              }}>{op === 'bueno' ? 'Bueno' : op === 'regular' ? 'Reg.' : 'Malo'}</button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={guardarYGenerarChecklist} disabled={guardandoChecklist} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardandoChecklist?0.6:1}}>
+                      {guardandoChecklist ? 'Guardando...' : '📋 Guardar y descargar PDF'}
+                    </button>
+                  </div>
+
+                  <p style={{fontSize:'12px',fontWeight:'700',color:'#8a94a6',textTransform:'uppercase',letterSpacing:'0.5px',margin:'0 0 8px'}}>Inspecciones anteriores</p>
+                  {checklistRegistros.length === 0 ? (
+                    <p style={{fontSize:'13px',color:'#999'}}>Sin inspecciones registradas.</p>
+                  ) : (
+                    <div style={{display:'grid',gap:'6px'}}>
+                      {checklistRegistros.map(r => (
+                        <div key={r.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'10px',padding:'8px 14px'}}>
+                          <span style={{fontSize:'12px',color:'#666'}}>{r.fecha} · {r.realizado_por}</span>
+                          <button onClick={()=>redescargarChecklist(r)} style={{fontSize:'11px',color:AZUL,background:'none',border:'none',cursor:'pointer',padding:'0',fontWeight:'600'}}>Descargar PDF</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {(subTabGeneracion === 'Programa Mantención' || subTabGeneracion === 'Certificado Operatividad') && (
+            <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px'}}>
+              <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 4px'}}>{subTabGeneracion === 'Programa Mantención' ? 'Programa de Mantención' : 'Certificado de Operatividad'}</p>
+              <p style={{fontSize:'11px',color:'#999',margin:'0 0 14px'}}>Estos datos se comparten entre ambos documentos — solo se ingresan una vez.</p>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'16px'}}>
+                <div>
+                  <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'4px'}}>{vehiculo.tipo_medicion === 'horas' ? 'Horas' : 'Kilómetros'} actuales</label>
+                  <input type="text" inputMode="numeric" value={formatMiles(docValorActual)} onChange={e=>setDocValorActual(parseMiles(e.target.value))} style={inputStyle}/>
+                </div>
+                <div>
+                  <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'4px'}}>Próxima mantención ({vehiculo.tipo_medicion === 'horas' ? 'horas' : 'km'})</label>
+                  <input type="text" inputMode="numeric" value={formatMiles(docValorProximo)} onChange={e=>setDocValorProximo(parseMiles(e.target.value))} style={inputStyle}/>
+                </div>
+              </div>
+              <div style={{display:'grid',gap:'8px'}}>
+                {subTabGeneracion === 'Certificado Operatividad' && (
+                  <button onClick={confirmarGenerarCertificado} disabled={generandoCertificado} style={{padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoCertificado?0.6:1}}>
+                    {generandoCertificado ? 'Generando...' : '📄 Descargar Certificado de Operatividad'}
+                  </button>
+                )}
+                {subTabGeneracion === 'Programa Mantención' && (
+                  <button onClick={confirmarGenerarPrograma} disabled={generandoPrograma} style={{padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoPrograma?0.6:1}}>
+                    {generandoPrograma ? 'Generando...' : '📋 Descargar Programa de Mantención'}
+                  </button>
+                )}
+                <button onClick={confirmarGenerarAmbos} disabled={generandoAmbos} style={{padding:'10px',borderRadius:'8px',border:`1.5px solid ${AZUL}`,background:'#fff',color:AZUL,fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:generandoAmbos?0.6:1}}>
+                  {generandoAmbos ? 'Generando...' : '📄📋 Descargar ambos documentos'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
+
     </main>
   )
 }

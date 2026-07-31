@@ -8,6 +8,7 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { generarCertificadoOperatividad } from '@/lib/generarCertificadoOperatividad'
 import { generarChecklistPDF } from '@/lib/generarChecklistPDF'
 import { generarProgramaMantencion } from '@/lib/generarProgramaMantencion'
+import { abrirVentanaPDF, entregarPDF } from '@/lib/abrirPDF'
 
 const VERDE = '#137333'
 const TABS = ['Datos', 'Documentos', 'Kilometraje', 'Mantenciones', 'Generación Certificados']
@@ -138,9 +139,11 @@ export default function DetalleVehiculo() {
   }
 
   const confirmarGenerarCertificado = async () => {
+    const ventana = abrirVentanaPDF()
     setGenerandoCertificado(true)
     try {
-      await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      const { doc, nombreArchivo } = await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      entregarPDF(doc, nombreArchivo, ventana)
     } catch (e: any) {
       alert('No se pudo generar el certificado: ' + e.message)
     }
@@ -148,9 +151,11 @@ export default function DetalleVehiculo() {
   }
 
   const confirmarGenerarPrograma = async () => {
+    const ventana = abrirVentanaPDF()
     setGenerandoPrograma(true)
     try {
-      await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      const { doc, nombreArchivo } = await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      entregarPDF(doc, nombreArchivo, ventana)
     } catch (e: any) {
       alert('No se pudo generar el programa: ' + e.message)
     }
@@ -158,10 +163,14 @@ export default function DetalleVehiculo() {
   }
 
   const confirmarGenerarAmbos = async () => {
+    const ventana1 = abrirVentanaPDF()
+    const ventana2 = abrirVentanaPDF()
     setGenerandoAmbos(true)
     try {
-      await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
-      await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      const cert = await generarCertificadoOperatividad({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      entregarPDF(cert.doc, cert.nombreArchivo, ventana1)
+      const prog = await generarProgramaMantencion({ vehiculo, valorActual: docValorActual, valorProximo: docValorProximo })
+      entregarPDF(prog.doc, prog.nombreArchivo, ventana2)
     } catch (e: any) {
       alert('No se pudo generar alguno de los documentos: ' + e.message)
     }
@@ -236,6 +245,7 @@ export default function DetalleVehiculo() {
 
   const guardarYGenerarChecklist = async () => {
     if (!checklistRealizadoPor.trim()) { alert('Indica quién lo realizó.'); return }
+    const ventana = abrirVentanaPDF()
     setGuardandoChecklist(true)
     const itemsParaGuardar = checklistItems.map(it => ({ numero: it.numero, texto: it.texto, estado: checklistEstados[it.id] || 'bueno' }))
     const { error } = await supabase.from('vehiculo_checklist_registros').insert({
@@ -243,7 +253,8 @@ export default function DetalleVehiculo() {
     })
     if (error) { setGuardandoChecklist(false); alert('No se pudo guardar: ' + error.message); return }
     try {
-      await generarChecklistPDF({ vehiculo, items: itemsParaGuardar, realizadoPor: checklistRealizadoPor.trim(), fecha: checklistFecha })
+      const { doc, nombreArchivo } = await generarChecklistPDF({ vehiculo, items: itemsParaGuardar, realizadoPor: checklistRealizadoPor.trim(), fecha: checklistFecha })
+      entregarPDF(doc, nombreArchivo, ventana)
     } catch (e: any) {
       alert('Se guardó, pero no se pudo generar el PDF: ' + e.message)
     }
@@ -252,8 +263,10 @@ export default function DetalleVehiculo() {
   }
 
   const redescargarChecklist = async (registro: any) => {
+    const ventana = abrirVentanaPDF()
     try {
-      await generarChecklistPDF({ vehiculo, items: registro.items, realizadoPor: registro.realizado_por, fecha: registro.fecha })
+      const { doc, nombreArchivo } = await generarChecklistPDF({ vehiculo, items: registro.items, realizadoPor: registro.realizado_por, fecha: registro.fecha })
+      entregarPDF(doc, nombreArchivo, ventana)
     } catch (e: any) {
       alert('No se pudo generar el PDF: ' + e.message)
     }

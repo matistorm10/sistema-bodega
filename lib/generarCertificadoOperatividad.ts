@@ -95,5 +95,5 @@ export async function generarCertificadoOperatividad(params: {
   } catch (e) { console.error('No se pudo cargar la firma:', e) }
 
   const nombreArchivo = `Certificado_Operatividad_${(vehiculo.patente || vehiculo.codigo_interno || 'vehiculo').replace(/\s+/g,'_')}_${hoy.toISOString().split('T')[0]}.pdf`
-  doc.save(nombreArchivo)
+  return { doc, nombreArchivo }
 }

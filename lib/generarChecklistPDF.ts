@@ -116,5 +116,5 @@ export async function generarChecklistPDF(params: {
   } catch (e) { console.error('No se pudo cargar la firma:', e) }
 
   const nombreArchivo = `Checklist_${(vehiculo.patente || vehiculo.codigo_interno || 'vehiculo').replace(/\s+/g,'_')}_${fecha}.pdf`
-  doc.save(nombreArchivo)
+  return { doc, nombreArchivo }
 }

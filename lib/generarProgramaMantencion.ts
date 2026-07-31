@@ -136,5 +136,5 @@ export async function generarProgramaMantencion(params: {
   } catch (e) { console.error('No se pudo cargar la firma:', e) }
 
   const nombreArchivo = `Programa_Mantencion_${(vehiculo.patente || vehiculo.codigo_interno || 'vehiculo').replace(/\s+/g,'_')}_${hoy.toISOString().split('T')[0]}.pdf`
-  doc.save(nombreArchivo)
+  return { doc, nombreArchivo }
 }

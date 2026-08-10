@@ -22,6 +22,8 @@ export default function Movimientos() {
   const [retornable, setRetornable] = useState('1')
   const [cantidad, setCantidad] = useState(1)
   const [exito, setExito] = useState('')
+  const [productoExistente, setProductoExistente] = useState<any>(null)
+  const [guardandoIngreso, setGuardandoIngreso] = useState(false)
 
   // --- Traslado ---
   const [origSel, setOrigSel] = useState('')
@@ -74,6 +76,20 @@ export default function Movimientos() {
     if (!catSel) { setTipos([]); setTipoSel(''); return }
     supabase.from('tipos').select('*').eq('categoria_id', catSel).order('nombre').then(({data}) => { setTipos(data||[]); setTipoSel('') })
   }, [catSel])
+
+  // Si ya existe un producto con el mismo tipo + nombre, el sistema respeta cómo fue creado
+  // (con código único o por cantidad) para que nunca queden datos repartidos en dos formatos distintos.
+  useEffect(() => {
+    if (tab !== 'Ingreso' || clase !== 'propio' || !tipoSel || !modelo.trim()) { setProductoExistente(null); return }
+    const handle = setTimeout(() => {
+      supabase.from('productos').select('id, retornable').eq('tipo_id', tipoSel).eq('nombre', modelo.trim()).single()
+        .then(({ data }) => {
+          if (data) { setProductoExistente(data); setRetornable(data.retornable ? '1' : '0') }
+          else setProductoExistente(null)
+        })
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [tipoSel, modelo, tab, clase])
 
   // Trae SOLO lo que existe físicamente en la ubicación elegida (unidades con código + stock con cantidad > 0)
   // Se usa tanto en Traslado como en Cambio estado
@@ -164,6 +180,8 @@ export default function Movimientos() {
     setOrigSel(''); setProdSel(''); setUnidadSel(''); setCantTraslado(1); setArriendoSel(''); setEstadoNuevo('')
     setFechaDevolucion(new Date().toISOString().split('T')[0])
     setArchivos([])
+    setProductoExistente(null)
+    setRetornable('1')
   }
 
   const subirArchivosSiHay = async (): Promise<{ url: string, nombre: string }[]> => {
@@ -216,7 +234,6 @@ export default function Movimientos() {
     }).eq('id', item.id)
     if (error) { alert('No se pudo eliminar: ' + error.message); return }
     setLogAll(prev => prev.map(l => l.id === item.id ? { ...l, archivos: restantes, archivo_url: restantes[0]?.url || null, archivo_nombre: restantes[0]?.nombre || null } : l))
-    // Intenta borrar el archivo del almacenamiento también, para no dejar basura (si falla, no es grave: solo queda un archivo huérfano)
     if (objetivo?.url) {
       const partes = objetivo.url.split('/movimientos/')
       if (partes[1]) supabase.storage.from('movimientos').remove([partes[1]]).catch(() => {})
@@ -291,28 +308,49 @@ export default function Movimientos() {
 
   const registrar = async () => {
     if (!tipoSel || !dstSel || !modelo) { alert('Completa todos los campos.'); return }
+    if (retornable === '1' && !codigo.trim()) { alert('Ingresa el código único (no puede quedar vacío ni ser un texto genérico como "N/A"; si esta herramienta no tiene un código físico, elige "No — consumible por cantidad" en vez de inventar uno).'); return }
+    setGuardandoIngreso(true)
     let productoId = ''
-    const { data: prodExist } = await supabase.from('productos').select('id').eq('tipo_id', tipoSel).eq('nombre', modelo).single()
-    if (prodExist) { productoId = prodExist.id }
-    else {
-      const { data: newProd } = await supabase.from('productos').insert({tipo_id: tipoSel, nombre: modelo, retornable: retornable==='1', unidad: 'un', revisado: false}).select('id').single()
-      productoId = newProd?.id
-    }
-    if (retornable === '1') {
-      if (!codigo) { alert('Ingresa el código único.'); return }
-      await supabase.from('unidades').insert({producto_id: productoId, codigo, estado: 'bueno', ubicacion_id: dstSel})
+
+    const { data: prodExist, error: errBuscar } = await supabase.from('productos').select('id, retornable').eq('tipo_id', tipoSel).eq('nombre', modelo).maybeSingle()
+    if (errBuscar) { setGuardandoIngreso(false); alert('No se pudo verificar el producto: ' + errBuscar.message); return }
+
+    if (prodExist) {
+      productoId = prodExist.id
     } else {
-      const { data: stockEx } = await supabase.from('stock').select('id, cantidad').eq('producto_id', productoId).eq('ubicacion_id', dstSel).single()
-      if (stockEx) { await supabase.from('stock').update({cantidad: stockEx.cantidad + cantidad}).eq('id', stockEx.id) }
-      else { await supabase.from('stock').insert({producto_id: productoId, ubicacion_id: dstSel, cantidad}) }
+      const { data: newProd, error: errCrear } = await supabase.from('productos').insert({tipo_id: tipoSel, nombre: modelo, retornable: retornable === '1', unidad: 'un', revisado: false}).select('id').single()
+      if (errCrear || !newProd) { setGuardandoIngreso(false); alert('No se pudo crear el producto: ' + (errCrear?.message || 'error desconocido')); return }
+      productoId = newProd.id
     }
-    registrarLog({
+
+    const esRetornable = prodExist ? prodExist.retornable : (retornable === '1')
+
+    if (esRetornable) {
+      const { error: errUnidad } = await supabase.from('unidades').insert({producto_id: productoId, codigo: codigo.trim(), estado: 'bueno', ubicacion_id: dstSel})
+      if (errUnidad) {
+        setGuardandoIngreso(false)
+        const esDuplicado = errUnidad.code === '23505'
+        alert('No se pudo registrar el ingreso: ' + errUnidad.message + (esDuplicado ? '\n\nEse código ya está en uso — cada código debe ser único. Usa uno distinto, o si esta herramienta no tiene código físico, ingrésala como "No — consumible por cantidad".' : ''))
+        return
+      }
+    } else {
+      const { data: stockEx } = await supabase.from('stock').select('id, cantidad').eq('producto_id', productoId).eq('ubicacion_id', dstSel).maybeSingle()
+      if (stockEx) {
+        const { error: errStock } = await supabase.from('stock').update({cantidad: stockEx.cantidad + cantidad}).eq('id', stockEx.id)
+        if (errStock) { setGuardandoIngreso(false); alert('No se pudo actualizar el stock: ' + errStock.message); return }
+      } else {
+        const { error: errStock } = await supabase.from('stock').insert({producto_id: productoId, ubicacion_id: dstSel, cantidad})
+        if (errStock) { setGuardandoIngreso(false); alert('No se pudo crear el stock: ' + errStock.message); return }
+      }
+    }
+    await registrarLog({
       tipo: 'ingreso', clase: 'propio',
       descripcion: `${modelo} ingresado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categorias.find(c=>c.id===catSel)?.nombre, tipoItem: tipos.find(t=>t.id===tipoSel)?.nombre, nombreItem: modelo,
       ubDestinoId: dstSel,
-      detalle: retornable === '1' ? { codigo } : { cantidad }
+      detalle: esRetornable ? { codigo: codigo.trim() } : { cantidad }
     })
+    setGuardandoIngreso(false)
     setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
     reset()
     setTimeout(() => setExito(''), 4000)
@@ -324,12 +362,13 @@ export default function Movimientos() {
     const vd = Number((document.getElementById('arr-vd') as HTMLInputElement)?.value)
     const fi = (document.getElementById('arr-fi') as HTMLInputElement)?.value
     if (!modelo || !prov || !vd || !fi || !dstSel) { alert('Completa todos los campos.'); return }
-    await supabase.from('arriendos').insert({
+    const { error } = await supabase.from('arriendos').insert({
       descripcion: modelo, categoria_id: catSel||null, tipo_id: tipoSel||null,
       proveedor: prov, orden_compra: oc, valor_dia: vd,
       fecha_inicio: fi, ubicacion_id: dstSel, estado: 'activo', estado_fisico: 'bueno'
     })
-    registrarLog({
+    if (error) { alert('No se pudo registrar el arriendo: ' + error.message); return }
+    await registrarLog({
       tipo: 'ingreso', clase: 'arrendado',
       descripcion: `${modelo} ingresado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categorias.find(c=>c.id===catSel)?.nombre, tipoItem: tipos.find(t=>t.id===tipoSel)?.nombre, nombreItem: modelo,
@@ -673,15 +712,19 @@ export default function Movimientos() {
             </div>
             <div style={{marginBottom:'10px'}}>
               <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>¿Retornable?</label>
-              <select value={retornable} onChange={e=>setRetornable(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+              <select value={retornable} onChange={e=>setRetornable(e.target.value)} disabled={!!productoExistente} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px', background: productoExistente ? '#f1f3f4' : '#fff'}}>
                 <option value='1'>Sí — código único por unidad</option>
                 <option value='0'>No — consumible por cantidad</option>
               </select>
+              {productoExistente && (
+                <p style={{fontSize:'11px',color:'#8a94a6',margin:'4px 0 0'}}>Este producto ya existe en el Catálogo y quedó definido como "{productoExistente.retornable ? 'con código único' : 'por cantidad'}" — no se puede cambiar aquí para evitar que quede repartido en dos formatos. Si necesitas cambiarlo, pídele al administrador que lo ajuste en Catálogo.</p>
+              )}
             </div>
             {retornable==='1' ? (
               <div style={{marginBottom:'10px'}}>
                 <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Código único</label>
                 <input value={codigo} onChange={e=>setCodigo(e.target.value)} placeholder="Ej: BSH-001" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
+                <p style={{fontSize:'11px',color:'#8a94a6',margin:'4px 0 0'}}>Tiene que ser un código real y distinto para cada unidad física. Si esta herramienta no tiene uno, mejor cambia arriba a "No — consumible por cantidad".</p>
               </div>
             ) : (
               <div style={{marginBottom:'10px'}}>
@@ -691,7 +734,7 @@ export default function Movimientos() {
             )}
             {selDstSinOrigenTraslado}
             {selArchivo}
-            <button onClick={registrar} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Registrar ingreso</button>
+            <button onClick={registrar} disabled={guardandoIngreso} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardandoIngreso?0.6:1}}>{guardandoIngreso ? 'Guardando...' : 'Registrar ingreso'}</button>
           </>}
         </div>
       )}

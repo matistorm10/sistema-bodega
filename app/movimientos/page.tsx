@@ -147,6 +147,8 @@ export default function Movimientos() {
   const etiquetasLog: Record<string, string> = { ingreso: 'Ingresos', traslado: 'Traslados', cambio_estado: 'Cambios de estado', devolucion: 'Devoluciones', perdida: 'Pérdidas' }
   const logStats = Object.keys(etiquetasLog).map(k => ({ tipo: k, etiqueta: etiquetasLog[k], total: logAll.filter(l => (!logUbicacionSel || l.ubicacion_origen_id === logUbicacionSel || l.ubicacion_destino_id === logUbicacionSel) && (!logClaseSel || l.clase === logClaseSel) && l.tipo === k).length }))
   const logItems = logFiltrado.slice(0, 100)
+  // Los "últimos 3" son globales (de todo el historial), sin importar el filtro que se esté viendo
+  const ultimosTresIds = new Set(logAll.slice(0, 3).map(l => l.id))
 
   // Categorías, tipos y productos disponibles EN EL ORIGEN elegido (solo lo que realmente hay ahí)
   const categoriasOrigen = Array.from(new Map(itemsOrigen.map(i => [i.categoria_id, {id: i.categoria_id, nombre: i.categoria_nombre}])).values())
@@ -204,7 +206,8 @@ export default function Movimientos() {
     tipo: string, clase: string, descripcion: string,
     categoria?: string, tipoItem?: string, nombreItem?: string,
     ubOrigenId?: string, ubDestinoId?: string,
-    detalle?: Record<string, any>
+    detalle?: Record<string, any>,
+    referenciaId?: string
   }) => {
     const subidos = await subirArchivosSiHay()
     const { error } = await supabase.from('movimientos_log').insert({
@@ -212,6 +215,7 @@ export default function Movimientos() {
       categoria: opts.categoria || null, tipo_item: opts.tipoItem || null, nombre_item: opts.nombreItem || null,
       ubicacion_origen_id: opts.ubOrigenId || null, ubicacion_destino_id: opts.ubDestinoId || null,
       detalle: opts.detalle || null,
+      referencia_id: opts.referenciaId || null,
       archivos: subidos.length > 0 ? subidos : null,
       archivo_url: subidos[0]?.url || null, archivo_nombre: subidos[0]?.nombre || null
     })
@@ -261,6 +265,98 @@ export default function Movimientos() {
     setLogAll(prev => prev.map(l => l.id === item.id ? { ...l, archivos: combinados, archivo_url: combinados[0]?.url, archivo_nombre: combinados[0]?.nombre } : l))
   }
 
+  const [deshaciendoId, setDeshaciendoId] = useState('')
+
+  // Revierte exactamente lo que hizo ese movimiento en unidades/stock/arriendos, según su tipo y clase.
+  const deshacerMovimiento = async (item: any) => {
+    if (!item.referencia_id) { alert('Este movimiento es muy antiguo y no guardó la referencia exacta necesaria para deshacerlo automáticamente.'); return }
+    if (!confirm(`¿Deshacer este movimiento?\n\n"${item.descripcion}"\n\nEsta acción no se puede repetir después.`)) return
+    setDeshaciendoId(item.id)
+    const d = item.detalle || {}
+    let error: any = null
+    let sinFilas = false // true si Supabase no dio error, pero tampoco tocó ninguna fila (típico de un bloqueo silencioso de permisos/RLS)
+
+    try {
+      if (item.tipo === 'ingreso' && item.clase === 'propio') {
+        if (d.codigo) {
+          const r = await supabase.from('unidades').delete().eq('id', item.referencia_id).select()
+          error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+        } else if (d.cantidad != null) {
+          const { data: row } = await supabase.from('stock').select('id, cantidad').eq('producto_id', item.referencia_id).eq('ubicacion_id', item.ubicacion_destino_id).maybeSingle()
+          if (row) {
+            const r = row.cantidad - d.cantidad <= 0
+              ? await supabase.from('stock').delete().eq('id', row.id).select()
+              : await supabase.from('stock').update({ cantidad: row.cantidad - d.cantidad }).eq('id', row.id).select()
+            error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+          }
+        }
+      } else if (item.tipo === 'ingreso' && item.clase === 'arrendado') {
+        const r = await supabase.from('arriendos').delete().eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else if (item.tipo === 'traslado' && item.clase === 'propio') {
+        if (d.codigo) {
+          const r = await supabase.from('unidades').update({ ubicacion_id: item.ubicacion_origen_id }).eq('id', item.referencia_id).select()
+          error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+        } else if (d.cantidad != null) {
+          const { data: dstRow } = await supabase.from('stock').select('id, cantidad').eq('producto_id', item.referencia_id).eq('ubicacion_id', item.ubicacion_destino_id).maybeSingle()
+          if (dstRow) {
+            const r1 = dstRow.cantidad - d.cantidad <= 0
+              ? await supabase.from('stock').delete().eq('id', dstRow.id).select()
+              : await supabase.from('stock').update({ cantidad: dstRow.cantidad - d.cantidad }).eq('id', dstRow.id).select()
+            if (r1.error) error = r1.error
+          }
+          const { data: origRow } = await supabase.from('stock').select('id, cantidad').eq('producto_id', item.referencia_id).eq('ubicacion_id', item.ubicacion_origen_id).maybeSingle()
+          if (!error) {
+            const r2 = origRow
+              ? await supabase.from('stock').update({ cantidad: origRow.cantidad + d.cantidad }).eq('id', origRow.id).select()
+              : await supabase.from('stock').insert({ producto_id: item.referencia_id, ubicacion_id: item.ubicacion_origen_id, cantidad: d.cantidad }).select()
+            error = r2.error; sinFilas = !r2.error && (!r2.data || r2.data.length === 0)
+          }
+        }
+      } else if (item.tipo === 'traslado' && item.clase === 'arrendado') {
+        const r = await supabase.from('arriendos').update({ ubicacion_id: item.ubicacion_origen_id }).eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else if (item.tipo === 'cambio_estado' && item.clase === 'propio') {
+        const r = await supabase.from('unidades').update({ estado: d.estado_anterior || 'bueno' }).eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else if (item.tipo === 'cambio_estado' && item.clase === 'arrendado') {
+        const r = await supabase.from('arriendos').update({ estado_fisico: d.estado_anterior || 'bueno' }).eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else if (item.tipo === 'devolucion') {
+        const r = await supabase.from('arriendos').update({ estado: 'activo', fecha_devolucion: null }).eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else if (item.tipo === 'perdida' && item.clase === 'propio') {
+        if (d.codigo) {
+          const r = await supabase.from('unidades').update({ estado: d.estado_anterior || 'bueno' }).eq('id', item.referencia_id).select()
+          error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+        } else if (d.cantidad != null) {
+          const { data: row } = await supabase.from('stock').select('id, cantidad').eq('producto_id', item.referencia_id).eq('ubicacion_id', item.ubicacion_origen_id).maybeSingle()
+          const r = row
+            ? await supabase.from('stock').update({ cantidad: row.cantidad + d.cantidad }).eq('id', row.id).select()
+            : await supabase.from('stock').insert({ producto_id: item.referencia_id, ubicacion_id: item.ubicacion_origen_id, cantidad: d.cantidad }).select()
+          error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+        }
+      } else if (item.tipo === 'perdida' && item.clase === 'arrendado') {
+        const r = await supabase.from('arriendos').update({ estado: 'activo', fecha_devolucion: null }).eq('id', item.referencia_id).select()
+        error = r.error; sinFilas = !r.error && (!r.data || r.data.length === 0)
+      } else {
+        setDeshaciendoId(''); alert('Este tipo de movimiento todavía no se puede deshacer automáticamente.'); return
+      }
+    } catch (e: any) {
+      error = e
+    }
+
+    if (error) { setDeshaciendoId(''); alert('No se pudo deshacer: ' + (error.message || error)); return }
+    if (sinFilas) { setDeshaciendoId(''); alert('No se pudo deshacer: no se modificó ningún dato. Probablemente falten permisos (RLS) para eliminar/actualizar en Supabase.'); return }
+
+    const { error: errMark } = await supabase.from('movimientos_log').update({
+      deshecho: true, deshecho_por: usuario?.nombre || 'Administrador', deshecho_en: new Date().toISOString()
+    }).eq('id', item.id)
+    setDeshaciendoId('')
+    if (errMark) { alert('Se deshizo el movimiento en el inventario, pero no se pudo marcar en el historial: ' + errMark.message); return }
+    setLogAll(prev => prev.map(l => l.id === item.id ? { ...l, deshecho: true, deshecho_por: usuario?.nombre || 'Administrador', deshecho_en: new Date().toISOString() } : l))
+  }
+
   const quitarArchivoSeleccionado = (idx: number) => setArchivos(prev => prev.filter((_, i) => i !== idx))
 
   const selArchivo = (
@@ -308,7 +404,7 @@ export default function Movimientos() {
 
   const registrar = async () => {
     if (!tipoSel || !dstSel || !modelo) { alert('Completa todos los campos.'); return }
-    if (retornable === '1' && !codigo.trim()) { alert('Ingresa el código único (no puede quedar vacío ni ser un texto genérico como "N/A"; si esta herramienta no tiene un código físico, elige "No — consumible por cantidad" en vez de inventar uno).'); return }
+    if (retornable === '1' && !codigo.trim()) { alert('Ingresa el código único (no puede quedar vacío ni ser un texto genérico como "N/A"; si esta herramienta no tiene un código físico, elige "No tiene código — se maneja por cantidad" en vez de inventar uno).'); return }
     setGuardandoIngreso(true)
     let productoId = ''
 
@@ -324,15 +420,17 @@ export default function Movimientos() {
     }
 
     const esRetornable = prodExist ? prodExist.retornable : (retornable === '1')
+    let referenciaId = productoId // por defecto: para stock, la referencia es el producto (se busca por producto+ubicación al deshacer)
 
     if (esRetornable) {
-      const { error: errUnidad } = await supabase.from('unidades').insert({producto_id: productoId, codigo: codigo.trim(), estado: 'bueno', ubicacion_id: dstSel})
+      const { data: nuevaUnidad, error: errUnidad } = await supabase.from('unidades').insert({producto_id: productoId, codigo: codigo.trim(), estado: 'bueno', ubicacion_id: dstSel}).select('id').single()
       if (errUnidad) {
         setGuardandoIngreso(false)
         const esDuplicado = errUnidad.code === '23505'
-        alert('No se pudo registrar el ingreso: ' + errUnidad.message + (esDuplicado ? '\n\nEse código ya está en uso — cada código debe ser único. Usa uno distinto, o si esta herramienta no tiene código físico, ingrésala como "No — consumible por cantidad".' : ''))
+        alert('No se pudo registrar el ingreso: ' + errUnidad.message + (esDuplicado ? '\n\nEse código ya está en uso — cada código debe ser único. Usa uno distinto, o si esta herramienta no tiene código físico, ingrésala como "No tiene código — se maneja por cantidad".' : ''))
         return
       }
+      referenciaId = nuevaUnidad?.id || productoId
     } else {
       const { data: stockEx } = await supabase.from('stock').select('id, cantidad').eq('producto_id', productoId).eq('ubicacion_id', dstSel).maybeSingle()
       if (stockEx) {
@@ -348,7 +446,8 @@ export default function Movimientos() {
       descripcion: `${modelo} ingresado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categorias.find(c=>c.id===catSel)?.nombre, tipoItem: tipos.find(t=>t.id===tipoSel)?.nombre, nombreItem: modelo,
       ubDestinoId: dstSel,
-      detalle: esRetornable ? { codigo: codigo.trim() } : { cantidad }
+      detalle: esRetornable ? { codigo: codigo.trim() } : { cantidad },
+      referenciaId
     })
     setGuardandoIngreso(false)
     setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
@@ -362,18 +461,19 @@ export default function Movimientos() {
     const vd = Number((document.getElementById('arr-vd') as HTMLInputElement)?.value)
     const fi = (document.getElementById('arr-fi') as HTMLInputElement)?.value
     if (!modelo || !prov || !vd || !fi || !dstSel) { alert('Completa todos los campos.'); return }
-    const { error } = await supabase.from('arriendos').insert({
+    const { data: nuevoArriendo, error } = await supabase.from('arriendos').insert({
       descripcion: modelo, categoria_id: catSel||null, tipo_id: tipoSel||null,
       proveedor: prov, orden_compra: oc, valor_dia: vd,
       fecha_inicio: fi, ubicacion_id: dstSel, estado: 'activo', estado_fisico: 'bueno'
-    })
+    }).select('id').single()
     if (error) { alert('No se pudo registrar el arriendo: ' + error.message); return }
     await registrarLog({
       tipo: 'ingreso', clase: 'arrendado',
       descripcion: `${modelo} ingresado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categorias.find(c=>c.id===catSel)?.nombre, tipoItem: tipos.find(t=>t.id===tipoSel)?.nombre, nombreItem: modelo,
       ubDestinoId: dstSel,
-      detalle: { proveedor: prov, orden_compra: oc, valor_dia: vd, fecha_inicio: fi }
+      detalle: { proveedor: prov, orden_compra: oc, valor_dia: vd, fecha_inicio: fi },
+      referenciaId: nuevoArriendo?.id
     })
     setExito(`${modelo} registrado en ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
     reset()
@@ -409,7 +509,8 @@ export default function Movimientos() {
       descripcion: `${prodInfo?.nombre} trasladado de ${ubicaciones.find(u=>u.id===origSel)?.nombre} a ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categoriasOrigen.find(c=>c.id===catSel)?.nombre, tipoItem: tiposOrigen.find(t=>t.id===tipoSel)?.nombre, nombreItem: prodInfo?.nombre,
       ubOrigenId: origSel, ubDestinoId: dstSel,
-      detalle: prodInfo?.retornable ? { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo } : { cantidad: cantTraslado }
+      detalle: prodInfo?.retornable ? { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo } : { cantidad: cantTraslado },
+      referenciaId: prodInfo?.retornable ? unidadSel : prodSel
     })
     setExito(`${prodInfo?.nombre} trasladado a ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
     reset()
@@ -426,7 +527,8 @@ export default function Movimientos() {
       descripcion: `${ar?.descripcion} trasladado de ${ubicaciones.find(u=>u.id===origSel)?.nombre} a ${ubicaciones.find(u=>u.id===dstSel)?.nombre}`,
       categoria: categorias.find(c=>c.id===ar?.categoria_id)?.nombre, tipoItem: ar?.tipos?.nombre, nombreItem: ar?.descripcion,
       ubOrigenId: origSel, ubDestinoId: dstSel,
-      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra }
+      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra },
+      referenciaId: arriendoSel
     })
     setExito(`${ar?.descripcion} trasladado a ${ubicaciones.find(u=>u.id===dstSel)?.nombre}.`)
     reset()
@@ -443,7 +545,8 @@ export default function Movimientos() {
       descripcion: `${prodInfoConCodigo?.nombre} cambiado a ${estadoNuevo}`,
       categoria: categoriasConCodigo.find(c=>c.id===catSel)?.nombre, tipoItem: tiposConCodigo.find(t=>t.id===tipoSel)?.nombre, nombreItem: prodInfoConCodigo?.nombre,
       ubOrigenId: origSel,
-      detalle: { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo, estado_anterior: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.estado, estado_nuevo: estadoNuevo }
+      detalle: { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo, estado_anterior: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.estado, estado_nuevo: estadoNuevo },
+      referenciaId: unidadSel
     })
     setExito(`${prodInfoConCodigo?.nombre} (${unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo}) marcado como ${estadoNuevo}.`)
     reset()
@@ -461,7 +564,8 @@ export default function Movimientos() {
       descripcion: `${ar?.descripcion} cambiado a ${estadoNuevo}`,
       categoria: categorias.find(c=>c.id===ar?.categoria_id)?.nombre, tipoItem: ar?.tipos?.nombre, nombreItem: ar?.descripcion,
       ubOrigenId: origSel,
-      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra, estado_anterior: ar?.estado_fisico, estado_nuevo: estadoNuevo }
+      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra, estado_anterior: ar?.estado_fisico, estado_nuevo: estadoNuevo },
+      referenciaId: arriendoSel
     })
     setExito(`${ar?.descripcion} marcado como ${estadoNuevo}.`)
     reset()
@@ -482,7 +586,8 @@ export default function Movimientos() {
       descripcion: `${ar?.descripcion} devuelto`,
       categoria: categorias.find(c=>c.id===ar?.categoria_id)?.nombre, tipoItem: ar?.tipos?.nombre, nombreItem: ar?.descripcion,
       ubOrigenId: origSel,
-      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra, valor_dia: ar?.valor_dia, fecha_inicio: ar?.fecha_inicio, fecha_devolucion: fechaDevolucion, dias: diasArr, valor_total: valorTotal }
+      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra, valor_dia: ar?.valor_dia, fecha_inicio: ar?.fecha_inicio, fecha_devolucion: fechaDevolucion, dias: diasArr, valor_total: valorTotal },
+      referenciaId: arriendoSel
     })
     setExito(`${ar?.descripcion} devuelto el ${fechaDevolucion}.`)
     reset()
@@ -493,7 +598,8 @@ export default function Movimientos() {
     if (!prodSel) { alert('Selecciona la herramienta.'); return }
     if (prodInfo?.retornable) {
       if (!unidadSel) { alert('Selecciona el elemento exacto.'); return }
-      if (!confirm('¿Confirmas dar de baja esta herramienta? No podrás deshacer esto.')) return
+      const estadoAnterior = unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.estado
+      if (!confirm('¿Confirmas dar de baja esta herramienta?')) return
       const { error, data } = await supabase.from('unidades').update({ estado: 'baja' }).eq('id', unidadSel).select()
       if (error) { alert('No se pudo registrar la pérdida: ' + error.message); return }
       if (!data || data.length === 0) { alert('No se guardó. Probablemente falten permisos (RLS) para actualizar la tabla "unidades" en Supabase.'); return }
@@ -502,12 +608,13 @@ export default function Movimientos() {
         descripcion: `${prodInfo.nombre} dado de baja`,
         categoria: categoriasOrigen.find(c=>c.id===catSel)?.nombre, tipoItem: tiposOrigen.find(t=>t.id===tipoSel)?.nombre, nombreItem: prodInfo.nombre,
         ubOrigenId: origSel,
-        detalle: { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo }
+        detalle: { codigo: unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo, estado_anterior: estadoAnterior },
+        referenciaId: unidadSel
       })
       setExito(`${prodInfo.nombre} (${unidadesDelProducto.find(u=>u.unidad_id===unidadSel)?.codigo}) dado de baja.`)
     } else {
       if (cantTraslado < 1 || cantTraslado > stockDelProducto) { alert('Cantidad inválida (máx. ' + stockDelProducto + ').'); return }
-      if (!confirm(`¿Confirmas registrar la pérdida de ${cantTraslado} unidades? No podrás deshacer esto.`)) return
+      if (!confirm(`¿Confirmas registrar la pérdida de ${cantTraslado} unidades?`)) return
       const { data: row } = await supabase.from('stock').select('id, cantidad').eq('producto_id', prodSel).eq('ubicacion_id', origSel).single()
       if (!row) { alert('No hay stock en esta ubicación.'); return }
       const { error, data } = await supabase.from('stock').update({ cantidad: row.cantidad - cantTraslado }).eq('id', row.id).select()
@@ -518,7 +625,8 @@ export default function Movimientos() {
         descripcion: `${prodInfo?.nombre} perdido en ${ubicaciones.find(u=>u.id===origSel)?.nombre}`,
         categoria: categoriasOrigen.find(c=>c.id===catSel)?.nombre, tipoItem: tiposOrigen.find(t=>t.id===tipoSel)?.nombre, nombreItem: prodInfo?.nombre,
         ubOrigenId: origSel,
-        detalle: { cantidad: cantTraslado }
+        detalle: { cantidad: cantTraslado },
+        referenciaId: prodSel
       })
       setExito(`Pérdida de ${cantTraslado} unidades de ${prodInfo?.nombre} registrada.`)
     }
@@ -529,7 +637,7 @@ export default function Movimientos() {
   const registrarPerdidaArriendo = async () => {
     if (!arriendoSel) { alert('Selecciona el equipo.'); return }
     const ar = arriendosActivos.find(a => a.id === arriendoSel)
-    if (!confirm('¿Confirmas registrar la pérdida de este equipo arrendado? No podrás deshacer esto.')) return
+    if (!confirm('¿Confirmas registrar la pérdida de este equipo arrendado?')) return
     const hoy = new Date().toISOString().split('T')[0]
     const { error, data } = await supabase.from('arriendos').update({ estado: 'perdido', fecha_devolucion: hoy }).eq('id', arriendoSel).select()
     if (error) { alert('No se pudo registrar la pérdida: ' + error.message); return }
@@ -539,7 +647,8 @@ export default function Movimientos() {
       descripcion: `${ar?.descripcion} registrado como perdido`,
       categoria: categorias.find(c=>c.id===ar?.categoria_id)?.nombre, tipoItem: ar?.tipos?.nombre, nombreItem: ar?.descripcion,
       ubOrigenId: origSel,
-      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra }
+      detalle: { proveedor: ar?.proveedor, orden_compra: ar?.orden_compra },
+      referenciaId: arriendoSel
     })
     setExito(`${ar?.descripcion} registrado como perdido.`)
     reset()
@@ -714,7 +823,7 @@ export default function Movimientos() {
               <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>¿Retornable?</label>
               <select value={retornable} onChange={e=>setRetornable(e.target.value)} disabled={!!productoExistente} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px', background: productoExistente ? '#f1f3f4' : '#fff'}}>
                 <option value='1'>Sí — código único por unidad</option>
-                <option value='0'>No — consumible por cantidad</option>
+                <option value='0'>No tiene código — se maneja por cantidad</option>
               </select>
               {productoExistente && (
                 <p style={{fontSize:'11px',color:'#8a94a6',margin:'4px 0 0'}}>Este producto ya existe en el Catálogo y quedó definido como "{productoExistente.retornable ? 'con código único' : 'por cantidad'}" — no se puede cambiar aquí para evitar que quede repartido en dos formatos. Si necesitas cambiarlo, pídele al administrador que lo ajuste en Catálogo.</p>
@@ -724,7 +833,7 @@ export default function Movimientos() {
               <div style={{marginBottom:'10px'}}>
                 <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Código único</label>
                 <input value={codigo} onChange={e=>setCodigo(e.target.value)} placeholder="Ej: BSH-001" style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}}/>
-                <p style={{fontSize:'11px',color:'#8a94a6',margin:'4px 0 0'}}>Tiene que ser un código real y distinto para cada unidad física. Si esta herramienta no tiene uno, mejor cambia arriba a "No — consumible por cantidad".</p>
+                <p style={{fontSize:'11px',color:'#8a94a6',margin:'4px 0 0'}}>Tiene que ser un código real y distinto para cada unidad física. Si esta herramienta no tiene uno, mejor cambia arriba a "No tiene código — se maneja por cantidad".</p>
               </div>
             ) : (
               <div style={{marginBottom:'10px'}}>
@@ -1118,19 +1227,26 @@ export default function Movimientos() {
               <div style={{display:'grid',gap:'8px'}}>
                 {logItems.map(item => {
                   const info = tipoInfo[item.tipo] || {label:item.tipo, fg:'#444', bg:'#f1f1f1'}
+                  const puedeDeshacer = esAdmin && ultimosTresIds.has(item.id) && !item.deshecho && item.referencia_id
                   return (
-                    <div key={item.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'10px',padding:'12px 14px'}}>
+                    <div key={item.id} style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'10px',padding:'12px 14px',opacity:item.deshecho?0.55:1}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
                         <span style={{fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'20px',background:info.bg,color:info.fg}}>{info.label}</span>
                         <span style={{fontSize:'11px',color:'#999'}}>{new Date(item.created_at).toLocaleString('es-CL')}</span>
                       </div>
                       {item.categoria && <p style={{fontSize:'11px',color:'#999',margin:'0 0 2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>{item.categoria}</p>}
-                      <p style={{fontSize:'14px',fontWeight:'700',margin:'0',color:'#111'}}>
+                      <p style={{fontSize:'14px',fontWeight:'700',margin:'0',color:'#111',textDecoration:item.deshecho?'line-through':'none'}}>
                         {item.tipo_item || item.descripcion}
                         {item.tipo_item && item.nombre_item && <span style={{fontWeight:'400',color:'#555'}}> - {item.nombre_item}</span>}
                         {' '}<span style={{fontWeight:'400',fontSize:'12px',color:'#999'}}>{item.clase === 'propio' ? '🔧' : '🏗'}</span>
                       </p>
+                      {item.deshecho && <p style={{fontSize:'11px',color:'#c5221f',fontWeight:'600',margin:'4px 0 0'}}>↩️ Deshecho por {item.deshecho_por || 'admin'}{item.deshecho_en ? ' · ' + new Date(item.deshecho_en).toLocaleString('es-CL') : ''}</p>}
                       {renderDetalle(item)}
+                      {puedeDeshacer && (
+                        <button onClick={()=>deshacerMovimiento(item)} disabled={deshaciendoId===item.id} style={{marginTop:'8px',fontSize:'11px',color:'#c5221f',background:'none',border:'0.5px solid #f5c6c2',borderRadius:'6px',padding:'4px 10px',cursor:'pointer',opacity:deshaciendoId===item.id?0.6:1}}>
+                          {deshaciendoId===item.id ? 'Deshaciendo...' : '↩️ Deshacer este movimiento'}
+                        </button>
+                      )}
                       {(() => {
                         const adjuntos = listaArchivosDe(item)
                         return (

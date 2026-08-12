@@ -8,6 +8,8 @@ export default function Inventario() {
   const [ubicaciones, setUbicaciones] = useState<any[]>([])
   const [ubSel, setUbSel] = useState('') // '' = todas las ubicaciones
   const [claseSel, setClaseSel] = useState('') // '' = todas, 'propio', 'arrendado'
+  const [catSel, setCatSel] = useState('') // '' = todas las categorías
+  const [tipoSel, setTipoSel] = useState('') // '' = todos los tipos
   const [items, setItems] = useState<any[]>([])
   const [arriendos, setArriendos] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
@@ -22,7 +24,7 @@ export default function Inventario() {
     Promise.all([
       supabase.from('unidades').select('id, codigo, estado, producto_id, ubicacion_id, ubicaciones(nombre), productos(nombre, retornable, tipo_id, tipos(nombre, categoria_id, categorias(nombre, orden)))').neq('estado','baja'),
       supabase.from('stock').select('id, cantidad, producto_id, ubicacion_id, ubicaciones(nombre), productos(nombre, retornable, tipo_id, tipos(nombre, categoria_id, categorias(nombre, orden)))').gt('cantidad', 0),
-      supabase.from('arriendos').select('*, tipos(nombre, categorias(nombre)), ubicacion:ubicacion_id(nombre)').eq('estado','activo').order('descripcion')
+      supabase.from('arriendos').select('*, tipos(nombre, categoria_id, categorias(nombre)), ubicacion:ubicacion_id(nombre)').eq('estado','activo').order('descripcion')
     ]).then(([unidadesRes, stockRes, arriendosRes]) => {
       if (unidadesRes.error) console.error('Error unidades:', unidadesRes.error.message)
       if (stockRes.error) console.error('Error stock:', stockRes.error.message)
@@ -30,8 +32,8 @@ export default function Inventario() {
       const deUnidades = (unidadesRes.data||[]).map((u:any) => ({
         retornable: true,
         ubicacion_id: u.ubicacion_id, ubicacion: u.ubicaciones?.nombre || '—',
-        categoria: u.productos?.tipos?.categorias?.nombre || '—', categoria_orden: u.productos?.tipos?.categorias?.orden ?? 999,
-        tipo: u.productos?.tipos?.nombre || '—',
+        categoria_id: u.productos?.tipos?.categoria_id, categoria: u.productos?.tipos?.categorias?.nombre || '—', categoria_orden: u.productos?.tipos?.categorias?.orden ?? 999,
+        tipo_id: u.productos?.tipo_id, tipo: u.productos?.tipos?.nombre || '—',
         producto: u.productos?.nombre || '—',
         codigo: u.codigo, estado: u.estado, cantidad: 1,
         key: 'u-' + u.id
@@ -39,8 +41,8 @@ export default function Inventario() {
       const deStock = (stockRes.data||[]).map((s:any) => ({
         retornable: false,
         ubicacion_id: s.ubicacion_id, ubicacion: s.ubicaciones?.nombre || '—',
-        categoria: s.productos?.tipos?.categorias?.nombre || '—', categoria_orden: s.productos?.tipos?.categorias?.orden ?? 999,
-        tipo: s.productos?.tipos?.nombre || '—',
+        categoria_id: s.productos?.tipos?.categoria_id, categoria: s.productos?.tipos?.categorias?.nombre || '—', categoria_orden: s.productos?.tipos?.categorias?.orden ?? 999,
+        tipo_id: s.productos?.tipo_id, tipo: s.productos?.tipos?.nombre || '—',
         producto: s.productos?.nombre || '—',
         codigo: '—', estado: '—', cantidad: s.cantidad,
         key: 's-' + s.id
@@ -53,7 +55,7 @@ export default function Inventario() {
         String(a.codigo).localeCompare(String(b.codigo))
       )
       setItems(todas)
-      setArriendos(arriendosRes.data||[])
+      setArriendos((arriendosRes.data||[]).map((a: any) => ({ ...a, categoria_id: a.tipos?.categoria_id })))
       setCargando(false)
     })
   }, [])
@@ -61,14 +63,34 @@ export default function Inventario() {
   const bodegas = ubicaciones.filter(u => u.tipo === 'bodega')
   const faenas = ubicaciones.filter(u => u.tipo === 'faena')
 
+  // Categorías y tipos disponibles según lo que realmente hay en el inventario (propio + arrendado)
+  const categoriasDisponibles = Array.from(new Map(
+    [...items, ...arriendos.map(a => ({ categoria_id: a.categoria_id, categoria: a.tipos?.categorias?.nombre || '—' }))]
+      .filter(i => i.categoria_id)
+      .map(i => [i.categoria_id, { id: i.categoria_id, nombre: i.categoria }])
+  ).values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+  const tiposDisponibles = Array.from(new Map(
+    [...items, ...arriendos.map(a => ({ categoria_id: a.categoria_id, tipo_id: a.tipo_id, tipo: a.tipos?.nombre || '—' }))]
+      .filter(i => i.tipo_id && (!catSel || i.categoria_id === catSel))
+      .map(i => [i.tipo_id, { id: i.tipo_id, nombre: i.tipo }])
+  ).values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+
   // Filtros (del lado del cliente, sin volver a consultar la base de datos)
   const mostrarPropio = claseSel === '' || claseSel === 'propio'
   const mostrarArrendado = claseSel === '' || claseSel === 'arrendado'
-  const itemsFiltrados = (ubSel ? items.filter(i => i.ubicacion_id === ubSel) : items)
-  const arriendosFiltrados = (ubSel ? arriendos.filter(a => a.ubicacion_id === ubSel) : arriendos)
+  const itemsFiltrados = items
+    .filter(i => !ubSel || i.ubicacion_id === ubSel)
+    .filter(i => !catSel || i.categoria_id === catSel)
+    .filter(i => !tipoSel || i.tipo_id === tipoSel)
+  const arriendosFiltrados = arriendos
+    .filter(a => !ubSel || a.ubicacion_id === ubSel)
+    .filter(a => !catSel || a.categoria_id === catSel)
+    .filter(a => !tipoSel || a.tipo_id === tipoSel)
 
   const th: React.CSSProperties = {textAlign:'left',fontSize:'11px',color:'#666',fontWeight:'600',padding:'8px 10px',borderBottom:'1px solid #e0e0e0',whiteSpace:'nowrap'}
   const td: React.CSSProperties = {fontSize:'12px',color:'#333',padding:'8px 10px',borderBottom:'0.5px solid #eee'}
+  const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}
   const estadoTextColor = (e: string) => e === 'malo' ? '#c5221f' : e === 'bueno' ? '#137333' : '#666'
 
   const sinResultados = !cargando &&
@@ -86,10 +108,24 @@ export default function Inventario() {
       <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'1.25rem',background:'#fff',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
         <div style={{minWidth:'220px'}}>
           <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Ubicación</label>
-          <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
+          <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={inputStyle}>
             <option value=''>Todas las ubicaciones</option>
             <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
             <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}{!f.activa ? ' (cerrada)' : ''}</option>)}</optgroup>
+          </select>
+        </div>
+        <div style={{minWidth:'200px'}}>
+          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Categoría</label>
+          <select value={catSel} onChange={e=>{setCatSel(e.target.value); setTipoSel('')}} style={inputStyle}>
+            <option value=''>Todas las categorías</option>
+            {categoriasDisponibles.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </div>
+        <div style={{minWidth:'200px'}}>
+          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Tipo</label>
+          <select value={tipoSel} onChange={e=>setTipoSel(e.target.value)} style={inputStyle}>
+            <option value=''>Todos los tipos</option>
+            {tiposDisponibles.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           </select>
         </div>
         <div style={{minWidth:'220px'}}>

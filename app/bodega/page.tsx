@@ -11,10 +11,10 @@ export default function Bodega() {
   const puedeAcceder = esAdmin || usuario?.accesoBodega
 
   const items = [
-    {href:'/catalogo',icon:'📦',label:'Catálogo',desc:'Categorías y tipos de herramientas'},
     {href:'/inventario',icon:'📋',label:'Inventario',desc:'Qué hay en cada bodega/faena, con su estado'},
     {href:'/movimientos',icon:'🔄',label:'Movimientos',desc:'Ingresos, traslados y pérdidas'},
     {href:'/arriendos',icon:'🏗',label:'Arriendos',desc:'Equipos arrendados activos'},
+    {href:'/catalogo',icon:'📦',label:'Catálogo',desc:'Categorías y tipos de herramientas'},
     ...(esAdmin ? [{href:'/ubicaciones',icon:'📍',label:'Ubicaciones',desc:'Bodegas y faenas'}] : []),
   ]
 

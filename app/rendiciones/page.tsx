@@ -16,6 +16,8 @@ const ESTADOS: Record<Estado, { texto: string, bg: string, color: string }> = {
 }
 const TIPOS: Record<string, string> = { boleta: 'Boleta', factura: 'Factura', en_sistema: 'En sistema (compra con RUT empresa)', otro: 'Otro' }
 const peso = (n: number) => '$' + Math.round(n || 0).toLocaleString('es-CL')
+// Escribe el monto con puntos de miles mientras se tipea (pesos chilenos, sin decimales)
+const miles = (v: string) => { const d = v.replace(/\D/g, ''); return d ? Number(d).toLocaleString('es-CL') : '' }
 const fechaCL = (f?: string | null) => f ? f.slice(0, 10).split('-').reverse().join('-') : ''
 const numRend = (n: number) => 'R-' + String(n).padStart(4, '0')
 
@@ -188,7 +190,7 @@ export default function Rendiciones() {
 
   const limpiarForm = () => { setINum(''); setIDet(''); setIMonto(''); setIFoto(null); setEditandoId(null); setIFecha(hoy); setITipo('boleta') }
   const editarItem = (it: any) => {
-    setEditandoId(it.id); setIFecha(it.fecha); setITipo(it.tipo_doc); setINum(it.numero_doc || ''); setIDet(it.detalle); setIMonto(String(Math.round(Number(it.monto)))); setIFoto(null)
+    setEditandoId(it.id); setIFecha(it.fecha); setITipo(it.tipo_doc); setINum(it.numero_doc || ''); setIDet(it.detalle); setIMonto(miles(String(Math.round(Number(it.monto))))); setIFoto(null)
     setTimeout(() => document.getElementById('form-gasto')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }
   const agregarItem = async (r: any) => {
@@ -446,7 +448,7 @@ export default function Rendiciones() {
               <div><span style={label}>Tipo de documento</span>
                 <select value={iTipo} onChange={e => setITipo(e.target.value)} style={input}>{Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div><span style={label}>N° documento</span><input value={iNum} onChange={e => setINum(e.target.value)} style={input} /></div>
-              <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={iMonto} onChange={e => setIMonto(e.target.value)} style={input} /></div>
+              <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={iMonto} onChange={e => setIMonto(miles(e.target.value))} style={input} /></div>
             </div>
             <div style={{ marginTop: '10px' }}><span style={label}>Detalle (qué se compró)</span><input value={iDet} onChange={e => setIDet(e.target.value)} style={input} /></div>
             <div style={{ marginTop: '10px' }}>
@@ -495,7 +497,7 @@ export default function Rendiciones() {
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eef1f6' }}>
                   <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '12.5px' }}>{debeEmpresa ? 'Registrar transferencia de la empresa al trabajador' : 'Registrar transferencia a la empresa'}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px' }}>
-                    <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={pMonto} onChange={e => setPMonto(e.target.value)} placeholder={String(cu.pendiente)} style={input} /></div>
+                    <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={pMonto} onChange={e => setPMonto(miles(e.target.value))} placeholder={miles(String(cu.pendiente))} style={input} /></div>
                     <div><span style={label}>Fecha</span><input type="date" value={pFecha} onChange={e => setPFecha(e.target.value)} style={input} /></div>
                     <div><span style={label}>Nota (opcional)</span><input value={pNota} onChange={e => setPNota(e.target.value)} style={input} /></div>
                   </div>
@@ -699,7 +701,7 @@ export default function Rendiciones() {
                     <select value={fUsuario} onChange={e => setFUsuario(e.target.value)} style={input}><option value="">Elegir...</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select></div>
                   <div><span style={label}>Centro de costo (CECO)</span>
                     <select value={fCC} onChange={e => setFCC(e.target.value)} style={input}><option value="">Elegir...</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></div>
-                  <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={fMonto} onChange={e => setFMonto(e.target.value)} style={input} /></div>
+                  <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={fMonto} onChange={e => setFMonto(miles(e.target.value))} placeholder="Ej: 500.000" style={input} /></div>
                   <div><span style={label}>Nota</span><input value={fDesc} onChange={e => setFDesc(e.target.value)} style={input} /></div>
                 </div>
                 <button onClick={darFondo} style={{ ...btn(), marginTop: '12px' }}>Registrar fondo</button>

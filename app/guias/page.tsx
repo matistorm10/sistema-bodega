@@ -52,6 +52,8 @@ export default function Guias() {
   const [it, setIt] = useState({ ...ITEM_VACIO })
   const [opcionesInv, setOpcionesInv] = useState<any[]>([])
   const [filtroEstado, setFiltroEstado] = useState('')
+  const [firmaUrl, setFirmaUrl] = useState<string | null>(null)
+  const [firmaSubiendo, setFirmaSubiendo] = useState(false)
 
   const avisar = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 4000) }
 
@@ -68,6 +70,29 @@ export default function Guias() {
     setCargando(false)
   }, [])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
+
+  // Firma de quien aprueba (se estampa en el PDF de las guías que aprueba)
+  const cargarFirma = useCallback(async () => {
+    if (!usuario) return
+    const { data } = await supabase.storage.from('firmas').createSignedUrl(`${usuario.id}/firma`, 300)
+    setFirmaUrl(data?.signedUrl || null)
+  }, [usuario])
+  useEffect(() => { if (usuario && (esAdmin || usuario.puedeAprobar)) cargarFirma() }, [usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const subirFirma = async (f: File | null) => {
+    if (!f || !usuario) return
+    if (!/^image\/(png|jpe?g)$/.test(f.type)) { alert('La firma debe ser una imagen PNG o JPG.'); return }
+    setFirmaSubiendo(true)
+    const { error } = await supabase.storage.from('firmas').upload(`${usuario.id}/firma`, f, { upsert: true, contentType: f.type })
+    setFirmaSubiendo(false)
+    if (error) { alert('No se pudo guardar la firma: ' + error.message); return }
+    avisar('Firma guardada. Se usará en las guías que apruebes.'); await cargarFirma()
+  }
+  const quitarFirma = async () => {
+    if (!usuario || !confirm('¿Quitar tu firma? Las guías que apruebes después saldrán sin ella.')) return
+    const { error } = await supabase.storage.from('firmas').remove([`${usuario.id}/firma`])
+    if (error) { alert(error.message); return }
+    setFirmaUrl(null)
+  }
 
   // Recordar dónde estaba el usuario si el navegador recarga la página
   useEffect(() => {
@@ -187,14 +212,21 @@ export default function Guias() {
     await cambiar(g.id, { estado: 'pendiente', motivo_rechazo: null }, 'Guía enviada a aprobación.')
   }
 
-  const descargarPDF = (g: any) => {
+  const descargarPDF = async (g: any) => {
     const ventana = abrirVentanaGuia() // antes de cualquier await, para que el celular no bloquee la ventana
-    generarGuiaTraslado({
-      numero: g.numero, fechaTraslado: g.fecha_traslado, origen: lugar(g.origen_id, g.origen_texto), destino: lugar(g.destino_id, g.destino_texto), motivo: g.motivo || '',
-      choferNombre: g.chofer_nombre || '', choferRut: g.chofer_rut || '', patente: g.patente || '', transportista: g.transportista || '', transportistaRut: g.transportista_rut || '',
-      emitidoPor: nombreUsuario(g.creado_por), aprobadoPor: g.aprobada_por ? nombreUsuario(g.aprobada_por) : '', fechaAprobacion: g.fecha_aprobacion || '',
-      items: itemsDe(g.id).map(x => ({ descripcion: x.descripcion, codigo: x.codigo || '', cantidad: Number(x.cantidad), unidad: x.unidad, procedencia: x.procedencia === 'proveedor' ? 'Proveedor: ' + (x.proveedor || '') : 'Propio', observacion: x.observacion || '' })),
-    }, ventana).catch(e => { ventana?.close(); alert('No se pudo generar el PDF: ' + e.message) })
+    try {
+      let firma: string | null = null
+      if (g.aprobada_por) {
+        const { data: blob } = await supabase.storage.from('firmas').download(`${g.aprobada_por}/firma`)
+        if (blob) firma = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(blob) })
+      }
+      await generarGuiaTraslado({
+        numero: g.numero, fechaTraslado: g.fecha_traslado, origen: lugar(g.origen_id, g.origen_texto), destino: lugar(g.destino_id, g.destino_texto), motivo: g.motivo || '',
+        choferNombre: g.chofer_nombre || '', choferRut: g.chofer_rut || '', patente: g.patente || '', transportista: g.transportista || '', transportistaRut: g.transportista_rut || '',
+        emitidoPor: nombreUsuario(g.creado_por), aprobadoPor: g.aprobada_por ? nombreUsuario(g.aprobada_por) : '', fechaAprobacion: g.fecha_aprobacion || '', firmaAprobador: firma,
+        items: itemsDe(g.id).map(x => ({ descripcion: x.descripcion, codigo: x.codigo || '', cantidad: Number(x.cantidad), unidad: x.unidad, procedencia: x.procedencia === 'proveedor' ? 'Proveedor: ' + (x.proveedor || '') : 'Propio', observacion: x.observacion || '' })),
+      }, ventana)
+    } catch (e: any) { ventana?.close(); alert('No se pudo generar el PDF: ' + e.message) }
   }
 
   // ---------- vistas ----------
@@ -366,6 +398,21 @@ export default function Guias() {
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '980px', margin: '0 auto' }}>
         {cabecera}
         {msg && <p style={{ background: '#e6f4ea', color: '#1e6b3a', padding: '9px 12px', borderRadius: '8px', fontSize: '13px', margin: '0 0 10px' }}>{msg}</p>}
+
+        {!abierta && aprueba && (
+          <div style={{ ...card, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <div style={{ width: '120px', height: '56px', border: '1px dashed #c4cad6', borderRadius: '8px', background: '#fafbfd', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {firmaUrl ? <img src={firmaUrl} alt="Mi firma" style={{ maxWidth: '100%', maxHeight: '100%' }} /> : <span style={{ fontSize: '11px', color: '#8a94a6' }}>Sin firma</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: '220px' }}>
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '13px' }}>Mi firma para las guías</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>Se estampa en el PDF de las guías que apruebes. Sube una imagen PNG (mejor con fondo transparente) o JPG.</p>
+            </div>
+            <label style={{ ...btn(false), cursor: 'pointer' }}>{firmaSubiendo ? 'Subiendo...' : firmaUrl ? 'Cambiar firma' : 'Subir firma'}
+              <input type="file" accept="image/png,image/jpeg" onChange={e => { subirFirma(e.target.files?.[0] || null); e.target.value = '' }} style={{ display: 'none' }} /></label>
+            {firmaUrl && <button style={btn(false, true)} onClick={quitarFirma}>Quitar</button>}
+          </div>
+        )}
 
         {abierta ? detalle() : (<>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>

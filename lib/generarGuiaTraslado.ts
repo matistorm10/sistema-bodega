@@ -16,10 +16,20 @@ export type GuiaPDF = {
   emitidoPor: string
   aprobadoPor: string
   fechaAprobacion: string
+  firmaAprobador?: string | null // imagen (data URL) de la firma de quien aprueba
   items: { descripcion: string, codigo: string, cantidad: number, unidad: string, procedencia: string, observacion: string }[]
 }
 
 export const numeroGuia = (n: number | null | undefined) => (n ? 'GT-' + String(n).padStart(4, '0') : 'Sin número')
+
+// Datos de la empresa (mismo formato que las guías de despacho emitidas desde KAME)
+const EMPRESA = {
+  rut: '79.866.670-3',
+  nombre: ['INDELI CONSTRUCCION Y', 'MONTAJE LIMITADA'],
+  giro: 'CONSTRUCCION',
+  matriz: 'FUNDO LA FAMA LOTE C3-3B- QUILLOTA, QUILLOTA, Tel: 332346205',
+  email: 'ANGELA.SILVA@INDELI.CL',
+}
 
 // Llamar apenas se hace clic (antes de cualquier await) para que el celular no bloquee la ventana.
 export function abrirVentanaGuia() {
@@ -50,92 +60,168 @@ async function cargarLogo(): Promise<{ data: string, ratio: number } | null> {
   }
 }
 
-const fechaCL = (f: string) => (f ? f.slice(0, 10).split('-').reverse().join('-') : '')
+async function dimensionesImagen(data: string): Promise<{ w: number, h: number } | null> {
+  try {
+    return await new Promise((resolve, reject) => {
+      const img = new Image()
+      const limite = setTimeout(() => reject(new Error('timeout')), 6000)
+      img.onload = () => { clearTimeout(limite); resolve({ w: img.width, h: img.height }) }
+      img.onerror = () => { clearTimeout(limite); reject(new Error('error')) }
+      img.src = data
+    })
+  } catch { return null }
+}
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const fechaLarga = (f: string) => {
+  const p = (f || '').slice(0, 10).split('-')
+  if (p.length !== 3) return ''
+  return `${Number(p[2])} de ${MESES[Number(p[1]) - 1]} del ${p[0]}`
+}
 
 export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const ancho = doc.internal.pageSize.getWidth()
-  const alto = doc.internal.pageSize.getHeight()
-  const M = 14
-  const AZUL: [number, number, number] = [27, 79, 156]
-
-  // Encabezado
+  const W = doc.internal.pageSize.getWidth()   // 210
+  const H = doc.internal.pageSize.getHeight()  // 297
+  const M = 12
+  const ROJO: [number, number, number] = [255, 0, 0]
+  const AZUL: [number, number, number] = [0, 0, 128]
+  const GRIS: [number, number, number] = [170, 170, 170]
   const logo = await cargarLogo()
-  let y = M
-  if (logo) doc.addImage(logo.data, 'JPEG', M, y, 34, 34 * logo.ratio)
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...AZUL)
-  doc.text('GUÍA DE TRASLADO INTERNO', ancho - M, y + 7, { align: 'right' })
-  doc.setFontSize(14); doc.setTextColor(30, 30, 30)
-  doc.text('N° ' + numeroGuia(g.numero), ancho - M, y + 14, { align: 'right' })
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90, 90, 90)
-  doc.text('Fecha de traslado: ' + fechaCL(g.fechaTraslado), ancho - M, y + 20, { align: 'right' })
-  y += Math.max(logo ? 34 * logo.ratio : 12, 24) + 4
+  const firmaDim = g.firmaAprobador ? await dimensionesImagen(g.firmaAprobador) : null
 
-  // Leyenda
-  doc.setDrawColor(...AZUL); doc.setLineWidth(0.5)
-  doc.setFillColor(232, 240, 254)
-  doc.roundedRect(M, y, ancho - M * 2, 11, 1.5, 1.5, 'FD')
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...AZUL)
-  doc.text('TRASLADO NO CONSTITUYE VENTA', ancho / 2, y + 5, { align: 'center' })
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(70, 70, 70)
-  doc.text('Documento de uso interno, sin valor tributario.', ancho / 2, y + 9, { align: 'center' })
-  y += 15
+  // Encabezado: se repite en cada página
+  const encabezado = () => {
+    if (logo) doc.addImage(logo.data, 'JPEG', M + 2, 15, 36, 36 * logo.ratio)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...ROJO)
+    doc.text(EMPRESA.nombre[0], 58, 21)
+    doc.text(EMPRESA.nombre[1], 58, 26.5)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...AZUL)
+    doc.text('Giro: ' + EMPRESA.giro, 58, 31)
+    doc.text('Matriz: ' + EMPRESA.matriz, 58, 34.5, { maxWidth: 58 })
+    doc.text('E-mail: ' + EMPRESA.email, 58, 42)
 
-  const tablaDatos = (titulo: string, filas: [string, string][]) => {
-    autoTable(doc, {
-      startY: y,
-      head: [[{ content: titulo, colSpan: 2 }]],
-      body: filas.map(f => [f[0], f[1] || '—']),
-      theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 1.8, textColor: [40, 40, 40], lineColor: [200, 205, 215] },
-      headStyles: { fillColor: AZUL, textColor: 255, fontSize: 9 },
-      columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold', fillColor: [246, 248, 251] } },
-      margin: { left: M, right: M },
-    })
-    y = (doc as any).lastAutoTable.finalY + 4
+    // Recuadro rojo con el número
+    const bx = 124, by = 8, bw = W - M - bx, bh = 36
+    doc.setDrawColor(...ROJO); doc.setLineWidth(0.9)
+    doc.rect(bx, by, bw, bh)
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...ROJO)
+    doc.setFontSize(11.5)
+    doc.text('R.U.T.:' + EMPRESA.rut, bx + bw / 2, by + 9, { align: 'center' })
+    doc.setFontSize(11.5)
+    doc.text('GUÍA DE TRASLADO', bx + bw / 2, by + 19, { align: 'center' })
+    doc.text('INTERNO', bx + bw / 2, by + 24.5, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text('Nº ' + numeroGuia(g.numero), bx + bw / 2, by + 32.5, { align: 'center' })
+    doc.setFontSize(8.5)
+    doc.text('DOCUMENTO DE USO INTERNO', bx + bw / 2, by + bh + 5.5, { align: 'center' })
   }
 
-  tablaDatos('Traslado', [['Origen', g.origen], ['Destino', g.destino], ['Motivo / observaciones', g.motivo]])
-  tablaDatos('Transporte', [
-    ['Chofer', g.choferNombre], ['RUT chofer', g.choferRut], ['Patente', g.patente],
-    ['Empresa transportista', g.transportista], ['RUT transportista', g.transportistaRut],
-  ])
+  // Marca de agua con el logo
+  const marcaAgua = () => {
+    if (!logo) return
+    try {
+      const w = 92
+      const GS = (doc as any).GState
+      if (GS) doc.setGState(new GS({ opacity: 0.13 }))
+      doc.addImage(logo.data, 'JPEG', (W - w) / 2, 118, w, w * logo.ratio)
+      if (GS) doc.setGState(new GS({ opacity: 1 }))
+    } catch {}
+  }
 
-  // Ítems
+  encabezado()
+  marcaAgua()
+
+  let y = 58
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...AZUL)
+  doc.text('Fecha Emisión:', M + 4, y)
+  doc.setTextColor(30, 30, 30)
+  doc.text(fechaLarga(g.fechaAprobacion || new Date().toISOString()), M + 25, y)
+  y += 4
+  doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3)
+  doc.line(M, y, W - M, y)
+  y += 6
+
+  // Datos del traslado (dos columnas, como la guía de despacho)
+  const dato = (x: number, yy: number, etiqueta: string, valor: string, ancho: number, ancho0 = 28) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...AZUL)
+    doc.text(etiqueta, x, yy)
+    doc.setTextColor(30, 30, 30)
+    const lineas = doc.splitTextToSize(valor || '—', ancho) as string[]
+    doc.text(lineas, x + ancho0, yy)
+    return lineas.length
+  }
+  const filasIzq: [string, string][] = [['ORIGEN:', g.origen], ['DESTINO:', g.destino], ['MOTIVO:', g.motivo], ['TRANSPORTISTA:', g.transportista]]
+  const filasDer: [string, string][] = [['FECHA TRASLADO:', fechaLarga(g.fechaTraslado)], ['TRASLADO:', 'TRASLADO INTERNO NO VENTA'], ['EMITE:', g.emitidoPor], ['APRUEBA:', g.aprobadoPor]]
+  let yi = y, yd = y
+  filasIzq.forEach(([e, v]) => { const n = dato(M + 4, yi, e, v, 62, 29); yi += 4.2 * n + 0.6 })
+  filasDer.forEach(([e, v]) => { const n = dato(112, yd, e, v, 52, 31); yd += 4.2 * n + 0.6 })
+  y = Math.max(yi, yd) + 1
+  doc.line(M, y, W - M, y)
+  y += 5
+
+  // Ítems (cabecera gris, sin líneas, como la guía de despacho)
   autoTable(doc, {
     startY: y,
-    head: [['N°', 'Descripción', 'Código', 'Cant.', 'Unidad', 'Procedencia']],
-    body: g.items.map((it, k) => [String(k + 1), it.descripcion + (it.observacion ? '\n' + it.observacion : ''), it.codigo || '—', String(it.cantidad).replace('.', ','), it.unidad, it.procedencia]),
-    theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 1.8, textColor: [40, 40, 40], lineColor: [200, 205, 215], valign: 'middle' },
-    headStyles: { fillColor: AZUL, textColor: 255, fontSize: 9 },
-    columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 2: { cellWidth: 26 }, 3: { cellWidth: 15, halign: 'center' }, 4: { cellWidth: 17 }, 5: { cellWidth: 36 } },
-    margin: { left: M, right: M, bottom: 60 },
+    head: [['Código', 'Descripción', 'Cantidad', 'Procedencia']],
+    body: g.items.map(it => [
+      it.codigo || '-',
+      it.descripcion + (it.observacion ? '\n' + it.observacion : ''),
+      `${String(it.cantidad).replace('.', ',')} ${it.unidad.toUpperCase()}`,
+      it.procedencia,
+    ]),
+    theme: 'plain',
+    styles: { fontSize: 8, cellPadding: { top: 1.3, bottom: 1.3, left: 1.5, right: 1.5 }, textColor: [45, 45, 45], valign: 'top' },
+    headStyles: { fillColor: GRIS, textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 8 },
+    columnStyles: { 0: { cellWidth: 30 }, 2: { cellWidth: 28, halign: 'right' }, 3: { cellWidth: 46 } },
+    margin: { left: M, right: M, top: 60, bottom: 66 },
+    didDrawPage: (d: any) => { if (d.pageNumber > 1) { encabezado(); marcaAgua() } },
   })
-  y = (doc as any).lastAutoTable.finalY + 8
+  y = (doc as any).lastAutoTable.finalY + 6
 
-  // Firmas (siempre al final de la última página, con espacio para firmar a mano)
-  if (y > alto - 62) { doc.addPage(); y = M }
-  const yFirmas = Math.max(y + 6, alto - 56)
-  const colW = (ancho - M * 2 - 8) / 3
-  const firma = (x: number, titulo: string, lineas: string[]) => {
-    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3)
-    doc.line(x, yFirmas + 14, x + colW, yFirmas + 14)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40)
-    doc.text(titulo, x + colW / 2, yFirmas + 18.5, { align: 'center' })
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 90, 90)
-    lineas.forEach((l, k) => doc.text(l, x + colW / 2, yFirmas + 23 + k * 4, { align: 'center', maxWidth: colW }))
+  // Bloque final en la última página: datos del transporte y firmas
+  if (y > H - 70) { doc.addPage(); encabezado(); marcaAgua(); y = 60 }
+  const yBase = H - 62
+  doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3)
+  doc.line(M, yBase - 7, W - M, yBase - 7)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
+  let x = M + 2
+  const campo = (e: string, v: string) => {
+    doc.setTextColor(...AZUL); doc.text(e + ' ', x, yBase - 2)
+    x += doc.getTextWidth(e + ' ')
+    doc.setTextColor(30, 30, 30); doc.text(v || '—', x, yBase - 2)
+    x += doc.getTextWidth(v || '—') + 5
   }
-  firma(M, 'Emite / Aprueba', [g.emitidoPor ? 'Emite: ' + g.emitidoPor : '', g.aprobadoPor ? 'Aprueba: ' + g.aprobadoPor : '', g.fechaAprobacion ? 'Fecha: ' + fechaCL(g.fechaAprobacion) : ''].filter(Boolean))
-  firma(M + colW + 4, 'Chofer', [g.choferNombre, g.choferRut ? 'RUT ' + g.choferRut : ''].filter(Boolean))
-  firma(M + (colW + 4) * 2, 'Recibe conforme', ['Nombre:', 'RUT:', 'Fecha:'])
+  campo('RUT CHOFER:', g.choferRut); campo('RUT TRANSPORTE:', g.transportistaRut); campo('PATENTE:', g.patente); campo('NOMBRE CHOFER:', g.choferNombre)
+
+  const colW = (W - M * 2 - 12) / 3
+  const yF = yBase + 24
+  const firma = (cx: number, titulo: string, lineas: string[], imagen?: string | null) => {
+    if (imagen && firmaDim) {
+      const maxW = colW - 10, maxH = 20
+      let w = maxW, h = (firmaDim.h / firmaDim.w) * w
+      if (h > maxH) { h = maxH; w = (firmaDim.w / firmaDim.h) * h }
+      try { doc.addImage(imagen, /^data:image\/jpe?g/i.test(imagen) ? 'JPEG' : 'PNG', cx + (colW - w) / 2, yF - h - 1, w, h) } catch {}
+    }
+    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3)
+    doc.line(cx, yF, cx + colW, yF)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...AZUL)
+    doc.text(titulo, cx + colW / 2, yF + 4.5, { align: 'center' })
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80)
+    lineas.forEach((l, k) => doc.text(l, cx + colW / 2, yF + 9 + k * 3.8, { align: 'center', maxWidth: colW }))
+  }
+  firma(M, 'Emite / Aprueba', [g.aprobadoPor ? 'Aprueba: ' + g.aprobadoPor : '', g.emitidoPor ? 'Emite: ' + g.emitidoPor : ''].filter(Boolean), g.firmaAprobador)
+  firma(M + colW + 6, 'Chofer', [g.choferNombre, g.choferRut ? 'RUT ' + g.choferRut : ''].filter(Boolean))
+  firma(M + (colW + 6) * 2, 'Recibe conforme', ['Nombre:', 'RUT:', 'Fecha:'])
 
   // Pie
   const total = doc.getNumberOfPages()
   for (let i = 1; i <= total; i++) {
     doc.setPage(i)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
-    doc.text(`${numeroGuia(g.numero)} · Traslado no constituye venta · Página ${i} de ${total}`, ancho / 2, alto - 6, { align: 'center' })
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...AZUL)
+    doc.text('Documento generado por Sistema INDELI · Traslado no constituye venta · Sin valor tributario', W / 2, H - 9, { align: 'center' })
+    doc.setTextColor(120, 120, 120)
+    doc.text(`${numeroGuia(g.numero)} · Página ${i} de ${total}`, W / 2, H - 5, { align: 'center' })
   }
 
   entregarPDF(doc, `Guia_Traslado_${numeroGuia(g.numero)}.pdf`, ventana)

@@ -44,6 +44,9 @@ export default function Rendiciones() {
   const [cargando, setCargando] = useState(true)
   const [abierta, setAbierta] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [fUsuario, setFUsuario] = useState('')
+  const [fMonto, setFMonto] = useState('')
+  const [fDesc, setFDesc] = useState('')
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -299,9 +302,6 @@ export default function Rendiciones() {
   }
 
   // ---------- fondos ----------
-  const [fUsuario, setFUsuario] = useState('')
-  const [fMonto, setFMonto] = useState('')
-  const [fDesc, setFDesc] = useState('')
   const darFondo = async () => {
     const monto = Number(fMonto.replace(/\./g, ''))
     if (!fUsuario || !monto) { alert('Elige la persona y el monto.'); return }

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, permisos } = body
+    const { nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, permisos } = body
     if (!nombre || !email || !password || !rol) {
       return NextResponse.json({ error: 'Faltan campos obligatorios.' }, { status: 400 })
     }
@@ -30,7 +30,9 @@ export async function POST(req: NextRequest) {
 
     const { data: perfil, error: errPerfil } = await supabaseAdmin.from('usuarios').insert({
       auth_id: nuevoAuth.user.id, nombre, cargo: cargo || null, telefono: telefono || null, email, rol,
-      acceso_bodega: accesoBodega !== false, acceso_vehiculos: !!accesoVehiculos, acceso_licitaciones: !!accesoLicitaciones
+      acceso_bodega: accesoBodega !== false, acceso_vehiculos: !!accesoVehiculos, acceso_licitaciones: !!accesoLicitaciones,
+      acceso_contabilidad: !!accesoContabilidad, acceso_hsec: !!accesoHsec,
+      puede_aprobar_contabilidad: !!puedeAprobar, es_revisor_contabilidad: !!esRevisor
     }).select().single()
     if (errPerfil || !perfil) {
       await supabaseAdmin.auth.admin.deleteUser(nuevoAuth.user.id)

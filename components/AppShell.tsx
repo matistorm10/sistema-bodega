@@ -31,6 +31,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     },
     { clave: 'vehiculos', href: '/vehiculos', icon: '🚚', label: 'Vehículos y Maquinaria', visible: esAdmin || usuario.accesoVehiculos, rutas: ['/vehiculos'] },
     { clave: 'licitaciones', href: '/licitaciones', icon: '📋', label: 'Licitaciones', visible: esAdmin || usuario.accesoLicitaciones, rutas: ['/licitaciones'] },
+    { clave: 'contabilidad', href: '/contabilidad', icon: '🧾', label: 'Contabilidad', visible: esAdmin || usuario.accesoContabilidad, rutas: ['/contabilidad', '/rendiciones', '/guias'] },
+    { clave: 'hsec', href: '/hsec', icon: '🦺', label: 'HSEC', visible: esAdmin || usuario.accesoHsec, rutas: ['/hsec'] },
     { clave: 'administracion', href: '/administracion', icon: '⚙️', label: 'Administración', visible: esAdmin, rutas: ['/administracion', '/usuarios'] },
   ].filter(m => m.visible)
 

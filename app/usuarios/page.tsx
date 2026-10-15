@@ -22,6 +22,10 @@ export default function Usuarios() {
   const [accesoBodega, setAccesoBodega] = useState(true)
   const [accesoVehiculos, setAccesoVehiculos] = useState(false)
   const [accesoLicitaciones, setAccesoLicitaciones] = useState(false)
+  const [accesoContabilidad, setAccesoContabilidad] = useState(false)
+  const [accesoHsec, setAccesoHsec] = useState(false)
+  const [puedeAprobar, setPuedeAprobar] = useState(false)
+  const [esRevisor, setEsRevisor] = useState(false)
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -36,6 +40,10 @@ export default function Usuarios() {
   const [editAccesoBodega, setEditAccesoBodega] = useState(true)
   const [editAccesoVehiculos, setEditAccesoVehiculos] = useState(false)
   const [editAccesoLicitaciones, setEditAccesoLicitaciones] = useState(false)
+  const [editAccesoContabilidad, setEditAccesoContabilidad] = useState(false)
+  const [editAccesoHsec, setEditAccesoHsec] = useState(false)
+  const [editPuedeAprobar, setEditPuedeAprobar] = useState(false)
+  const [editEsRevisor, setEditEsRevisor] = useState(false)
   const [editPermisos, setEditPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
@@ -87,14 +95,14 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`)
     setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
-    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setPermisos({})
+    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setPermisos({})
     cargar()
   }
 
@@ -107,6 +115,10 @@ export default function Usuarios() {
     setEditAccesoBodega(u.acceso_bodega !== false)
     setEditAccesoVehiculos(!!u.acceso_vehiculos)
     setEditAccesoLicitaciones(!!u.acceso_licitaciones)
+    setEditAccesoContabilidad(!!u.acceso_contabilidad)
+    setEditAccesoHsec(!!u.acceso_hsec)
+    setEditPuedeAprobar(!!u.puede_aprobar_contabilidad)
+    setEditEsRevisor(!!u.es_revisor_contabilidad)
     const p: Record<string, {origen:boolean, destino:boolean}> = {}
     ;(u.usuario_ubicaciones || []).forEach((x: any) => { p[x.ubicacion_id] = { origen: x.puede_origen, destino: x.puede_destino } })
     setEditPermisos(p)
@@ -122,7 +134,9 @@ export default function Usuarios() {
 
     const { error: errPerfil } = await supabase.from('usuarios').update({
       nombre: editNombre.trim(), cargo: editCargo || null, telefono: editTelefono || null, rol: editRol,
-      acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones
+      acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones,
+      acceso_contabilidad: editAccesoContabilidad, acceso_hsec: editAccesoHsec,
+      puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
@@ -272,6 +286,18 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={accesoBodega} onChange={e=>setAccesoBodega(e.target.checked)}/>📦 Bodega</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoHsec} onChange={e=>setAccesoHsec(e.target.checked)}/>🦺 HSEC</label>
+            </div>
+          </div>
+        )}
+
+        {(rol === 'admin' || accesoContabilidad) && (
+          <div style={{marginBottom:'10px'}}>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
+            <div style={{display:'grid',gap:'8px'}}>
+              <label style={checkboxLabel}><input type="checkbox" checked={puedeAprobar} onChange={e=>setPuedeAprobar(e.target.checked)}/>✅ Puede aprobar rendiciones y guías de traslado</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esRevisor} onChange={e=>setEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
             </div>
           </div>
         )}
@@ -326,6 +352,17 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoBodega} onChange={e=>setEditAccesoBodega(e.target.checked)}/>📦 Bodega</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoHsec} onChange={e=>setEditAccesoHsec(e.target.checked)}/>🦺 HSEC</label>
+                      </div>
+                    </div>
+                  )}
+                  {(editRol === 'admin' || editAccesoContabilidad) && (
+                    <div style={{marginBottom:'10px'}}>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
+                      <div style={{display:'grid',gap:'8px'}}>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editPuedeAprobar} onChange={e=>setEditPuedeAprobar(e.target.checked)}/>✅ Puede aprobar rendiciones y guías de traslado</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsRevisor} onChange={e=>setEditEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
                       </div>
                     </div>
                   )}
@@ -357,6 +394,14 @@ export default function Usuarios() {
                       {u.acceso_bodega !== false && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>📦 Bodega</span>}
                       {u.acceso_vehiculos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fce8e6',color:'#c5221f'}}>🚚 Vehículos</span>}
                       {u.acceso_licitaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e8f0fe',color:AZUL}}>📋 Licitaciones</span>}
+                      {u.acceso_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fef7e0',color:'#986a00'}}>🧾 Contabilidad</span>}
+                      {u.acceso_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🦺 HSEC</span>}
+                    </div>
+                  )}
+                  {(u.puede_aprobar_contabilidad || u.es_revisor_contabilidad) && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
+                      {u.puede_aprobar_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>✅ Aprueba</span>}
+                      {u.es_revisor_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>🔎 Revisor contable</span>}
                     </div>
                   )}
                   {u.usuario_ubicaciones?.length > 0 && (

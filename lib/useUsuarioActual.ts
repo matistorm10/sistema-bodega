@@ -6,6 +6,7 @@ export type Permiso = { ubicacion_id: string, puede_origen: boolean, puede_desti
 export type UsuarioActual = {
   id: string, nombre: string, cargo: string | null, telefono: string | null, email: string, rol: string,
   accesoBodega: boolean, accesoVehiculos: boolean, accesoLicitaciones: boolean,
+  accesoContabilidad: boolean, accesoHsec: boolean, puedeAprobar: boolean, esRevisor: boolean,
   permisos: Permiso[]
 }
 
@@ -27,6 +28,8 @@ export function useUsuarioActual() {
     setUsuario({
       id: perfil.id, nombre: perfil.nombre, cargo: perfil.cargo, telefono: perfil.telefono, email: perfil.email, rol: perfil.rol,
       accesoBodega: perfil.acceso_bodega !== false, accesoVehiculos: !!perfil.acceso_vehiculos, accesoLicitaciones: !!perfil.acceso_licitaciones,
+      accesoContabilidad: !!perfil.acceso_contabilidad, accesoHsec: !!perfil.acceso_hsec,
+      puedeAprobar: !!perfil.puede_aprobar_contabilidad, esRevisor: !!perfil.es_revisor_contabilidad,
       permisos: perfil.usuario_ubicaciones || []
     })
     setSinSesion(false)

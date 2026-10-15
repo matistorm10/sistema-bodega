@@ -21,6 +21,8 @@ export default function Home() {
     { href:'/bodega', icon:'📦', label:'Bodega', desc:'Catálogo, inventario, movimientos, arriendos', visible: esAdmin || usuario?.accesoBodega },
     { href:'/vehiculos', icon:'🚚', label:'Vehículos y Maquinaria', desc:'Documentos, kilometraje y mantenciones', visible: esAdmin || usuario?.accesoVehiculos },
     { href:'/licitaciones', icon:'📋', label:'Licitaciones', desc:'Seguimiento de licitaciones y propuestas', visible: esAdmin || usuario?.accesoLicitaciones },
+    { href:'/contabilidad', icon:'🧾', label:'Contabilidad', desc:'Rendiciones y guías de traslado', visible: esAdmin || usuario?.accesoContabilidad },
+    { href:'/hsec', icon:'🦺', label:'HSEC', desc:'Salud, seguridad, medio ambiente y comunidad', visible: esAdmin || usuario?.accesoHsec },
     { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles y permisos de acceso', visible: esAdmin },
   ].filter(m => m.visible)
 

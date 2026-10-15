@@ -11,7 +11,7 @@ export default function Contabilidad() {
   const puedeAcceder = esAdmin || usuario?.accesoContabilidad
 
   const secciones = [
-    { href: '/rendiciones', icon: '🧾', label: 'Rendiciones', desc: 'Carga de boletas y facturas, fondos por rendir, aprobación y revisión', disponible: false },
+    { href: '/rendiciones', icon: '🧾', label: 'Rendiciones', desc: 'Carga de boletas y facturas, fondos por rendir, aprobación y revisión', disponible: true },
     { href: '/guias', icon: '🚚', label: 'Guías de traslado', desc: 'Traslados internos de un punto a otro, con aprobación y correlativo interno', disponible: false },
   ]
 
@@ -41,14 +41,14 @@ export default function Contabilidad() {
         {cabecera}
         <div style={{display:'grid',gap:'10px'}}>
           {secciones.map(item => (
-            <div key={item.href} style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'14px',padding:'14px 16px',display:'flex',alignItems:'center',gap:'14px',opacity:item.disponible ? 1 : 0.75}}>
+            <Link key={item.href} href={item.disponible ? item.href : '/contabilidad'} style={{textDecoration:'none',color:'inherit',background:'#fff',border:'1px solid #e2e6ed',borderRadius:'14px',padding:'14px 16px',display:'flex',alignItems:'center',gap:'14px',opacity:item.disponible ? 1 : 0.75}}>
               <div style={{width:'40px',height:'40px',borderRadius:'10px',flexShrink:0,background:'rgba(27,79,156,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'19px'}}>{item.icon}</div>
               <div style={{flex:1,minWidth:0}}>
                 <p style={{fontWeight:'700',fontSize:'14.5px',margin:'0 0 2px',color:'#16213E'}}>{item.label}</p>
                 <p style={{fontSize:'12px',color:'#667085',margin:'0'}}>{item.desc}</p>
               </div>
               {!item.disponible && <span style={{fontSize:'11px',padding:'3px 9px',borderRadius:'20px',background:'#fef7e0',color:'#986a00',whiteSpace:'nowrap'}}>Próximamente</span>}
-            </div>
+            </Link>
           ))}
         </div>
       </div>

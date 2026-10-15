@@ -8,11 +8,11 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 type Estado = 'borrador' | 'enviada' | 'aprobada' | 'revisada' | 'pagada' | 'rechazada'
 const ESTADOS: Record<Estado, { texto: string, bg: string, color: string }> = {
   borrador: { texto: 'Borrador', bg: '#f1f3f7', color: '#555' },
-  enviada: { texto: 'Esperando aprobación', bg: '#fef7e0', color: '#986a00' },
-  aprobada: { texto: 'Aprobada · en revisión contable', bg: '#E8F0FE', color: AZUL },
-  revisada: { texto: 'Revisada · por pagar', bg: '#e6f4ea', color: '#1e6b3a' },
+  enviada: { texto: 'En revisión contable', bg: '#fef7e0', color: '#986a00' },
+  rechazada: { texto: 'Devuelta al trabajador', bg: '#fde8e8', color: '#9b1c1c' },
+  revisada: { texto: 'Cuadrada · esperando aprobación', bg: '#E8F0FE', color: AZUL },
+  aprobada: { texto: 'Aprobada · por pagar', bg: '#e6f4ea', color: '#1e6b3a' },
   pagada: { texto: 'Pagada', bg: '#d7efe0', color: '#14532d' },
-  rechazada: { texto: 'Devuelta', bg: '#fde8e8', color: '#9b1c1c' },
 }
 const TIPOS: Record<string, string> = { boleta: 'Boleta', factura: 'Factura', en_sistema: 'En sistema (compra con RUT empresa)', otro: 'Otro' }
 const peso = (n: number) => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -46,6 +46,7 @@ export default function Rendiciones() {
   const [msg, setMsg] = useState('')
   const [restaurado, setRestaurado] = useState(false)
   const [fUsuario, setFUsuario] = useState('')
+  const [fCC, setFCC] = useState('')
   const [fMonto, setFMonto] = useState('')
   const [fDesc, setFDesc] = useState('')
 
@@ -86,11 +87,17 @@ export default function Rendiciones() {
   const itemsDe = (rid: string) => items.filter(i => i.rendicion_id === rid)
   const totalDe = (rid: string) => itemsDe(rid).reduce((s, i) => s + Number(i.monto), 0)
 
-  // Saldo del fondo por rendir: lo entregado menos lo rendido (desde que se envía)
-  const saldoDe = (uid: string) => {
-    const entregado = fondos.filter(f => f.usuario_id === uid).reduce((s, f) => s + Number(f.monto), 0)
-    const rendido = rendiciones.filter(r => r.usuario_id === uid && ['enviada', 'aprobada', 'revisada', 'pagada'].includes(r.estado)).reduce((s, r) => s + totalDe(r.id), 0)
+  // Fondo por rendir: lo que la revisora carga a una persona en un centro de costo, menos lo que rinde en ese centro de costo (desde que envía la rendición)
+  const saldoDe = (uid: string, cc?: string | null) => {
+    const entregado = fondos.filter(f => f.usuario_id === uid && (cc === undefined || (f.centro_costo_id || null) === (cc || null))).reduce((s, f) => s + Number(f.monto), 0)
+    const rendido = rendiciones.filter(r => r.usuario_id === uid && (cc === undefined || (r.centro_costo_id || null) === (cc || null)) && ['enviada', 'revisada', 'aprobada', 'pagada'].includes(r.estado)).reduce((s, r) => s + totalDe(r.id), 0)
     return { entregado, rendido, saldo: entregado - rendido }
+  }
+  // Combinaciones persona + centro de costo que tienen fondo cargado
+  const paresFondo = (uid?: string) => {
+    const claves = new Set<string>()
+    fondos.filter(f => !uid || f.usuario_id === uid).forEach(f => claves.add(f.usuario_id + '|' + (f.centro_costo_id || '')))
+    return Array.from(claves).map(k => { const [u, c] = k.split('|'); return { usuario_id: u, cc: c || null } })
   }
 
   const avisar = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 4000) }
@@ -258,9 +265,9 @@ export default function Rendiciones() {
   }
 
   const mias = rendiciones.filter(r => r.usuario_id === usuario!.id)
-  const porAprobar = rendiciones.filter(r => r.estado === 'enviada')
-  const enRevision = rendiciones.filter(r => r.estado === 'aprobada' || r.estado === 'revisada')
-  const miSaldo = saldoDe(usuario!.id)
+  const porAprobar = rendiciones.filter(r => r.estado === 'revisada')
+  const enRevision = rendiciones.filter(r => r.estado === 'enviada' || r.estado === 'aprobada')
+  const misFondos = paresFondo(usuario!.id)
 
   const fila = (r: any, conTrabajador: boolean) => (
     <div key={r.id} onClick={() => setAbierta(r.id)} style={{ ...card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -280,9 +287,11 @@ export default function Rendiciones() {
     const its = itemsDe(r.id)
     const esDueno = r.usuario_id === usuario!.id
     const editable = esDueno && (r.estado === 'borrador' || r.estado === 'rechazada')
-    const puedeRevisar = revisa && (r.estado === 'aprobada' || r.estado === 'revisada')
-    const puedeAprobarEsta = aprueba && r.estado === 'enviada' && !(r.usuario_id === usuario!.id && !esAdmin)
-    const puedeObservar = puedeAprobarEsta || (revisa && r.estado === 'aprobada')
+    const puedeRevisar = revisa && r.estado === 'enviada'
+    const puedeAprobarEsta = aprueba && r.estado === 'revisada' && !(r.usuario_id === usuario!.id && !esAdmin)
+    const puedeObservar = revisa && r.estado === 'enviada'
+    const sinCuenta = its.filter(i => !i.cuenta_contable).length
+    const saldoCC = saldoDe(r.usuario_id, r.centro_costo_id || null)
     const pendientesCorregir = its.filter(i => i.estado_item === 'rechazado').length
     return (
       <div style={{ display: 'grid', gap: '12px' }}>
@@ -297,7 +306,9 @@ export default function Rendiciones() {
           </div>
           {puedeObservar && pendientesCorregir > 0 && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fef7e0', color: '#7a5600', borderRadius: '8px', fontSize: '12.5px' }}>Marcaste <strong>{pendientesCorregir}</strong> gasto(s) como rechazado(s). El trabajador <strong>aún no puede corregirlos</strong>: presiona <strong>"Devolver al trabajador"</strong> abajo para enviárselos.</p>}
           {r.estado === 'rechazada' && esDueno && pendientesCorregir > 0 && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Tienes <strong>{pendientesCorregir}</strong> gasto(s) con observaciones (marcados en rojo). Edítalos para corregirlos o quítalos, y luego envía de nuevo.</p>}
+          {r.estado === 'enviada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fef7e0', color: '#7a5600', borderRadius: '8px', fontSize: '12.5px' }}>{r.motivo_rechazo}</p>}
           {r.estado === 'rechazada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Devuelta: {r.motivo_rechazo}</p>}
+          {saldoCC.entregado > 0 && <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#344054' }}>Fondo por rendir en este centro de costo: entregado {peso(saldoCC.entregado)} · rendido {peso(saldoCC.rendido)} · <strong style={{ color: saldoCC.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{saldoCC.saldo < 0 ? 'se debe reintegrar ' + peso(-saldoCC.saldo) : 'saldo a favor ' + peso(saldoCC.saldo)}</strong></p>}
           {r.aprobada_por && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Aprobada por {nombreUsuario(r.aprobada_por)} el {fechaCL(r.fecha_aprobacion)}{r.fecha_pago ? ' · Pagada el ' + fechaCL(r.fecha_pago) : ''}</p>}
         </div>
 
@@ -370,17 +381,21 @@ export default function Rendiciones() {
         )}
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } if (pendientesCorregir > 0) { alert(`Aún tienes ${pendientesCorregir} gasto(s) con observaciones. Edítalos para corregirlos o quítalos antes de enviar.`); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a aprobación.') }}>Enviar a aprobación</button>}
+          {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } if (pendientesCorregir > 0) { alert(`Aún tienes ${pendientesCorregir} gasto(s) con observaciones. Edítalos para corregirlos o quítalos antes de enviar.`); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a revisión contable.') }}>Enviar a revisión contable</button>}
           {editable && r.estado === 'borrador' && <button style={btn(false, true)} onClick={() => eliminarRendicion(r)}>Eliminar</button>}
-          {aprueba && r.estado === 'enviada' && !(r.usuario_id === usuario!.id && !esAdmin) && <>
-            <button style={btn()} onClick={() => { if (pendientesCorregir > 0) { alert('Hay gastos rechazados. Devuelve la rendición al trabajador o deshaz los rechazos antes de aprobar.'); return } cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Pasa a revisión contable.') }}>✔ Aprobar</button>
+          {puedeRevisar && <>
+            <button style={btn()} onClick={() => {
+              if (pendientesCorregir > 0) { alert('Hay gastos rechazados. Devuelve la rendición al trabajador o deshaz los rechazos antes de pasarla a aprobación.'); return }
+              if (sinCuenta > 0) { alert(`Faltan ${sinCuenta} gasto(s) sin cuenta contable. Asígnalas antes de pasarla a aprobación.`); return }
+              cambiar(r.id, { estado: 'revisada', revisada_por: usuario!.id, fecha_revision: new Date().toISOString(), motivo_rechazo: null }, 'Cuadrada. Pasa a aprobación.')
+            }}>✔ Cuadrada: pasar a aprobación</button>
             <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
           </>}
-          {puedeRevisar && r.estado === 'aprobada' && <>
-            <button style={btn()} onClick={() => { if (pendientesCorregir > 0) { alert('Hay gastos rechazados. Devuelve la rendición al trabajador o deshaz los rechazos antes de marcarla revisada.'); return } cambiar(r.id, { estado: 'revisada', revisada_por: usuario!.id, fecha_revision: new Date().toISOString() }, 'Marcada como revisada.') }}>✔ Marcar revisada (cruzada con KAME)</button>
-            <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
+          {puedeAprobarEsta && <>
+            <button style={btn()} onClick={() => cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Queda por pagar.')}>✔ Aprobar</button>
+            <button style={btn(false, true)} onClick={() => { const m = prompt('Motivo por el que vuelve a revisión contable:'); if (m && m.trim()) cambiar(r.id, { estado: 'enviada', motivo_rechazo: 'Devuelta por aprobación: ' + m.trim() }, 'Devuelta a revisión contable.') }}>Devolver a revisión</button>
           </>}
-          {puedeRevisar && r.estado === 'revisada' && <button style={btn()} onClick={() => { const f = prompt('Fecha de pago (AAAA-MM-DD):', hoy); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) cambiar(r.id, { estado: 'pagada', fecha_pago: f }, 'Marcada como pagada.') }}>💲 Marcar pagada</button>}
+          {revisa && r.estado === 'aprobada' && <button style={btn()} onClick={() => { const f = prompt('Fecha de pago (AAAA-MM-DD):', hoy); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) cambiar(r.id, { estado: 'pagada', fecha_pago: f }, 'Marcada como pagada.') }}>💲 Marcar pagada</button>}
           <button style={btn(false)} onClick={() => exportarExcel([r])}>⬇ Excel</button>
         </div>
       </div>
@@ -390,10 +405,10 @@ export default function Rendiciones() {
   // ---------- fondos ----------
   const darFondo = async () => {
     const monto = Number(fMonto.replace(/\./g, ''))
-    if (!fUsuario || !monto) { alert('Elige la persona y el monto.'); return }
-    const { error } = await supabase.from('fondos_rendir').insert({ usuario_id: fUsuario, monto, descripcion: fDesc.trim() || null, creado_por: usuario!.id })
+    if (!fUsuario || !fCC || !monto) { alert('Elige la persona, el centro de costo y el monto.'); return }
+    const { error } = await supabase.from('fondos_rendir').insert({ usuario_id: fUsuario, centro_costo_id: fCC, monto, descripcion: fDesc.trim() || null, creado_por: usuario!.id })
     if (error) { alert(error.message); return }
-    setFUsuario(''); setFMonto(''); setFDesc(''); avisar('Fondo registrado.'); await cargar()
+    setFUsuario(''); setFCC(''); setFMonto(''); setFDesc(''); avisar('Fondo registrado.'); await cargar()
   }
 
   const tabs: { k: typeof tab, t: string, v: boolean, n?: number }[] = [
@@ -401,7 +416,7 @@ export default function Rendiciones() {
     { k: 'mias', t: 'Mis rendiciones', v: true },
     { k: 'todas', t: 'Todas', v: aprueba || revisa },
     { k: 'aprobar', t: 'Por aprobar', v: aprueba, n: porAprobar.length },
-    { k: 'revision', t: 'Revisión contable', v: revisa, n: enRevision.length },
+    { k: 'revision', t: 'Revisión y pagos', v: revisa, n: enRevision.length },
     { k: 'fondos', t: 'Fondos por rendir', v: revisa },
   ]
 
@@ -431,9 +446,9 @@ export default function Rendiciones() {
             const porEstado = (e: Estado) => activas.filter(r => r.estado === e)
             const kpis = [
               { t: 'Rendido este mes', v: peso(suma(delMes)), s: delMes.length + ' rendición(es)', c: AZUL },
-              { t: 'Esperando aprobación', v: peso(suma(porEstado('enviada'))), s: porEstado('enviada').length + ' rendición(es)', c: '#986a00' },
-              { t: 'En revisión contable', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: AZUL },
-              { t: 'Revisadas, por pagar', v: peso(suma(porEstado('revisada'))), s: porEstado('revisada').length + ' rendición(es)', c: '#1e6b3a' },
+              { t: 'En revisión contable', v: peso(suma(porEstado('enviada'))), s: porEstado('enviada').length + ' rendición(es)', c: '#986a00' },
+              { t: 'Esperando aprobación', v: peso(suma(porEstado('revisada'))), s: porEstado('revisada').length + ' rendición(es)', c: AZUL },
+              { t: 'Aprobadas, por pagar', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: '#1e6b3a' },
               { t: 'Pagado este mes', v: peso(suma(porEstado('pagada').filter(r => (r.fecha_pago || '').slice(0, 7) === mesActual))), s: 'rendiciones pagadas', c: '#14532d' },
               { t: 'Devueltas', v: String(porEstado('rechazada').length), s: 'esperando corrección', c: '#9b1c1c' },
             ]
@@ -457,8 +472,8 @@ export default function Rendiciones() {
               const clave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
               meses.push([clave.slice(5) + '/' + clave.slice(2, 4), suma(activas.filter(r => r.estado !== 'rechazada' && (r.created_at || '').slice(0, 7) === clave))])
             }
-            const sinCuenta = activas.filter(r => r.estado === 'aprobada' || r.estado === 'revisada').reduce((a, r) => a + itemsDe(r.id).filter(i => !i.cuenta_contable).length, 0)
-            const enSistema = activas.filter(r => r.estado === 'aprobada').reduce((a, r) => a + itemsDe(r.id).filter(i => i.tipo_doc === 'en_sistema').length, 0)
+            const sinCuenta = activas.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => !i.cuenta_contable).length, 0)
+            const enSistema = activas.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => i.tipo_doc === 'en_sistema').length, 0)
             return (
               <div style={{ display: 'grid', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '10px' }}>
@@ -478,17 +493,23 @@ export default function Rendiciones() {
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por trabajador</p>{barras(agrupar(r => nombreUsuario(r.usuario_id)), 'Sin datos todavía.')}</div>
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Últimos 6 meses</p>{barras(meses, '')}</div>
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Fondos por rendir pendientes</p>
-                    {barras(usuarios.filter(u => fondos.some(f => f.usuario_id === u.id)).map(u => [u.nombre, Math.max(0, saldoDe(u.id).saldo)] as [string, number]).filter(d => d[1] > 0), 'No hay saldos pendientes.')}</div>
+                    {barras(paresFondo().map(x => [nombreUsuario(x.usuario_id) + ' · ' + (x.cc ? nombreCC(x.cc) : 'sin CECO'), Math.max(0, saldoDe(x.usuario_id, x.cc).saldo)] as [string, number]).filter(d => d[1] > 0), 'No hay saldos pendientes.')}</div>
                 </div>
               </div>)
           })()}
 
           {!cargando && tab === 'mias' && (
             <div style={{ display: 'grid', gap: '10px' }}>
-              {miSaldo.entregado > 0 && (
+              {misFondos.length > 0 && (
                 <div style={card}>
-                  <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px' }}>Mi fondo por rendir</p>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#344054' }}>Entregado {peso(miSaldo.entregado)} · Rendido {peso(miSaldo.rendido)} · <strong style={{ color: miSaldo.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{miSaldo.saldo < 0 ? 'Se te debe ' + peso(-miSaldo.saldo) : 'Saldo por rendir ' + peso(miSaldo.saldo)}</strong></p>
+                  <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13.5px' }}>Mis fondos por rendir</p>
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    {misFondos.map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
+                      <div key={x.cc || 'x'} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', fontSize: '13px', padding: '8px 10px', background: '#f6f8fb', borderRadius: '8px' }}>
+                        <span><strong>{x.cc ? nombreCC(x.cc) : 'Sin centro de costo'}</strong> <span style={{ color: '#8a94a6' }}>· entregado {peso(sd.entregado)} · rendido {peso(sd.rendido)}</span></span>
+                        <strong style={{ color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se te debe ' + peso(-sd.saldo) : 'A tu favor ' + peso(sd.saldo)}</strong>
+                      </div>) })}
+                  </div>
                 </div>
               )}
               <div style={card}>
@@ -497,7 +518,7 @@ export default function Rendiciones() {
                   <div><span style={label}>Centro de costo (CECO)</span>
                     <select value={nuevoCC} onChange={e => setNuevoCC(e.target.value)} style={input}>
                       <option value="">Elegir...</option>
-                      {faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                      {faenas.map(f => { const sd = saldoDe(usuario!.id, f.id); return <option key={f.id} value={f.id}>{f.nombre}{sd.entregado > 0 ? ` (fondo a favor ${peso(sd.saldo)})` : ''}</option> })}
                     </select></div>
                   <div><span style={label}>Descripción (opcional)</span><input value={nuevaDesc} onChange={e => setNuevaDesc(e.target.value)} style={input} placeholder="Ej: compras de la semana" /></div>
                 </div>
@@ -515,7 +536,7 @@ export default function Rendiciones() {
 
           {!cargando && tab === 'aprobar' && (
             <div style={{ display: 'grid', gap: '10px' }}>
-              {porAprobar.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones esperando aprobación.</p> : porAprobar.map(r => fila(r, true))}
+              {porAprobar.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones cuadradas esperando aprobación.</p> : porAprobar.map(r => fila(r, true))}
             </div>
           )}
 
@@ -524,7 +545,7 @@ export default function Rendiciones() {
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button style={btn(false)} onClick={() => exportarExcel(rendiciones.filter(r => r.estado !== 'borrador'))}>⬇ Excel de todas las rendiciones</button>
               </div>
-              {enRevision.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones pendientes de revisión.</p> : enRevision.map(r => fila(r, true))}
+              {enRevision.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones por revisar ni por pagar.</p> : enRevision.map(r => fila(r, true))}
               <p style={{ margin: '10px 0 0', fontWeight: 700, fontSize: '13.5px' }}>Pagadas</p>
               {rendiciones.filter(r => r.estado === 'pagada').slice(0, 30).map(r => fila(r, true))}
             </div>
@@ -533,10 +554,13 @@ export default function Rendiciones() {
           {!cargando && tab === 'fondos' && (
             <div style={{ display: 'grid', gap: '10px' }}>
               <div style={card}>
-                <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Entregar fondo por rendir</p>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13.5px' }}>Cargar fondo por rendir</p>
+                <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Al trabajador le aparecerá como saldo a favor en ese centro de costo, y se irá descontando con sus rendiciones.</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px' }}>
                   <div><span style={label}>Persona</span>
                     <select value={fUsuario} onChange={e => setFUsuario(e.target.value)} style={input}><option value="">Elegir...</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select></div>
+                  <div><span style={label}>Centro de costo (CECO)</span>
+                    <select value={fCC} onChange={e => setFCC(e.target.value)} style={input}><option value="">Elegir...</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></div>
                   <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={fMonto} onChange={e => setFMonto(e.target.value)} style={input} /></div>
                   <div><span style={label}>Nota</span><input value={fDesc} onChange={e => setFDesc(e.target.value)} style={input} /></div>
                 </div>
@@ -544,14 +568,15 @@ export default function Rendiciones() {
               </div>
               <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-                  <thead><tr style={{ background: '#f6f8fb', textAlign: 'left' }}>{['Persona', 'Entregado', 'Rendido', 'Saldo'].map(t => <th key={t} style={{ padding: '9px 10px', fontSize: '11px', color: '#667085' }}>{t}</th>)}</tr></thead>
+                  <thead><tr style={{ background: '#f6f8fb', textAlign: 'left' }}>{['Persona', 'Centro de costo', 'Entregado', 'Rendido', 'Saldo'].map(t => <th key={t} style={{ padding: '9px 10px', fontSize: '11px', color: '#667085' }}>{t}</th>)}</tr></thead>
                   <tbody>
-                    {usuarios.filter(u => fondos.some(f => f.usuario_id === u.id)).map(u => { const s = saldoDe(u.id); return (
-                      <tr key={u.id} style={{ borderTop: '1px solid #eef1f6' }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 600 }}>{u.nombre}</td><td style={{ padding: '8px 10px' }}>{peso(s.entregado)}</td><td style={{ padding: '8px 10px' }}>{peso(s.rendido)}</td>
-                        <td style={{ padding: '8px 10px', fontWeight: 700, color: s.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{s.saldo < 0 ? 'Se le debe ' + peso(-s.saldo) : peso(s.saldo)}</td>
+                    {paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
+                      <tr key={x.usuario_id + (x.cc || '')} style={{ borderTop: '1px solid #eef1f6' }}>
+                        <td style={{ padding: '8px 10px', fontWeight: 600 }}>{nombreUsuario(x.usuario_id)}</td><td style={{ padding: '8px 10px' }}>{x.cc ? nombreCC(x.cc) : <span style={{ color: '#8a94a6' }}>Sin centro de costo</span>}</td>
+                        <td style={{ padding: '8px 10px' }}>{peso(sd.entregado)}</td><td style={{ padding: '8px 10px' }}>{peso(sd.rendido)}</td>
+                        <td style={{ padding: '8px 10px', fontWeight: 700, color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se le debe ' + peso(-sd.saldo) : peso(sd.saldo)}</td>
                       </tr>) })}
-                    {fondos.length === 0 && <tr><td colSpan={4} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
+                    {fondos.length === 0 && <tr><td colSpan={5} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
                   </tbody>
                 </table>
               </div>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
+import { exportarInventarioExcel, exportarInventarioPDF, abrirVentanaExportacion, type DatosExportacion } from '@/lib/exportarInventario'
 
 export default function Inventario() {
   const [ubicaciones, setUbicaciones] = useState<any[]>([])
@@ -93,6 +94,48 @@ export default function Inventario() {
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}
   const estadoTextColor = (e: string) => e === 'malo' ? '#c5221f' : e === 'bueno' ? '#137333' : '#666'
 
+  // ── Exportar (Excel / PDF): usa exactamente lo que se ve en pantalla con los filtros activos ──
+  const [exportando, setExportando] = useState<'' | 'excel' | 'pdf'>('')
+  const [errorExport, setErrorExport] = useState('')
+
+  const datosExportacion = (): DatosExportacion => {
+    const ubNombre = ubicaciones.find(u => u.id === ubSel)?.nombre || ''
+    const catNombre = categoriasDisponibles.find(c => c.id === catSel)?.nombre || 'Todas'
+    const tipoNombre = tiposDisponibles.find(t => t.id === tipoSel)?.nombre || 'Todos'
+    const claseNombre = claseSel === 'propio' ? 'Propio' : claseSel === 'arrendado' ? 'Arrendado' : 'Todos'
+    return {
+      propias: mostrarPropio ? itemsFiltrados.map(i => ({
+        ubicacion: i.ubicacion, categoria: i.categoria, tipo: i.tipo, producto: i.producto,
+        codigo: String(i.codigo ?? ''), cantidad: i.cantidad ?? null, estado: i.estado,
+      })) : [],
+      arrendadas: mostrarArrendado ? arriendosFiltrados.map(a => ({
+        ubicacion: a.ubicacion?.nombre || '—', categoria: a.tipos?.categorias?.nombre || '—', tipo: a.tipos?.nombre || '—',
+        descripcion: a.descripcion || '', proveedor: a.proveedor || '', ordenCompra: a.orden_compra || '—',
+        fechaInicio: a.fecha_inicio || '', estado: a.estado_fisico || '',
+      })) : [],
+      filtros: `Ubicación: ${ubNombre || 'Todas'} · Categoría: ${catNombre} · Tipo: ${tipoNombre} · Clase: ${claseNombre}`,
+      ubicacionNombre: ubNombre,
+    }
+  }
+
+  const descargarExcel = async () => {
+    setErrorExport(''); setExportando('excel')
+    try { await exportarInventarioExcel(datosExportacion()) }
+    catch (e: any) { console.error(e); setErrorExport('No se pudo generar el Excel: ' + (e?.message || 'error desconocido')) }
+    setExportando('')
+  }
+
+  const descargarPDF = async () => {
+    setErrorExport('')
+    const ventana = abrirVentanaExportacion() // debe ir antes de cualquier espera (celular)
+    setExportando('pdf')
+    try { await exportarInventarioPDF(datosExportacion(), ventana) }
+    catch (e: any) { console.error(e); if (ventana) ventana.close(); setErrorExport('No se pudo generar el PDF: ' + (e?.message || 'error desconocido')) }
+    setExportando('')
+  }
+
+  const hayParaExportar = (mostrarPropio && itemsFiltrados.length > 0) || (mostrarArrendado && arriendosFiltrados.length > 0)
+
   const sinResultados = !cargando &&
     (!mostrarPropio || itemsFiltrados.length === 0) &&
     (!mostrarArrendado || arriendosFiltrados.length === 0)
@@ -137,6 +180,19 @@ export default function Inventario() {
           </div>
         </div>
       </div>
+
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',marginBottom:'1.25rem'}}>
+        <button type="button" onClick={descargarExcel} disabled={cargando || !hayParaExportar || exportando !== ''}
+          style={{padding:'9px 14px',borderRadius:'8px',border:`1px solid ${AZUL}`,background:'#fff',color:AZUL,fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:(cargando || !hayParaExportar || exportando !== '')?0.5:1}}>
+          {exportando === 'excel' ? 'Generando Excel...' : '⬇ Descargar Excel'}
+        </button>
+        <button type="button" onClick={descargarPDF} disabled={cargando || !hayParaExportar || exportando !== ''}
+          style={{padding:'9px 14px',borderRadius:'8px',border:`1px solid ${AZUL}`,background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:(cargando || !hayParaExportar || exportando !== '')?0.5:1}}>
+          {exportando === 'pdf' ? 'Generando PDF...' : '⬇ Descargar PDF (hoja de verificación)'}
+        </button>
+        <span style={{fontSize:'12px',color:'#888'}}>Se descarga con los filtros que tengas activos.</span>
+      </div>
+      {errorExport && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 14px',background:'#fce8e6',padding:'8px 12px',borderRadius:'8px'}}>{errorExport}</p>}
 
       {cargando && <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p>}
       {sinResultados && <p style={{fontSize:'13px',color:'#999'}}>No hay inventario registrado con este filtro.</p>}

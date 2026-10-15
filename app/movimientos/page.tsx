@@ -661,7 +661,7 @@ export default function Movimientos() {
     <select value={origSel} onChange={e=>{setOrigSel(e.target.value); setDstSel('')}} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
       <option value=''>Selecciona origen...</option>
       <optgroup label='Bodegas'>{bodegasOrigenTraslado.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-      <optgroup label='Faenas'>{faenasOrigenTraslado.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+      <optgroup label='Centros de Costo (CECO)'>{faenasOrigenTraslado.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
     </select>
     {!esAdmin && bodegasOrigenTraslado.length + faenasOrigenTraslado.length === 0 && (
       <p style={{fontSize:'12px',color:'#c5221f',margin:'4px 0 0'}}>No tienes ninguna ubicación asignada como origen. Pídele al administrador que te la asigne en Usuarios.</p>
@@ -673,7 +673,7 @@ export default function Movimientos() {
     <select value={dstSel} onChange={e=>setDstSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
       <option value=''>Selecciona destino...</option>
       <optgroup label='Bodegas'>{bodegasDestinoTraslado.filter(b=>b.id!==origSel).map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-      <optgroup label='Faenas'>{faenasDestinoTraslado.filter(f=>f.id!==origSel).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+      <optgroup label='Centros de Costo (CECO)'>{faenasDestinoTraslado.filter(f=>f.id!==origSel).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
     </select>
     {!esAdmin && (bodegasDestinoTraslado.length + faenasDestinoTraslado.length === 0) && (
       <p style={{fontSize:'12px',color:'#c5221f',margin:'4px 0 0'}}>No tienes ningún destino asignado. Pídele al administrador que te lo asigne en Usuarios.</p>
@@ -1191,7 +1191,7 @@ export default function Movimientos() {
               <select value={logUbicacionSel} onChange={e=>setLogUbicacionSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
                 <option value=''>Todas las ubicaciones</option>
                 <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-                <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+                <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
               </select>
             </div>
             <div style={{minWidth:'220px'}}>

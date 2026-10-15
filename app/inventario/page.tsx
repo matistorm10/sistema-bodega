@@ -154,7 +154,7 @@ export default function Inventario() {
           <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={inputStyle}>
             <option value=''>Todas las ubicaciones</option>
             <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-            <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}{!f.activa ? ' (cerrada)' : ''}</option>)}</optgroup>
+            <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}{!f.activa ? ' (cerrada)' : ''}</option>)}</optgroup>
           </select>
         </div>
         <div style={{minWidth:'200px'}}>

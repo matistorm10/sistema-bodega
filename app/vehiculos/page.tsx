@@ -202,7 +202,7 @@ export default function Vehiculos() {
               <select value={filtroUbicacion} onChange={e=>setFiltroUbicacion(e.target.value)} style={inputStyle}>
                 <option value=''>Todas las ubicaciones</option>
                 <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-                <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+                <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
               </select>
             </div>
             <div style={{minWidth:'160px'}}>
@@ -315,7 +315,7 @@ export default function Vehiculos() {
                   <select value={ubicacionId} onChange={e=>setUbicacionId(e.target.value)} style={inputStyle}>
                     <option value=''>Sin asignar</option>
                     <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-                    <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+                    <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
                   </select>
                 </div>
               </div>

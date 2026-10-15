@@ -15,7 +15,7 @@ export default function Bodega() {
     {href:'/movimientos',icon:'🔄',label:'Movimientos',desc:'Ingresos, traslados y pérdidas'},
     {href:'/arriendos',icon:'🏗',label:'Arriendos',desc:'Equipos arrendados activos'},
     {href:'/catalogo',icon:'📦',label:'Catálogo',desc:'Categorías y tipos de herramientas'},
-    ...(esAdmin ? [{href:'/ubicaciones',icon:'📍',label:'Ubicaciones',desc:'Bodegas y faenas'}] : []),
+    ...(esAdmin ? [{href:'/ubicaciones',icon:'📍',label:'Centros de Costo (CECO)',desc:'Bodegas y centros de costo (faenas)'}] : []),
   ]
 
   if (cargando) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>

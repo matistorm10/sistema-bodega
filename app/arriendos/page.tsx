@@ -47,7 +47,7 @@ export default function Arriendos() {
         <select value={ubSel} onChange={e=>setUbSel(e.target.value)} style={{width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px'}}>
           <option value=''>Todas las ubicaciones</option>
           <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-          <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+          <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
         </select>
       </div>
 

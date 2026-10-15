@@ -656,7 +656,7 @@ export default function DetalleVehiculo() {
                 <select value={fUbicacion} onChange={e=>setFUbicacion(e.target.value)} style={inputStyle}>
                   <option value=''>Sin asignar</option>
                   <optgroup label='Bodegas'>{bodegas.map(b=><option key={b.id} value={b.id}>{b.nombre}</option>)}</optgroup>
-                  <optgroup label='Faenas'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
+                  <optgroup label='Centros de Costo (CECO)'>{faenas.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</optgroup>
                 </select>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>

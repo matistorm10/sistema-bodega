@@ -304,7 +304,7 @@ export default function Usuarios() {
 
         {rol !== 'admin' && accesoBodega && (
           <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas dentro de Bodega (marca si puede usarla como origen y/o destino en Traslado)</label>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega (marca si puede usarla como origen y/o destino en Traslado)</label>
             {tablaPermisos(permisos, togglePermiso)}
           </div>
         )}
@@ -368,7 +368,7 @@ export default function Usuarios() {
                   )}
                   {editRol !== 'admin' && editAccesoBodega && (
                     <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Ubicaciones permitidas dentro de Bodega</label>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega</label>
                       {tablaPermisos(editPermisos, toggleEditPermiso)}
                     </div>
                   )}

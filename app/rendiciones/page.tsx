@@ -66,7 +66,7 @@ export default function Rendiciones() {
 
   const nombreUsuario = (id: string) => usuarios.find(u => u.id === id)?.nombre || '—'
   const faena = (id?: string | null) => faenas.find(f => f.id === id)
-  const nombreCC = (id?: string | null) => { const f = faena(id); return f ? (f.codigo ? f.codigo + ' · ' : '') + f.nombre : 'Sin centro de costo' }
+  const nombreCC = (id?: string | null) => { const f = faena(id); return f ? f.nombre : 'Sin centro de costo' }
   const itemsDe = (rid: string) => items.filter(i => i.rendicion_id === rid)
   const totalDe = (rid: string) => itemsDe(rid).reduce((s, i) => s + Number(i.monto), 0)
 
@@ -408,10 +408,10 @@ export default function Rendiciones() {
               <div style={card}>
                 <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Nueva rendición</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '10px' }}>
-                  <div><span style={label}>Centro de costo (faena o proyecto)</span>
+                  <div><span style={label}>Centro de costo (CECO)</span>
                     <select value={nuevoCC} onChange={e => setNuevoCC(e.target.value)} style={input}>
                       <option value="">Elegir...</option>
-                      {faenas.map(f => <option key={f.id} value={f.id}>{f.codigo ? f.codigo + ' · ' : ''}{f.nombre}</option>)}
+                      {faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
                     </select></div>
                   <div><span style={label}>Descripción (opcional)</span><input value={nuevaDesc} onChange={e => setNuevaDesc(e.target.value)} style={input} placeholder="Ej: compras de la semana" /></div>
                 </div>

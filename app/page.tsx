@@ -40,11 +40,19 @@ export default function Home() {
       <style>{`
         .tile:hover { box-shadow: 0 4px 14px rgba(16,24,40,0.08); border-color: #c7d3e6 !important; transform: translateY(-1px); }
         .tile { transition: box-shadow .15s, transform .15s, border-color .15s; }
+        .home-contenedor { max-width: 640px; }
+        .home-grid { display: grid; gap: 10px; }
+        .home-saludo { display: none; }
+        @media (min-width: 1024px) {
+          .home-contenedor { max-width: 1000px; padding: 2.5rem 2rem !important; }
+          .home-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+          .home-saludo { display: block; }
+        }
         .signout:hover { color: ${AZUL} !important; text-decoration: underline; }
       `}</style>
 
-      <div style={{maxWidth:'640px',margin:'0 auto',padding:'1.5rem'}}>
-        <div style={{
+      <div className="home-contenedor" style={{margin:'0 auto',padding:'1.5rem'}}>
+        <div className="solo-movil" style={{
           background:'#fff', borderRadius:'16px', padding:'1.25rem 1.5rem', marginBottom:'1.5rem',
           boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)',
         }}>
@@ -71,7 +79,14 @@ export default function Home() {
           <p style={{fontSize:'13px',color:'#999',textAlign:'center'}}>No tienes acceso a ningún módulo todavía. Pídele al administrador que te lo habilite.</p>
         )}
 
-        <div style={{display:'grid',gap:'10px'}}>
+        {!cargando && usuario && (
+          <div className="home-saludo" style={{marginBottom:'1.5rem'}}>
+            <h1 style={{fontSize:'24px',fontWeight:'700',margin:'0 0 4px',color:'#16213E'}}>Hola, {usuario.nombre.split(' ')[0]}</h1>
+            <p style={{fontSize:'13px',color:'#667085',margin:'0'}}>Elige un módulo para comenzar.</p>
+          </div>
+        )}
+
+        <div className="home-grid">
           {modulos.map(item => (
             <Link key={item.href} href={item.href} style={{textDecoration:'none'}}>
               <div className="tile" style={{background:'#fff',border:'1px solid #e2e6ed',borderRadius:'14px',padding:'16px 18px',cursor:'pointer',display:'flex',alignItems:'center',gap:'16px'}}>

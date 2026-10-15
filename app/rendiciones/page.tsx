@@ -121,6 +121,10 @@ export default function Rendiciones() {
   const [iFoto, setIFoto] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
+  const MOTIVOS = ['Monto no cuadra', 'Falta información', 'No se logra ver', 'Rendición no corresponde']
+  const [rechazando, setRechazando] = useState<any | null>(null)
+  const [motivoSel, setMotivoSel] = useState('')
+  const [motivoExtra, setMotivoExtra] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const [visor, setVisor] = useState<{ url: string, pdf: boolean } | null>(null)
 
@@ -156,11 +160,14 @@ export default function Rendiciones() {
     limpiarForm()
     await cargar()
   }
-  const observarItem = async (it: any) => {
-    const m = prompt('Motivo por el que se rechaza este gasto (lo verá el trabajador):')
-    if (!m || !m.trim()) return
-    const { error } = await supabase.from('rendicion_items').update({ estado_item: 'rechazado', motivo_rechazo: m.trim() }).eq('id', it.id)
+  const observarItem = (it: any) => { setRechazando(it); setMotivoSel(''); setMotivoExtra('') }
+  const confirmarRechazo = async () => {
+    if (!rechazando) return
+    if (!motivoSel) { alert('Elige el motivo del rechazo.'); return }
+    const motivo = motivoSel + (motivoExtra.trim() ? ' — ' + motivoExtra.trim() : '')
+    const { error } = await supabase.from('rendicion_items').update({ estado_item: 'rechazado', motivo_rechazo: motivo }).eq('id', rechazando.id)
     if (error) { alert(error.message); return }
+    setRechazando(null)
     await cargar()
   }
   const deshacerRechazo = async (it: any) => {
@@ -551,6 +558,25 @@ export default function Rendiciones() {
           )}
         </>)}
       </div>
+      {rechazando && (
+        <div onClick={() => setRechazando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,0.55)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '400px' }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '15px' }}>Rechazar gasto</p>
+            <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{rechazando.detalle} · {peso(rechazando.monto)}</p>
+            <span style={label}>Motivo</span>
+            <select value={motivoSel} onChange={e => setMotivoSel(e.target.value)} style={input} autoFocus>
+              <option value="">Elegir motivo...</option>
+              {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <span style={{ ...label, marginTop: '10px' }}>Comentario (opcional)</span>
+            <input value={motivoExtra} onChange={e => setMotivoExtra(e.target.value)} style={input} placeholder="Ej: la boleta dice $12.000" />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '14px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setRechazando(null)} style={btn(false)}>Cancelar</button>
+              <button onClick={confirmarRechazo} style={btn(true, true)}>Rechazar gasto</button>
+            </div>
+          </div>
+        </div>
+      )}
       {visor && (
         <div onClick={() => setVisor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,0.78)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px' }}>
           <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>

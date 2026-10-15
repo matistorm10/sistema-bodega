@@ -60,6 +60,23 @@ async function cargarLogo(): Promise<{ data: string, ratio: number } | null> {
   }
 }
 
+// Re-dibuja la imagen en un canvas y la devuelve como PNG de 32 bits: jsPDF no maneja bien los PNG con paleta y transparencia.
+async function normalizarImagen(data: string): Promise<{ data: string, w: number, h: number } | null> {
+  try {
+    const img: HTMLImageElement = await new Promise((resolve, reject) => {
+      const i = new Image()
+      const limite = setTimeout(() => reject(new Error('timeout')), 6000)
+      i.onload = () => { clearTimeout(limite); resolve(i) }
+      i.onerror = () => { clearTimeout(limite); reject(new Error('error')) }
+      i.src = data
+    })
+    const c = document.createElement('canvas')
+    c.width = img.width; c.height = img.height
+    c.getContext('2d')!.drawImage(img, 0, 0)
+    return { data: c.toDataURL('image/png'), w: img.width, h: img.height }
+  } catch { return null }
+}
+
 async function dimensionesImagen(data: string): Promise<{ w: number, h: number } | null> {
   try {
     return await new Promise((resolve, reject) => {
@@ -88,7 +105,13 @@ export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
   const AZUL: [number, number, number] = [0, 0, 128]
   const GRIS: [number, number, number] = [170, 170, 170]
   const logo = await cargarLogo()
-  const firmaDim = g.firmaAprobador ? await dimensionesImagen(g.firmaAprobador) : null
+  let firmaImg: string | null = null
+  let firmaDim: { w: number, h: number } | null = null
+  if (g.firmaAprobador) {
+    const n = await normalizarImagen(g.firmaAprobador)
+    if (n) { firmaImg = n.data; firmaDim = { w: n.w, h: n.h } }
+    else { firmaImg = g.firmaAprobador; firmaDim = await dimensionesImagen(g.firmaAprobador) }
+  }
 
   // Encabezado: se repite en cada página
   const encabezado = () => {
@@ -109,12 +132,10 @@ export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
     doc.setFontSize(11.5)
     doc.text('R.U.T.:' + EMPRESA.rut, bx + bw / 2, by + 9, { align: 'center' })
     doc.setFontSize(11.5)
-    doc.text('GUÍA DE TRASLADO', bx + bw / 2, by + 19, { align: 'center' })
-    doc.text('INTERNO', bx + bw / 2, by + 24.5, { align: 'center' })
+    doc.setFontSize(13)
+    doc.text('GUÍA DE TRASLADO', bx + bw / 2, by + 21.5, { align: 'center' })
     doc.setFontSize(12)
     doc.text('Nº ' + numeroGuia(g.numero), bx + bw / 2, by + 32.5, { align: 'center' })
-    doc.setFontSize(8.5)
-    doc.text('DOCUMENTO DE USO INTERNO', bx + bw / 2, by + bh + 5.5, { align: 'center' })
   }
 
   // Marca de agua con el logo
@@ -152,7 +173,7 @@ export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
     return lineas.length
   }
   const filasIzq: [string, string][] = [['ORIGEN:', g.origen], ['DESTINO:', g.destino], ['MOTIVO:', g.motivo], ['TRANSPORTISTA:', g.transportista]]
-  const filasDer: [string, string][] = [['FECHA TRASLADO:', fechaLarga(g.fechaTraslado)], ['TRASLADO:', 'TRASLADO INTERNO NO VENTA'], ['EMITE:', g.emitidoPor], ['APRUEBA:', g.aprobadoPor]]
+  const filasDer: [string, string][] = [['FECHA TRASLADO:', fechaLarga(g.fechaTraslado)], ['TRASLADO:', 'TRASLADO NO CONSTITUYE VENTA'], ['EMITE:', g.emitidoPor], ['APRUEBA:', g.aprobadoPor]]
   let yi = y, yd = y
   filasIzq.forEach(([e, v]) => { const n = dato(M + 4, yi, e, v, 62, 29); yi += 4.2 * n + 0.6 })
   filasDer.forEach(([e, v]) => { const n = dato(112, yd, e, v, 52, 31); yd += 4.2 * n + 0.6 })
@@ -210,7 +231,7 @@ export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80)
     lineas.forEach((l, k) => doc.text(l, cx + colW / 2, yF + 9 + k * 3.8, { align: 'center', maxWidth: colW }))
   }
-  firma(M, 'Emite / Aprueba', [g.aprobadoPor ? 'Aprueba: ' + g.aprobadoPor : '', g.emitidoPor ? 'Emite: ' + g.emitidoPor : ''].filter(Boolean), g.firmaAprobador)
+  firma(M, 'Emite / Aprueba', [g.aprobadoPor ? 'Aprueba: ' + g.aprobadoPor : '', g.emitidoPor ? 'Emite: ' + g.emitidoPor : ''].filter(Boolean), firmaImg)
   firma(M + colW + 6, 'Chofer', [g.choferNombre, g.choferRut ? 'RUT ' + g.choferRut : ''].filter(Boolean))
   firma(M + (colW + 6) * 2, 'Recibe conforme', ['Nombre:', 'RUT:', 'Fecha:'])
 
@@ -219,7 +240,7 @@ export async function generarGuiaTraslado(g: GuiaPDF, ventana: Window | null) {
   for (let i = 1; i <= total; i++) {
     doc.setPage(i)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...AZUL)
-    doc.text('Documento generado por Sistema INDELI · Traslado no constituye venta · Sin valor tributario', W / 2, H - 9, { align: 'center' })
+    doc.text('Documento generado por Sistema INDELI · Traslado no constituye venta', W / 2, H - 9, { align: 'center' })
     doc.setTextColor(120, 120, 120)
     doc.text(`${numeroGuia(g.numero)} · Página ${i} de ${total}`, W / 2, H - 5, { align: 'center' })
   }

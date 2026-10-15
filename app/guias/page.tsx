@@ -71,25 +71,34 @@ export default function Guias() {
   }, [])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
 
-  // Firma de quien aprueba (se estampa en el PDF de las guías que aprueba)
+  // Firma de quien aprueba (se estampa sola en el PDF de las guías que aprueba)
   const cargarFirma = useCallback(async () => {
     if (!usuario) return
-    const { data } = await supabase.storage.from('firmas').createSignedUrl(`${usuario.id}/firma`, 300)
-    setFirmaUrl(data?.signedUrl || null)
+    const { data } = await supabase.from('firmas_usuario').select('imagen').eq('usuario_id', usuario.id).maybeSingle()
+    setFirmaUrl(data?.imagen || null)
   }, [usuario])
   useEffect(() => { if (usuario && (esAdmin || usuario.puedeAprobar)) cargarFirma() }, [usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const subirFirma = async (f: File | null) => {
     if (!f || !usuario) return
     if (!/^image\/(png|jpe?g)$/.test(f.type)) { alert('La firma debe ser una imagen PNG o JPG.'); return }
     setFirmaSubiendo(true)
-    const { error } = await supabase.storage.from('firmas').upload(`${usuario.id}/firma`, f, { upsert: true, contentType: f.type })
+    try {
+      // Se reduce a un máximo de 600 px de ancho y se guarda como PNG (conserva la transparencia)
+      const origen: string = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f) })
+      const img: HTMLImageElement = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = origen })
+      const esc = Math.min(1, 600 / img.width)
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc)
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      const imagen = c.toDataURL('image/png')
+      const { error } = await supabase.from('firmas_usuario').upsert({ usuario_id: usuario.id, imagen, updated_at: new Date().toISOString() })
+      if (error) throw error
+      avisar('Firma guardada. Se estampará sola en las guías que apruebes.'); await cargarFirma()
+    } catch (e: any) { alert('No se pudo guardar la firma: ' + (e?.message || 'error')) }
     setFirmaSubiendo(false)
-    if (error) { alert('No se pudo guardar la firma: ' + error.message); return }
-    avisar('Firma guardada. Se usará en las guías que apruebes.'); await cargarFirma()
   }
   const quitarFirma = async () => {
     if (!usuario || !confirm('¿Quitar tu firma? Las guías que apruebes después saldrán sin ella.')) return
-    const { error } = await supabase.storage.from('firmas').remove([`${usuario.id}/firma`])
+    const { error } = await supabase.from('firmas_usuario').delete().eq('usuario_id', usuario.id)
     if (error) { alert(error.message); return }
     setFirmaUrl(null)
   }
@@ -217,8 +226,8 @@ export default function Guias() {
     try {
       let firma: string | null = null
       if (g.aprobada_por) {
-        const { data: blob } = await supabase.storage.from('firmas').download(`${g.aprobada_por}/firma`)
-        if (blob) firma = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(blob) })
+        const { data } = await supabase.from('firmas_usuario').select('imagen').eq('usuario_id', g.aprobada_por).maybeSingle()
+        firma = data?.imagen || null
       }
       await generarGuiaTraslado({
         numero: g.numero, fechaTraslado: g.fecha_traslado, origen: lugar(g.origen_id, g.origen_texto), destino: lugar(g.destino_id, g.destino_texto), motivo: g.motivo || '',

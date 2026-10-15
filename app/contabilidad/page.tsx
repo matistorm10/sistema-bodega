@@ -12,7 +12,7 @@ export default function Contabilidad() {
 
   const secciones = [
     { href: '/rendiciones', icon: '🧾', label: 'Rendiciones', desc: 'Carga de boletas y facturas, fondos por rendir, aprobación y revisión', disponible: true },
-    { href: '/guias', icon: '🚚', label: 'Guías de traslado', desc: 'Traslados internos de un punto a otro, con aprobación y correlativo interno', disponible: false },
+    { href: '/guias', icon: '🚚', label: 'Guías de traslado', desc: 'Traslados internos de un punto a otro, con aprobación y correlativo interno', disponible: true },
   ]
 
   const cabecera = (

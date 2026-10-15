@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import { formatearRut } from '@/lib/rut'
 import { generarGuiaTraslado, abrirVentanaGuia, numeroGuia } from '@/lib/generarGuiaTraslado'
 
 type Estado = 'borrador' | 'pendiente' | 'aprobada' | 'rechazada' | 'recibida' | 'anulada'
@@ -130,8 +131,8 @@ export default function Guias() {
     setH({
       fecha_traslado: guiaAbierta.fecha_traslado || '', origen: guiaAbierta.origen_id || (guiaAbierta.origen_texto ? OTRO : ''), origen_texto: guiaAbierta.origen_texto || '',
       destino: guiaAbierta.destino_id || (guiaAbierta.destino_texto ? OTRO : ''), destino_texto: guiaAbierta.destino_texto || '', motivo: guiaAbierta.motivo || '',
-      chofer_nombre: guiaAbierta.chofer_nombre || '', chofer_rut: guiaAbierta.chofer_rut || '', patente: guiaAbierta.patente || '',
-      transportista: guiaAbierta.transportista || '', transportista_rut: guiaAbierta.transportista_rut || '',
+      chofer_nombre: guiaAbierta.chofer_nombre || '', chofer_rut: formatearRut(guiaAbierta.chofer_rut || ''), patente: guiaAbierta.patente || '',
+      transportista: guiaAbierta.transportista || '', transportista_rut: formatearRut(guiaAbierta.transportista_rut || ''),
     })
     setIt({ ...ITEM_VACIO })
   }, [abierta]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -231,7 +232,7 @@ export default function Guias() {
       }
       await generarGuiaTraslado({
         numero: g.numero, fechaTraslado: g.fecha_traslado, origen: lugar(g.origen_id, g.origen_texto), destino: lugar(g.destino_id, g.destino_texto), motivo: g.motivo || '',
-        choferNombre: g.chofer_nombre || '', choferRut: g.chofer_rut || '', patente: g.patente || '', transportista: g.transportista || '', transportistaRut: g.transportista_rut || '',
+        choferNombre: g.chofer_nombre || '', choferRut: formatearRut(g.chofer_rut || ''), patente: g.patente || '', transportista: g.transportista || '', transportistaRut: formatearRut(g.transportista_rut || ''),
         emitidoPor: nombreUsuario(g.creado_por), aprobadoPor: g.aprobada_por ? nombreUsuario(g.aprobada_por) : '', fechaAprobacion: g.fecha_aprobacion || '', firmaAprobador: firma,
         items: itemsDe(g.id).map(x => ({ descripcion: x.descripcion, codigo: x.codigo || '', cantidad: Number(x.cantidad), unidad: x.unidad, procedencia: x.procedencia === 'proveedor' ? 'Proveedor: ' + (x.proveedor || '') : 'Propio', observacion: x.observacion || '' })),
       }, ventana)
@@ -313,10 +314,10 @@ export default function Guias() {
             <div style={{ marginTop: '10px' }}><span style={label}>Motivo / observaciones</span><input value={h.motivo || ''} onChange={sh('motivo')} style={input} placeholder="Ej: Devolución de herramientas a bodega" /></div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: '10px', marginTop: '10px' }}>
               <div><span style={label}>Chofer</span><input value={h.chofer_nombre || ''} onChange={sh('chofer_nombre')} style={input} /></div>
-              <div><span style={label}>RUT chofer</span><input value={h.chofer_rut || ''} onChange={sh('chofer_rut')} style={input} placeholder="12.345.678-9" /></div>
+              <div><span style={label}>RUT chofer</span><input value={h.chofer_rut || ''} onChange={e => setH({ ...h, chofer_rut: formatearRut(e.target.value) })} maxLength={12} style={input} placeholder="12.345.678-9" /></div>
               <div><span style={label}>Patente</span><input value={h.patente || ''} onChange={sh('patente')} style={{ ...input, textTransform: 'uppercase' }} /></div>
               <div><span style={label}>Empresa transportista</span><input value={h.transportista || ''} onChange={sh('transportista')} style={input} /></div>
-              <div><span style={label}>RUT transportista</span><input value={h.transportista_rut || ''} onChange={sh('transportista_rut')} style={input} /></div>
+              <div><span style={label}>RUT transportista</span><input value={h.transportista_rut || ''} onChange={e => setH({ ...h, transportista_rut: formatearRut(e.target.value) })} maxLength={12} style={input} placeholder="77.123.456-7" /></div>
             </div>
             <button onClick={() => guardarEncabezado(g)} disabled={hGuardando} style={{ ...btn(false), marginTop: '12px' }}>{hGuardando ? 'Guardando...' : 'Guardar datos'}</button>
           </>) : (
@@ -324,9 +325,9 @@ export default function Guias() {
               <div><span style={label}>Origen</span>{lugar(g.origen_id, g.origen_texto)}</div>
               <div><span style={label}>Destino</span>{lugar(g.destino_id, g.destino_texto)}</div>
               <div><span style={label}>Fecha del traslado</span>{fechaCL(g.fecha_traslado)}</div>
-              <div><span style={label}>Chofer</span>{g.chofer_nombre || '—'} {g.chofer_rut ? '· ' + g.chofer_rut : ''}</div>
+              <div><span style={label}>Chofer</span>{g.chofer_nombre || '—'} {g.chofer_rut ? '· ' + formatearRut(g.chofer_rut) : ''}</div>
               <div><span style={label}>Patente</span>{g.patente || '—'}</div>
-              <div><span style={label}>Transportista</span>{g.transportista || '—'} {g.transportista_rut ? '· ' + g.transportista_rut : ''}</div>
+              <div><span style={label}>Transportista</span>{g.transportista || '—'} {g.transportista_rut ? '· ' + formatearRut(g.transportista_rut) : ''}</div>
               {g.motivo && <div style={{ gridColumn: '1 / -1' }}><span style={label}>Motivo / observaciones</span>{g.motivo}</div>}
             </div>
           )}

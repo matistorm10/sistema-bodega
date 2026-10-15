@@ -11,8 +11,8 @@ const ESTADOS: Record<Estado, { texto: string, bg: string, color: string }> = {
   enviada: { texto: 'En revisión contable', bg: '#fef7e0', color: '#986a00' },
   rechazada: { texto: 'Devuelta al trabajador', bg: '#fde8e8', color: '#9b1c1c' },
   revisada: { texto: 'Cuadrada · esperando aprobación', bg: '#E8F0FE', color: AZUL },
-  aprobada: { texto: 'Aprobada · por pagar', bg: '#e6f4ea', color: '#1e6b3a' },
-  pagada: { texto: 'Pagada', bg: '#d7efe0', color: '#14532d' },
+  aprobada: { texto: 'Aprobada · por cuadrar', bg: '#e6f4ea', color: '#1e6b3a' },
+  pagada: { texto: 'Pagada y cuadrada', bg: '#d7efe0', color: '#14532d' },
 }
 const TIPOS: Record<string, string> = { boleta: 'Boleta', factura: 'Factura', en_sistema: 'En sistema (compra con RUT empresa)', otro: 'Otro' }
 const peso = (n: number) => '$' + Math.round(n || 0).toLocaleString('es-CL')
@@ -59,6 +59,7 @@ export default function Rendiciones() {
   const [rendiciones, setRendiciones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [fondos, setFondos] = useState<any[]>([])
+  const [pagos, setPagos] = useState<any[]>([])
   const [faenas, setFaenas] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
@@ -72,14 +73,16 @@ export default function Rendiciones() {
 
   const cargar = useCallback(async () => {
     setCargando(true)
-    const [r, i, f, u, us] = await Promise.all([
+    const [r, i, f, u, us, pg] = await Promise.all([
       supabase.from('rendiciones').select('*').order('numero', { ascending: false }),
       supabase.from('rendicion_items').select('*').order('fecha').order('created_at'),
       supabase.from('fondos_rendir').select('*').order('fecha', { ascending: false }),
       supabase.from('ubicaciones').select('id,nombre,codigo,tipo,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('rendicion_pagos').select('*').order('created_at'),
     ])
     setRendiciones(r.data || []); setItems(i.data || []); setFondos(f.data || [])
+    setPagos(pg.data || [])
     setFaenas((u.data || []).filter((x: any) => x.activa !== false)); setUsuarios(us.data || [])
     setCargando(false)
   }, [])
@@ -108,10 +111,33 @@ export default function Rendiciones() {
   const totalDe = (rid: string) => itemsDe(rid).reduce((s, i) => s + Number(i.monto), 0)
 
   // Fondo por rendir: lo que la revisora carga a una persona en un centro de costo, menos lo que rinde en ese centro de costo (desde que envía la rendición)
+  const pagosDe = (rid: string) => pagos.filter(p => p.rendicion_id === rid)
+  const delPar = (r: any, uid: string, cc?: string | null) => r.usuario_id === uid && (cc === undefined || (r.centro_costo_id || null) === (cc || null))
   const saldoDe = (uid: string, cc?: string | null) => {
     const entregado = fondos.filter(f => f.usuario_id === uid && (cc === undefined || (f.centro_costo_id || null) === (cc || null))).reduce((s, f) => s + Number(f.monto), 0)
-    const rendido = rendiciones.filter(r => r.usuario_id === uid && (cc === undefined || (r.centro_costo_id || null) === (cc || null)) && ['enviada', 'revisada', 'aprobada', 'pagada'].includes(r.estado)).reduce((s, r) => s + totalDe(r.id), 0)
-    return { entregado, rendido, saldo: entregado - rendido }
+    const rendido = rendiciones.filter(r => delPar(r, uid, cc) && ['enviada', 'revisada', 'aprobada', 'pagada'].includes(r.estado)).reduce((s, r) => s + totalDe(r.id), 0)
+    const ids = new Set(rendiciones.filter(r => delPar(r, uid, cc)).map(r => r.id))
+    const aTrab = pagos.filter(p => ids.has(p.rendicion_id) && p.sentido === 'a_trabajador').reduce((s, p) => s + Number(p.monto), 0)
+    const aEmp = pagos.filter(p => ids.has(p.rendicion_id) && p.sentido === 'a_empresa' && p.confirmado_por).reduce((s, p) => s + Number(p.monto), 0)
+    // entregadoBar / rendidoBar: lo que alimenta la barra (un reintegro suma al fondo, una devolución cuenta como usado)
+    return { entregado, rendido, saldo: entregado + aTrab - rendido - aEmp, entregadoBar: entregado + aTrab, rendidoBar: rendido + aEmp }
+  }
+  // Cuadratura de una rendición: diferencia entre el fondo y lo rendido, y cuánto falta por transferir
+  const cuadratura = (r: any) => {
+    const cc = r.centro_costo_id || null
+    const ids = new Set(rendiciones.filter(x => delPar(x, r.usuario_id, cc)).map(x => x.id))
+    const entregado = fondos.filter(f => f.usuario_id === r.usuario_id && (f.centro_costo_id || null) === cc).reduce((s, f) => s + Number(f.monto), 0)
+    const rendido = rendiciones.filter(x => delPar(x, r.usuario_id, cc) && ['enviada', 'revisada', 'aprobada', 'pagada'].includes(x.estado)).reduce((s, x) => s + totalDe(x.id), 0)
+    const otros = pagos.filter(p => ids.has(p.rendicion_id) && p.rendicion_id !== r.id)
+    const aTrabOtros = otros.filter(p => p.sentido === 'a_trabajador').reduce((s, p) => s + Number(p.monto), 0)
+    const aEmpOtros = otros.filter(p => p.sentido === 'a_empresa' && p.confirmado_por).reduce((s, p) => s + Number(p.monto), 0)
+    const dif = entregado + aTrabOtros - aEmpOtros - rendido            // >0: el trabajador debe devolver · <0: la empresa debe reintegrar
+    const propios = pagosDe(r.id)
+    const pagadoTrab = propios.filter(p => p.sentido === 'a_trabajador').reduce((s, p) => s + Number(p.monto), 0)
+    const pagadoEmp = propios.filter(p => p.sentido === 'a_empresa' && p.confirmado_por).reduce((s, p) => s + Number(p.monto), 0)
+    const porConfirmar = propios.filter(p => p.sentido === 'a_empresa' && !p.confirmado_por).reduce((s, p) => s + Number(p.monto), 0)
+    const pendiente = dif > 0 ? dif - pagadoEmp : dif < 0 ? -dif - pagadoTrab : 0
+    return { entregado, rendido, dif, pendiente: Math.max(0, Math.round(pendiente)), pagadoTrab, pagadoEmp, porConfirmar }
   }
   // Combinaciones persona + centro de costo que tienen fondo cargado
   const paresFondo = (uid?: string) => {
@@ -150,6 +176,11 @@ export default function Rendiciones() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const MOTIVOS = ['Monto no cuadra', 'Falta información', 'No se logra ver', 'Rendición no corresponde']
   const [rechazando, setRechazando] = useState<any | null>(null)
+  const [pMonto, setPMonto] = useState('')
+  const [pFecha, setPFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [pNota, setPNota] = useState('')
+  const [pFoto, setPFoto] = useState<File | null>(null)
+  const [pGuardando, setPGuardando] = useState(false)
   const [motivoSel, setMotivoSel] = useState('')
   const [motivoExtra, setMotivoExtra] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
@@ -185,6 +216,41 @@ export default function Rendiciones() {
     setSubiendo(false)
     if (error) { alert('No se pudo guardar el gasto: ' + error.message); return }
     limpiarForm()
+    await cargar()
+  }
+  const registrarPago = async (r: any, sentido: 'a_trabajador' | 'a_empresa', pendiente: number) => {
+    const monto = Number(pMonto.replace(/\./g, '').replace(',', '.'))
+    if (!monto || monto <= 0) { alert('Indica el monto transferido.'); return }
+    if (monto > pendiente + 0.5) { alert(`El monto no puede ser mayor a lo pendiente (${peso(pendiente)}).`); return }
+    if (!pFoto) { alert('Adjunta el comprobante de la transferencia.'); return }
+    setPGuardando(true)
+    const limpio = pFoto.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${usuario!.id}/${r.id}/pago-${Date.now()}-${limpio}`
+    const { error: eUp } = await supabase.storage.from('comprobantes').upload(path, pFoto, { contentType: pFoto.type })
+    if (eUp) { setPGuardando(false); alert('No se pudo subir el comprobante: ' + eUp.message); return }
+    const { error } = await supabase.from('rendicion_pagos').insert({
+      rendicion_id: r.id, sentido, monto, fecha: pFecha, comprobante_path: path, nota: pNota.trim() || null, registrado_por: usuario!.id,
+      ...(sentido === 'a_trabajador' ? { confirmado_por: usuario!.id, fecha_confirmacion: new Date().toISOString() } : {}),
+    })
+    if (error) { setPGuardando(false); alert('No se pudo registrar el pago: ' + error.message); return }
+    // si la empresa pagó todo lo pendiente, la rendición queda cuadrada al 100% y se cierra
+    if (sentido === 'a_trabajador' && monto >= pendiente - 0.5) {
+      await supabase.from('rendiciones').update({ estado: 'pagada', fecha_pago: pFecha }).eq('id', r.id)
+      avisar('Pago registrado. Rendición cuadrada al 100% y cerrada.')
+    } else {
+      avisar(sentido === 'a_empresa' ? 'Pago registrado. La revisora debe confirmar la recepción.' : 'Pago registrado.')
+    }
+    setPMonto(''); setPNota(''); setPFoto(null); setPGuardando(false)
+    await cargar()
+  }
+  const confirmarPago = async (r: any, p: any, pendiente: number) => {
+    if (!confirm(`¿Confirmas que la empresa recibió la transferencia de ${peso(p.monto)}?`)) return
+    const { error } = await supabase.from('rendicion_pagos').update({ confirmado_por: usuario!.id, fecha_confirmacion: new Date().toISOString() }).eq('id', p.id)
+    if (error) { alert(error.message); return }
+    if (Number(p.monto) >= pendiente - 0.5) {
+      await supabase.from('rendiciones').update({ estado: 'pagada', fecha_pago: p.fecha }).eq('id', r.id)
+      avisar('Recepción confirmada. Rendición cuadrada al 100% y cerrada.')
+    } else avisar('Recepción confirmada.')
     await cargar()
   }
   const observarItem = (it: any) => { setRechazando(it); setMotivoSel(''); setMotivoExtra('') }
@@ -329,7 +395,7 @@ export default function Rendiciones() {
           {r.estado === 'enviada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fef7e0', color: '#7a5600', borderRadius: '8px', fontSize: '12.5px' }}>{r.motivo_rechazo}</p>}
           {r.estado === 'rechazada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Devuelta: {r.motivo_rechazo}</p>}
           {saldoCC.entregado > 0 && <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#344054' }}>Fondo por rendir en este centro de costo: entregado {peso(saldoCC.entregado)} · rendido {peso(saldoCC.rendido)} · <strong style={{ color: saldoCC.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{saldoCC.saldo < 0 ? 'se debe reintegrar ' + peso(-saldoCC.saldo) : 'saldo a favor ' + peso(saldoCC.saldo)}</strong></p>}
-          <BarraFondo entregado={saldoCC.entregado} rendido={saldoCC.rendido} />
+          <BarraFondo entregado={saldoCC.entregadoBar} rendido={saldoCC.rendidoBar} />
           {r.aprobada_por && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Aprobada por {nombreUsuario(r.aprobada_por)} el {fechaCL(r.fecha_aprobacion)}{r.fecha_pago ? ' · Pagada el ' + fechaCL(r.fecha_pago) : ''}</p>}
         </div>
 
@@ -401,6 +467,55 @@ export default function Rendiciones() {
           </div>
         )}
 
+        {(r.estado === 'aprobada' || r.estado === 'pagada') && (() => {
+          const cu = cuadratura(r)
+          const propios = pagosDe(r.id)
+          const debeEmpresa = cu.dif < -0.5      // la empresa debe reintegrar al trabajador
+          const debeTrabajador = cu.dif > 0.5    // el trabajador debe devolver a la empresa
+          const puedeRegistrar = r.estado === 'aprobada' && cu.pendiente > 0 && ((debeEmpresa && revisa) || (debeTrabajador && (esDueno || revisa)))
+          return (
+            <div style={{ ...card, borderColor: r.estado === 'pagada' ? '#b7e0c5' : '#cfe0ff' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13.5px' }}>Cuadratura del fondo {r.estado === 'pagada' ? '· cerrada al 100% ✔' : ''}</p>
+              <p style={{ margin: '0 0 4px', fontSize: '12.5px', color: '#344054' }}>Fondo entregado {peso(cu.entregado)} · Rendido {peso(cu.rendido)} · Diferencia <strong>{peso(Math.abs(cu.dif))}</strong></p>
+              {r.estado === 'aprobada' && cu.dif >= -0.5 && cu.dif <= 0.5 && <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#1e6b3a' }}>Lo rendido coincide con el fondo: no hay diferencias que transferir.</p>}
+              {r.estado === 'aprobada' && debeEmpresa && <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#7a5600' }}>Se rindió más que el fondo: <strong>la empresa debe transferir {peso(-cu.dif)}</strong> al trabajador. Pendiente: <strong>{peso(cu.pendiente)}</strong>.</p>}
+              {r.estado === 'aprobada' && debeTrabajador && <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#7a5600' }}>Se rindió menos que el fondo: <strong>{esDueno ? 'debes transferir' : nombreUsuario(r.usuario_id) + ' debe transferir'} {peso(cu.dif)}</strong> a la empresa. La rendición no se cierra hasta que se confirme la transferencia. Pendiente: <strong>{peso(cu.pendiente)}</strong>.</p>}
+              {propios.length > 0 && (
+                <div style={{ marginTop: '10px', display: 'grid', gap: '6px' }}>
+                  {propios.map(pg => (
+                    <div key={pg.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', fontSize: '12.5px', padding: '7px 10px', background: '#f6f8fb', borderRadius: '8px' }}>
+                      <span style={{ flex: 1, minWidth: '200px' }}>{pg.sentido === 'a_empresa' ? 'Trabajador → empresa' : 'Empresa → trabajador'} · <strong>{peso(pg.monto)}</strong> · {fechaCL(pg.fecha)}{pg.nota ? ' · ' + pg.nota : ''}</span>
+                      {pg.sentido === 'a_empresa' && (pg.confirmado_por ? <span style={{ color: '#1e6b3a' }}>✔ Recepción confirmada</span> : <span style={{ color: '#986a00' }}>Esperando confirmación</span>)}
+                      {pg.comprobante_path && <button onClick={() => verFoto(pg.comprobante_path)} style={{ ...btn(false), padding: '4px 9px', fontSize: '11.5px' }}>📎 Comprobante</button>}
+                      {r.estado === 'aprobada' && revisa && pg.sentido === 'a_empresa' && !pg.confirmado_por && <button onClick={() => confirmarPago(r, pg, cu.pendiente)} style={{ ...btn(), padding: '4px 10px', fontSize: '11.5px' }}>Confirmar recepción</button>}
+                    </div>))}
+                </div>
+              )}
+              {puedeRegistrar && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eef1f6' }}>
+                  <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '12.5px' }}>{debeEmpresa ? 'Registrar transferencia de la empresa al trabajador' : 'Registrar transferencia a la empresa'}</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px' }}>
+                    <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={pMonto} onChange={e => setPMonto(e.target.value)} placeholder={String(cu.pendiente)} style={input} /></div>
+                    <div><span style={label}>Fecha</span><input type="date" value={pFecha} onChange={e => setPFecha(e.target.value)} style={input} /></div>
+                    <div><span style={label}>Nota (opcional)</span><input value={pNota} onChange={e => setPNota(e.target.value)} style={input} /></div>
+                  </div>
+                  <div style={{ marginTop: '10px' }}>
+                    <span style={label}>Comprobante de la transferencia</span>
+                    <label
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { if (!/^image\/|application\/pdf/.test(f.type)) { alert('Solo se aceptan fotos o PDF.'); return } setPFoto(f) } }}
+                      style={{ display: 'block', cursor: 'pointer', textAlign: 'center', padding: '14px 12px', borderRadius: '10px', border: '2px dashed #c4cad6', background: '#fafbfd', fontSize: '13px', color: '#475467' }}>
+                      {pFoto ? <>📎 <strong>{pFoto.name}</strong></> : <>Arrastra aquí el comprobante, o <span style={{ color: AZUL, fontWeight: 600, textDecoration: 'underline' }}>haz clic para seleccionar</span></>}
+                      <input type="file" accept="image/*,application/pdf" onChange={e => setPFoto(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                  <button onClick={() => registrarPago(r, debeEmpresa ? 'a_trabajador' : 'a_empresa', cu.pendiente)} disabled={pGuardando} style={{ ...btn(), marginTop: '12px', opacity: pGuardando ? 0.6 : 1 }}>{pGuardando ? 'Guardando...' : 'Registrar pago'}</button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } if (pendientesCorregir > 0) { alert(`Aún tienes ${pendientesCorregir} gasto(s) con observaciones. Edítalos para corregirlos o quítalos antes de enviar.`); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a revisión contable.') }}>Enviar a revisión contable</button>}
           {editable && r.estado === 'borrador' && <button style={btn(false, true)} onClick={() => eliminarRendicion(r)}>Eliminar</button>}
@@ -416,7 +531,7 @@ export default function Rendiciones() {
             <button style={btn()} onClick={() => cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Queda por pagar.')}>✔ Aprobar</button>
             <button style={btn(false, true)} onClick={() => { const m = prompt('Motivo por el que vuelve a revisión contable:'); if (m && m.trim()) cambiar(r.id, { estado: 'enviada', motivo_rechazo: 'Devuelta por aprobación: ' + m.trim() }, 'Devuelta a revisión contable.') }}>Devolver a revisión</button>
           </>}
-          {revisa && r.estado === 'aprobada' && <button style={btn()} onClick={() => { const f = prompt('Fecha de pago (AAAA-MM-DD):', hoy); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) cambiar(r.id, { estado: 'pagada', fecha_pago: f }, 'Marcada como pagada.') }}>💲 Marcar pagada</button>}
+          {revisa && r.estado === 'aprobada' && Math.abs(cuadratura(r).dif) <= 0.5 && <button style={btn()} onClick={() => cambiar(r.id, { estado: 'pagada', fecha_pago: hoy }, 'Rendición cuadrada al 100% y cerrada.')}>✔ Cerrar rendición (cuadrada 100%)</button>}
           <button style={btn(false)} onClick={() => exportarExcel([r])}>⬇ Excel</button>
         </div>
       </div>
@@ -469,7 +584,7 @@ export default function Rendiciones() {
               { t: 'Rendido este mes', v: peso(suma(delMes)), s: delMes.length + ' rendición(es)', c: AZUL },
               { t: 'En revisión contable', v: peso(suma(porEstado('enviada'))), s: porEstado('enviada').length + ' rendición(es)', c: '#986a00' },
               { t: 'Esperando aprobación', v: peso(suma(porEstado('revisada'))), s: porEstado('revisada').length + ' rendición(es)', c: AZUL },
-              { t: 'Aprobadas, por pagar', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: '#1e6b3a' },
+              { t: 'Aprobadas, por cuadrar', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: '#1e6b3a' },
               { t: 'Pagado este mes', v: peso(suma(porEstado('pagada').filter(r => (r.fecha_pago || '').slice(0, 7) === mesActual))), s: 'rendiciones pagadas', c: '#14532d' },
               { t: 'Devueltas', v: String(porEstado('rechazada').length), s: 'esperando corrección', c: '#9b1c1c' },
             ]
@@ -515,7 +630,7 @@ export default function Rendiciones() {
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Últimos 6 meses</p>{barras(meses, '')}</div>
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Uso de fondos por rendir</p>
                     {paresFondo().length === 0 ? <p style={{ fontSize: '12.5px', color: '#999', margin: 0 }}>Aún no hay fondos cargados.</p> : <div style={{ display: 'grid', gap: '12px' }}>{paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
-                      <div key={x.usuario_id + (x.cc || '')}><div style={{ fontSize: '12.5px' }}><strong>{nombreUsuario(x.usuario_id)}</strong> <span style={{ color: '#667085' }}>· {x.cc ? nombreCC(x.cc) : 'sin CECO'} · {peso(sd.rendido)} de {peso(sd.entregado)}</span></div><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></div>) })}</div>}</div>
+                      <div key={x.usuario_id + (x.cc || '')}><div style={{ fontSize: '12.5px' }}><strong>{nombreUsuario(x.usuario_id)}</strong> <span style={{ color: '#667085' }}>· {x.cc ? nombreCC(x.cc) : 'sin CECO'} · {peso(sd.rendido)} de {peso(sd.entregado)}</span></div><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></div>) })}</div>}</div>
                 </div>
               </div>)
           })()}
@@ -530,7 +645,7 @@ export default function Rendiciones() {
                       <div key={x.cc || 'x'} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', fontSize: '13px', padding: '8px 10px', background: '#f6f8fb', borderRadius: '8px' }}>
                         <span><strong>{x.cc ? nombreCC(x.cc) : 'Sin centro de costo'}</strong> <span style={{ color: '#8a94a6' }}>· entregado {peso(sd.entregado)} · rendido {peso(sd.rendido)}</span></span>
                         <strong style={{ color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se te debe ' + peso(-sd.saldo) : 'A tu favor ' + peso(sd.saldo)}</strong>
-                        <div style={{ flexBasis: '100%' }}><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></div>
+                        <div style={{ flexBasis: '100%' }}><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></div>
                       </div>) })}
                   </div>
                 </div>
@@ -598,7 +713,7 @@ export default function Rendiciones() {
                         <td style={{ padding: '8px 10px', fontWeight: 600 }}>{nombreUsuario(x.usuario_id)}</td><td style={{ padding: '8px 10px' }}>{x.cc ? nombreCC(x.cc) : <span style={{ color: '#8a94a6' }}>Sin centro de costo</span>}</td>
                         <td style={{ padding: '8px 10px' }}>{peso(sd.entregado)}</td><td style={{ padding: '8px 10px' }}>{peso(sd.rendido)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se le debe ' + peso(-sd.saldo) : peso(sd.saldo)}</td>
-                        <td style={{ padding: '8px 10px', minWidth: '170px' }}><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></td>
+                        <td style={{ padding: '8px 10px', minWidth: '170px' }}><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></td>
                       </tr>) })}
                     {fondos.length === 0 && <tr><td colSpan={6} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
                   </tbody>

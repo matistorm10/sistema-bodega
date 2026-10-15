@@ -33,8 +33,11 @@ export default function Ubicaciones() {
 
   useEffect(() => { cargar(); supabase.from('usuarios').select('id,nombre').order('nombre').then(({data}) => setUsuarios(data || [])) }, [])
 
-  const bodegas = ubicaciones.filter(u => u.tipo === 'bodega')
-  const faenas = ubicaciones.filter(u => u.tipo === 'faena')
+  const [filtroCliente, setFiltroCliente] = useState('')
+  const todasFaenas = ubicaciones.filter(u => u.tipo === 'faena')
+  const clientes = Array.from(new Set(todasFaenas.map(u => (u.cliente || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  const bodegas = filtroCliente ? [] : ubicaciones.filter(u => u.tipo === 'bodega')
+  const faenas = todasFaenas.filter(u => !filtroCliente || (filtroCliente === '__sin' ? !(u.cliente || '').trim() : (u.cliente || '').trim() === filtroCliente))
 
   const detallesParaGuardar = (d: typeof VACIO) => ({
     cliente: d.cliente.trim() || null, lugar: d.lugar.trim() || null, responsable_id: d.responsable_id || null,
@@ -198,7 +201,7 @@ export default function Ubicaciones() {
         <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Centros de Costo (CECO)</h1>
       </div>
 
-      <p style={{fontSize:'13px',color:'#666',margin:'0 0 1.25rem'}}>{bodegas.length} bodegas · {faenas.length} centros de costo</p>
+      <p style={{fontSize:'13px',color:'#666',margin:'0 0 1.25rem'}}>{filtroCliente ? '' : bodegas.length + ' bodegas · '}{faenas.length} centros de costo{filtroCliente && filtroCliente !== '__sin' ? ' de ' + filtroCliente : ''}</p>
 
       <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1.5rem'}}>
         <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 10px'}}>+ Nuevo centro de costo o bodega</p>
@@ -215,12 +218,24 @@ export default function Ubicaciones() {
         <button onClick={crear} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Crear</button>
       </div>
 
+      <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'12px 16px',marginBottom:'1rem',display:'flex',alignItems:'center',gap:'10px'}}>
+        <label style={{fontSize:'13px',color:'#555',whiteSpace:'nowrap'}}>Filtrar por cliente</label>
+        <select value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} style={{...inputStyle,flex:1}}>
+          <option value="">Todos los clientes</option>
+          {clientes.map(c => <option key={c} value={c}>{c}</option>)}
+          <option value="__sin">Sin cliente asignado</option>
+        </select>
+        {filtroCliente && <button onClick={()=>setFiltroCliente('')} style={{padding:'8px 12px',borderRadius:'8px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer',whiteSpace:'nowrap'}}>Limpiar</button>}
+      </div>
+
       {cargando && <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p>}
 
       {!cargando && <>
-        <h2 style={{fontSize:'15px',fontWeight:'600',margin:'0 0 8px'}}>Bodegas</h2>
-        {bodegas.length === 0 && <p style={{fontSize:'13px',color:'#999'}}>Sin bodegas registradas.</p>}
-        {bodegas.map(tarjeta)}
+        {!filtroCliente && <>
+          <h2 style={{fontSize:'15px',fontWeight:'600',margin:'0 0 8px'}}>Bodegas</h2>
+          {bodegas.length === 0 && <p style={{fontSize:'13px',color:'#999'}}>Sin bodegas registradas.</p>}
+          {bodegas.map(tarjeta)}
+        </>}
 
         <h2 style={{fontSize:'15px',fontWeight:'600',margin:'1.25rem 0 8px'}}>Centros de Costo (CECO)</h2>
         {faenas.length === 0 && <p style={{fontSize:'13px',color:'#999'}}>Sin centros de costo registrados.</p>}

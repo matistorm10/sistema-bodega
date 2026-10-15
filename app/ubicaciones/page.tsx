@@ -94,6 +94,36 @@ export default function Ubicaciones() {
     cargar()
   }
 
+  const eliminar = async (u: any) => {
+    const c = (q: any) => q.then((r: any) => r.count || 0)
+    const cab = { count: 'exact' as const, head: true }
+    const [unid, stock, arr, movs, log, veh, rend] = await Promise.all([
+      c(supabase.from('unidades').select('id', cab).eq('ubicacion_id', u.id)),
+      c(supabase.from('stock').select('id', cab).eq('ubicacion_id', u.id).gt('cantidad', 0)),
+      c(supabase.from('arriendos').select('id', cab).or(`ubicacion_id.eq.${u.id},devuelto_desde.eq.${u.id}`)),
+      c(supabase.from('movimientos').select('id', cab).or(`origen_id.eq.${u.id},destino_id.eq.${u.id}`)),
+      c(supabase.from('movimientos_log').select('id', cab).or(`ubicacion_origen_id.eq.${u.id},ubicacion_destino_id.eq.${u.id}`)),
+      c(supabase.from('vehiculos').select('id', cab).eq('ubicacion_id', u.id)),
+      c(supabase.from('rendiciones').select('id', cab).eq('centro_costo_id', u.id)),
+    ])
+    const vinculos: string[] = []
+    if (unid) vinculos.push(`${unid} herramienta(s) con código`)
+    if (stock) vinculos.push(`${stock} producto(s) a granel`)
+    if (arr) vinculos.push(`${arr} arriendo(s)`)
+    if (movs + log) vinculos.push('historial de movimientos')
+    if (veh) vinculos.push(`${veh} vehículo(s)/maquinaria`)
+    if (rend) vinculos.push(`${rend} rendición(es)`)
+    if (vinculos.length > 0) {
+      alert(`No se puede eliminar "${u.nombre}" porque está vinculado a: ${vinculos.join(', ')}.${u.activa ? ' Si ya no se usa, puedes cerrarlo.' : ''}`)
+      return
+    }
+    if (!confirm(`¿Eliminar DEFINITIVAMENTE "${u.nombre}"? No tiene inventario, movimientos ni rendiciones asociadas. Esta acción no se puede deshacer.`)) return
+    const { error, data } = await supabase.from('ubicaciones').delete().eq('id', u.id).select()
+    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    if (!data || data.length === 0) { alert('No se eliminó. Probablemente falten permisos en Supabase.'); return }
+    cargar()
+  }
+
   const reactivar = async (u: any) => {
     const { error, data } = await supabase.from('ubicaciones').update({ activa: true }).eq('id', u.id).select()
     if (error) { alert('No se pudo reactivar: ' + error.message); return }
@@ -172,6 +202,7 @@ export default function Ubicaciones() {
           ) : (
             <button onClick={()=>reactivar(u)} style={{padding:'6px 10px',borderRadius:'6px',border:'0.5px solid #ddd',background:'#fff',color:'#137333',fontSize:'11px',cursor:'pointer'}}>Reactivar</button>
           )}
+          <button onClick={()=>eliminar(u)} style={{padding:'6px 10px',borderRadius:'6px',border:'0.5px solid #f0c4c2',background:'#fff',color:'#c5221f',fontSize:'11px',cursor:'pointer',marginLeft:'auto'}}>Eliminar</button>
         </div>
       )}
     </div>

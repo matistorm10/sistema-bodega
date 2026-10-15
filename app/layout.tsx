@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import AuthGate from "@/components/AuthGate";
+import AppShell from "@/components/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AuthGate>{children}</AuthGate>
+        <AuthGate><AppShell>{children}</AppShell></AuthGate>
       </body>
     </html>
   );

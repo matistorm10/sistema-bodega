@@ -57,7 +57,7 @@ export default function Rendiciones() {
   const aprueba = esAdmin || !!usuario?.puedeAprobar
   const revisa = esAdmin || !!usuario?.esRevisor
 
-  const [tab, setTab] = useState<'mias' | 'aprobar' | 'revision' | 'fondos' | 'resumen' | 'todas'>('mias')
+  const [tab, setTab] = useState<'mias' | 'aprobar' | 'revision' | 'fondos' | 'resumen' | 'todas' | 'historial'>('mias')
   const [rendiciones, setRendiciones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [fondos, setFondos] = useState<any[]>([])
@@ -69,6 +69,10 @@ export default function Rendiciones() {
   const [msg, setMsg] = useState('')
   const [restaurado, setRestaurado] = useState(false)
   const [fUsuario, setFUsuario] = useState('')
+  const [filtroUsuario, setFiltroUsuario] = useState('')
+  const [hUsuario, setHUsuario] = useState('')
+  const [hCC, setHCC] = useState('')
+  const [verCerrados, setVerCerrados] = useState(false)
   const [fCC, setFCC] = useState('')
   const [fMonto, setFMonto] = useState('')
   const [fDesc, setFDesc] = useState('')
@@ -141,6 +145,10 @@ export default function Rendiciones() {
     const pendiente = dif > 0 ? dif - pagadoEmp : dif < 0 ? -dif - pagadoTrab : 0
     return { entregado, rendido, dif, pendiente: Math.max(0, Math.round(pendiente)), pagadoTrab, pagadoEmp, porConfirmar }
   }
+  // Un fondo por rendir está "en curso" mientras tenga saldo distinto de cero o rendiciones abiertas
+  const fondoEnCurso = (x: { usuario_id: string, cc: string | null }) =>
+    Math.abs(saldoDe(x.usuario_id, x.cc).saldo) > 0.5 ||
+    rendiciones.some(r => delPar(r, x.usuario_id, x.cc) && ['borrador', 'enviada', 'rechazada', 'revisada', 'aprobada'].includes(r.estado))
   // Combinaciones persona + centro de costo que tienen fondo cargado
   const paresFondo = (uid?: string) => {
     const claves = new Set<string>()
@@ -352,16 +360,16 @@ export default function Rendiciones() {
       <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a este módulo. Pídele al administrador que te lo habilite en Usuarios.</p></div></main>
   }
 
-  const mias = rendiciones.filter(r => r.usuario_id === usuario!.id)
+  const mias = rendiciones.filter(r => r.usuario_id === usuario!.id && r.estado !== 'pagada')
   const porAprobar = rendiciones.filter(r => r.estado === 'revisada')
   const enRevision = rendiciones.filter(r => r.estado === 'enviada' || r.estado === 'aprobada')
-  const misFondos = paresFondo(usuario!.id)
+  const misFondos = paresFondo(usuario!.id).filter(fondoEnCurso)
 
   const fila = (r: any, conTrabajador: boolean) => (
     <div key={r.id} onClick={() => setAbierta(r.id)} style={{ ...card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
       <div style={{ flex: 1, minWidth: '180px' }}>
         <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{numRend(r.numero)}{conTrabajador ? ' · ' + nombreUsuario(r.usuario_id) : ''}</p>
-        <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{nombreCC(r.centro_costo_id)} · {itemsDe(r.id).length} gasto(s) · {fechaCL(r.created_at)}{r.estado === 'rechazada' && itemsDe(r.id).some(i => i.estado_item === 'rechazado') ? ' · ' + itemsDe(r.id).filter(i => i.estado_item === 'rechazado').length + ' por corregir' : ''}</p>
+        <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{nombreCC(r.centro_costo_id)} · {itemsDe(r.id).length} gasto(s) · {fechaCL(r.created_at)}{r.estado === 'pagada' && r.fecha_pago ? ' · cerrada el ' + fechaCL(r.fecha_pago) : ''}{r.estado === 'rechazada' && itemsDe(r.id).some(i => i.estado_item === 'rechazado') ? ' · ' + itemsDe(r.id).filter(i => i.estado_item === 'rechazado').length + ' por corregir' : ''}</p>
       </div>
       <strong style={{ fontSize: '14px' }}>{peso(totalDe(r.id))}</strong>
       {chip(r.estado)}
@@ -552,10 +560,11 @@ export default function Rendiciones() {
   const tabs: { k: typeof tab, t: string, v: boolean, n?: number }[] = [
     { k: 'resumen', t: '📊 Resumen', v: aprueba || revisa },
     { k: 'mias', t: 'Mis rendiciones', v: true },
-    { k: 'todas', t: 'Todas', v: aprueba || revisa },
+    { k: 'todas', t: 'Todas en curso', v: aprueba || revisa },
     { k: 'aprobar', t: 'Por aprobar', v: aprueba, n: porAprobar.length },
     { k: 'revision', t: 'Revisión y pagos', v: revisa, n: enRevision.length },
     { k: 'fondos', t: 'Fondos por rendir', v: revisa },
+    { k: 'historial', t: '🗂 Historial', v: true },
   ]
 
   return (
@@ -577,22 +586,23 @@ export default function Rendiciones() {
 
 
           {!cargando && tab === 'resumen' && (() => {
-            const activas = rendiciones.filter(r => r.estado !== 'borrador')
+            const delUsuario = (uid: string) => !filtroUsuario || uid === filtroUsuario
+            // Solo lo vigente: las rendiciones cerradas están en el Historial
+            const vigentes = rendiciones.filter(r => r.estado !== 'borrador' && r.estado !== 'pagada' && delUsuario(r.usuario_id))
             const suma = (l: any[]) => l.reduce((a, r) => a + totalDe(r.id), 0)
-            const mesActual = hoy.slice(0, 7)
-            const delMes = activas.filter(r => (r.created_at || '').slice(0, 7) === mesActual)
-            const porEstado = (e: Estado) => activas.filter(r => r.estado === e)
+            const porEstado = (e: Estado) => vigentes.filter(r => r.estado === e)
+            const fpr = paresFondo().filter(x => delUsuario(x.usuario_id) && fondoEnCurso(x))
+            const saldoFpr = fpr.reduce((a, x) => a + saldoDe(x.usuario_id, x.cc).saldo, 0)
             const kpis = [
-              { t: 'Rendido este mes', v: peso(suma(delMes)), s: delMes.length + ' rendición(es)', c: AZUL },
               { t: 'En revisión contable', v: peso(suma(porEstado('enviada'))), s: porEstado('enviada').length + ' rendición(es)', c: '#986a00' },
               { t: 'Esperando aprobación', v: peso(suma(porEstado('revisada'))), s: porEstado('revisada').length + ' rendición(es)', c: AZUL },
               { t: 'Aprobadas, por cuadrar', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: '#1e6b3a' },
-              { t: 'Pagado este mes', v: peso(suma(porEstado('pagada').filter(r => (r.fecha_pago || '').slice(0, 7) === mesActual))), s: 'rendiciones pagadas', c: '#14532d' },
-              { t: 'Devueltas', v: String(porEstado('rechazada').length), s: 'esperando corrección', c: '#9b1c1c' },
+              { t: 'Devueltas', v: String(porEstado('rechazada').length), s: 'esperando corrección del trabajador', c: '#9b1c1c' },
+              { t: 'Fondos por rendir en curso', v: String(fpr.length), s: 'saldo total ' + peso(saldoFpr), c: AZUL },
             ]
             const agrupar = (clave: (r: any) => string) => {
               const m: Record<string, number> = {}
-              activas.filter(r => r.estado !== 'rechazada').forEach(r => { const k = clave(r); m[k] = (m[k] || 0) + totalDe(r.id) })
+              vigentes.filter(r => r.estado !== 'rechazada').forEach(r => { const k = clave(r); m[k] = (m[k] || 0) + totalDe(r.id) })
               return Object.entries(m).sort((a, b) => b[1] - a[1])
             }
             const barras = (datos: [string, number][], vacio: string) => {
@@ -604,16 +614,19 @@ export default function Rendiciones() {
                   <div style={{ height: '8px', background: '#eef1f6', borderRadius: '6px' }}><div style={{ width: (v / max * 100) + '%', height: '100%', background: AZUL, borderRadius: '6px' }} /></div>
                 </div>))}</div>
             }
-            const meses: [string, number][] = []
-            for (let k = 5; k >= 0; k--) {
-              const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k)
-              const clave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
-              meses.push([clave.slice(5) + '/' + clave.slice(2, 4), suma(activas.filter(r => r.estado !== 'rechazada' && (r.created_at || '').slice(0, 7) === clave))])
-            }
-            const sinCuenta = activas.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => !i.cuenta_contable).length, 0)
-            const enSistema = activas.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => i.tipo_doc === 'en_sistema').length, 0)
+            const sinCuenta = vigentes.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => !i.cuenta_contable).length, 0)
+            const enSistema = vigentes.filter(r => r.estado === 'enviada').reduce((a, r) => a + itemsDe(r.id).filter(i => i.tipo_doc === 'en_sistema').length, 0)
+            const personas = usuarios.filter(u => rendiciones.some(r => r.usuario_id === u.id) || fondos.some(f => f.usuario_id === u.id))
             return (
               <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ ...label, margin: 0 }}>Filtrar por persona</span>
+                  <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} style={{ ...input, width: 'auto', minWidth: '220px' }}>
+                    <option value="">Todas las personas</option>
+                    {personas.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                  </select>
+                  <span style={{ fontSize: '12px', color: '#8a94a6' }}>Aquí solo está lo vigente. Lo ya cuadrado y cerrado está en la pestaña Historial.</span>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '10px' }}>
                   {kpis.map(k => (
                     <div key={k.t} style={card}>
@@ -627,13 +640,31 @@ export default function Rendiciones() {
                     <p style={{ margin: 0, fontSize: '13px', color: '#7a5600' }}>Para revisión contable: <strong>{sinCuenta}</strong> gasto(s) sin cuenta asignada · <strong>{enSistema}</strong> gasto(s) "en sistema" por cruzar.</p>
                   </div>)}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '12px' }}>
-                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por centro de costo</p>{barras(agrupar(r => nombreCC(r.centro_costo_id)), 'Sin datos todavía.')}</div>
-                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por trabajador</p>{barras(agrupar(r => nombreUsuario(r.usuario_id)), 'Sin datos todavía.')}</div>
-                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Últimos 6 meses</p>{barras(meses, '')}</div>
-                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Uso de fondos por rendir</p>
-                    {paresFondo().length === 0 ? <p style={{ fontSize: '12.5px', color: '#999', margin: 0 }}>Aún no hay fondos cargados.</p> : <div style={{ display: 'grid', gap: '12px' }}>{paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
-                      <div key={x.usuario_id + (x.cc || '')}><div style={{ fontSize: '12.5px' }}><strong>{nombreUsuario(x.usuario_id)}</strong> <span style={{ color: '#667085' }}>· {x.cc ? nombreCC(x.cc) : 'sin CECO'} · {peso(sd.rendido)} de {peso(sd.entregado)}</span></div><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></div>) })}</div>}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>En curso por centro de costo</p>{barras(agrupar(r => nombreCC(r.centro_costo_id)), 'No hay rendiciones en curso.')}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>En curso por trabajador</p>{barras(agrupar(r => nombreUsuario(r.usuario_id)), 'No hay rendiciones en curso.')}</div>
+                  <div style={{ ...card, gridColumn: '1 / -1' }}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Fondos por rendir en curso (FPR)</p>
+                    {fpr.length === 0 ? <p style={{ fontSize: '12.5px', color: '#999', margin: 0 }}>No hay fondos por rendir en curso{filtroUsuario ? ' para esta persona' : ''}.</p> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '14px' }}>{fpr.map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
+                      <div key={x.usuario_id + (x.cc || '')}><div style={{ fontSize: '12.5px' }}><strong>{nombreUsuario(x.usuario_id)}</strong> <span style={{ color: '#667085' }}>· {x.cc ? nombreCC(x.cc) : 'sin CECO'} · {peso(sd.rendidoBar)} de {peso(sd.entregadoBar)}</span></div><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></div>) })}</div>}</div>
                 </div>
+              </div>)
+          })()}
+
+          {!cargando && tab === 'historial' && (() => {
+            const privilegiado = aprueba || revisa
+            const cerradas = rendiciones.filter(r => r.estado === 'pagada' && (privilegiado || r.usuario_id === usuario!.id) && (!hUsuario || r.usuario_id === hUsuario) && (!hCC || r.centro_costo_id === hCC))
+              .sort((a, b) => String(b.fecha_pago || '').localeCompare(String(a.fecha_pago || '')))
+            const total = cerradas.reduce((a, r) => a + totalDe(r.id), 0)
+            return (
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <div style={{ ...card, display: 'flex', alignItems: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                  {privilegiado && <div style={{ flex: 1, minWidth: '180px' }}><span style={label}>Persona</span>
+                    <select value={hUsuario} onChange={e => setHUsuario(e.target.value)} style={input}><option value="">Todas</option>{usuarios.filter(u => rendiciones.some(r => r.usuario_id === u.id && r.estado === 'pagada')).map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select></div>}
+                  <div style={{ flex: 1, minWidth: '180px' }}><span style={label}>Centro de costo</span>
+                    <select value={hCC} onChange={e => setHCC(e.target.value)} style={input}><option value="">Todos</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></div>
+                  <button style={btn(false)} onClick={() => exportarExcel(cerradas)} disabled={!cerradas.length}>⬇ Excel</button>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#344054' }}><strong>{cerradas.length}</strong> rendición(es) cerrada(s) · total rendido <strong>{peso(total)}</strong></p>
+                {cerradas.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay rendiciones cerradas.</p> : cerradas.map(r => fila(r, privilegiado))}
               </div>)
           })()}
 
@@ -670,7 +701,7 @@ export default function Rendiciones() {
 
           {!cargando && tab === 'todas' && (
             <div style={{ display: 'grid', gap: '10px' }}>
-              {rendiciones.filter(r => r.estado !== 'borrador' || r.usuario_id === usuario!.id).length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones.</p> : rendiciones.filter(r => r.estado !== 'borrador' || r.usuario_id === usuario!.id).map(r => fila(r, true))}
+              {rendiciones.filter(r => r.estado !== 'pagada' && (r.estado !== 'borrador' || r.usuario_id === usuario!.id)).length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones.</p> : rendiciones.filter(r => r.estado !== 'pagada' && (r.estado !== 'borrador' || r.usuario_id === usuario!.id)).map(r => fila(r, true))}
             </div>
           )}
 
@@ -686,8 +717,6 @@ export default function Rendiciones() {
                 <button style={btn(false)} onClick={() => exportarExcel(rendiciones.filter(r => r.estado !== 'borrador'))}>⬇ Excel de todas las rendiciones</button>
               </div>
               {enRevision.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones por revisar ni por pagar.</p> : enRevision.map(r => fila(r, true))}
-              <p style={{ margin: '10px 0 0', fontWeight: 700, fontSize: '13.5px' }}>Pagadas</p>
-              {rendiciones.filter(r => r.estado === 'pagada').slice(0, 30).map(r => fila(r, true))}
             </div>
           )}
 
@@ -706,18 +735,19 @@ export default function Rendiciones() {
                 </div>
                 <button onClick={darFondo} style={{ ...btn(), marginTop: '12px' }}>Registrar fondo</button>
               </div>
+              <label style={{ fontSize: '12.5px', color: '#475467', display: 'flex', alignItems: 'center', gap: '6px' }}><input type="checkbox" checked={verCerrados} onChange={e => setVerCerrados(e.target.checked)} /> Mostrar también fondos ya cuadrados y cerrados</label>
               <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                   <thead><tr style={{ background: '#f6f8fb', textAlign: 'left' }}>{['Persona', 'Centro de costo', 'Entregado', 'Rendido', 'Saldo', 'Uso del fondo'].map(t => <th key={t} style={{ padding: '9px 10px', fontSize: '11px', color: '#667085' }}>{t}</th>)}</tr></thead>
                   <tbody>
-                    {paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
+                    {paresFondo().filter(x => verCerrados || fondoEnCurso(x)).map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
                       <tr key={x.usuario_id + (x.cc || '')} style={{ borderTop: '1px solid #eef1f6' }}>
                         <td style={{ padding: '8px 10px', fontWeight: 600 }}>{nombreUsuario(x.usuario_id)}</td><td style={{ padding: '8px 10px' }}>{x.cc ? nombreCC(x.cc) : <span style={{ color: '#8a94a6' }}>Sin centro de costo</span>}</td>
                         <td style={{ padding: '8px 10px' }}>{peso(sd.entregado)}</td><td style={{ padding: '8px 10px' }}>{peso(sd.rendido)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se le debe ' + peso(-sd.saldo) : peso(sd.saldo)}</td>
                         <td style={{ padding: '8px 10px', minWidth: '170px' }}><BarraFondo entregado={sd.entregadoBar} rendido={sd.rendidoBar} compacta /></td>
                       </tr>) })}
-                    {fondos.length === 0 && <tr><td colSpan={6} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
+                    {fondos.length === 0 && <tr><td colSpan={6} style={{ padding: '14px', color: '#999' }}>No hay fondos en curso.</td></tr>}
                   </tbody>
                 </table>
               </div>

@@ -45,7 +45,7 @@ export default function Home() {
         .home-saludo { display: none; }
         @media (min-width: 1024px) {
           .home-contenedor { max-width: 1000px; padding: 2.5rem 2rem !important; }
-          .home-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+          .home-grid { display: none; }
           .home-saludo { display: block; }
         }
         .signout:hover { color: ${AZUL} !important; text-decoration: underline; }
@@ -82,7 +82,7 @@ export default function Home() {
         {!cargando && usuario && (
           <div className="home-saludo" style={{marginBottom:'1.5rem'}}>
             <h1 style={{fontSize:'24px',fontWeight:'700',margin:'0 0 4px',color:'#16213E'}}>Hola, {usuario.nombre.split(' ')[0]}</h1>
-            <p style={{fontSize:'13px',color:'#667085',margin:'0'}}>Elige un módulo para comenzar.</p>
+            <p style={{fontSize:'13px',color:'#667085',margin:'0'}}>Elige un módulo en el menú de la izquierda para comenzar.</p>
           </div>
         )}
 

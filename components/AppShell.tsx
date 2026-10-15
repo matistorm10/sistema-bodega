@@ -8,10 +8,9 @@ import { AZUL } from '@/lib/theme'
 // Marco de la aplicación: en computador (pantalla ancha) muestra una barra lateral fija con los módulos.
 // En celular y tablet pequeña no muestra nada y todo se ve exactamente como antes.
 
-type SubItem = { href: string, label: string, soloAdmin?: boolean }
 type Modulo = {
   clave: string, href: string, icon: string, label: string,
-  rutas: string[], visible: boolean, sub?: SubItem[]
+  rutas: string[], visible: boolean
 }
 
 const ANCHO = 236
@@ -29,13 +28,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     {
       clave: 'bodega', href: '/bodega', icon: '📦', label: 'Bodega', visible: esAdmin || usuario.accesoBodega,
       rutas: ['/bodega', '/inventario', '/movimientos', '/arriendos', '/catalogo', '/ubicaciones'],
-      sub: [
-        { href: '/inventario', label: 'Inventario' },
-        { href: '/movimientos', label: 'Movimientos' },
-        { href: '/arriendos', label: 'Arriendos' },
-        { href: '/catalogo', label: 'Catálogo' },
-        { href: '/ubicaciones', label: 'Ubicaciones', soloAdmin: true },
-      ],
     },
     { clave: 'vehiculos', href: '/vehiculos', icon: '🚚', label: 'Vehículos y Maquinaria', visible: esAdmin || usuario.accesoVehiculos, rutas: ['/vehiculos'] },
     { clave: 'licitaciones', href: '/licitaciones', icon: '📋', label: 'Licitaciones', visible: esAdmin || usuario.accesoLicitaciones, rutas: ['/licitaciones'] },
@@ -67,9 +59,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         .shell-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; text-decoration: none; color: #344054; font-size: 13.5px; transition: background .12s, color .12s; }
         .shell-link:hover { background: #f2f5fa; }
         .shell-link.activo { background: #E8F0FE; color: ${AZUL}; font-weight: 700; }
-        .shell-sub { display: block; padding: 6px 12px 6px 44px; border-radius: 8px; text-decoration: none; color: #667085; font-size: 12.5px; transition: background .12s, color .12s; }
-        .shell-sub:hover { background: #f2f5fa; color: #344054; }
-        .shell-sub.activo { color: ${AZUL}; font-weight: 700; }
         .shell-salir:hover { color: ${AZUL} !important; text-decoration: underline; }
       `}</style>
 
@@ -88,13 +77,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href={m.href} className={'shell-link' + (activo ? ' activo' : '')}>
                   <span style={{ width: '20px', textAlign: 'center' }}>{m.icon}</span>{m.label}
                 </Link>
-                {activo && m.sub && (
-                  <div style={{ margin: '2px 0 6px' }}>
-                    {m.sub.filter(s => !s.soloAdmin || esAdmin).map(s => (
-                      <Link key={s.href} href={s.href} className={'shell-sub' + (pathname === s.href || pathname.startsWith(s.href + '/') ? ' activo' : '')}>{s.label}</Link>
-                    ))}
-                  </div>
-                )}
               </div>
             )
           })}

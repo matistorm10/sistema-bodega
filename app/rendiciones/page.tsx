@@ -44,6 +44,7 @@ export default function Rendiciones() {
   const [cargando, setCargando] = useState(true)
   const [abierta, setAbierta] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [restaurado, setRestaurado] = useState(false)
   const [fUsuario, setFUsuario] = useState('')
   const [fMonto, setFMonto] = useState('')
   const [fDesc, setFDesc] = useState('')
@@ -62,7 +63,22 @@ export default function Rendiciones() {
     setCargando(false)
   }, [])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
-  useEffect(() => { if (usuario && (esAdmin || usuario.puedeAprobar || usuario.esRevisor)) setTab('resumen') }, [usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Recordar la pestaña y la rendición abierta: si el navegador recarga la página (típico en celular), se vuelve al mismo lugar
+  useEffect(() => {
+    if (!usuario || restaurado) return
+    try {
+      const g = JSON.parse(sessionStorage.getItem('rend_vista') || 'null')
+      if (g?.abierta) setAbierta(g.abierta)
+      if (g?.tab) { setTab(g.tab); setRestaurado(true); return }
+    } catch {}
+    setRestaurado(true)
+    if (esAdmin || usuario.puedeAprobar || usuario.esRevisor) setTab('resumen')
+  }, [usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!restaurado) return
+    try { sessionStorage.setItem('rend_vista', JSON.stringify({ tab, abierta })) } catch {}
+  }, [tab, abierta, restaurado])
+  useEffect(() => { if (!cargando && abierta && !rendiciones.some(r => r.id === abierta)) setAbierta(null) }, [cargando, abierta, rendiciones])
 
   const nombreUsuario = (id: string) => usuarios.find(u => u.id === id)?.nombre || '—'
   const faena = (id?: string | null) => faenas.find(f => f.id === id)
@@ -104,6 +120,8 @@ export default function Rendiciones() {
   const [iMonto, setIMonto] = useState('')
   const [iFoto, setIFoto] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
+  const [arrastrando, setArrastrando] = useState(false)
+  const [visor, setVisor] = useState<{ url: string, pdf: boolean } | null>(null)
 
   const agregarItem = async (r: any) => {
     const monto = Number(iMonto.replace(/\./g, '').replace(',', '.'))
@@ -132,10 +150,9 @@ export default function Rendiciones() {
     await cargar()
   }
   const verFoto = async (path: string) => {
-    const w = window.open('', '_blank')
-    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 300)
-    if (error || !data) { w?.close(); alert('No se pudo abrir la foto.'); return }
-    if (w) w.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank')
+    const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(path, 600)
+    if (error || !data) { alert('No se pudo abrir la foto.'); return }
+    setVisor({ url: data.signedUrl, pdf: /\.pdf$/i.test(path) })
   }
   const guardarItemContable = async (it: any, cuenta: string, obs: string) => {
     const { error } = await supabase.from('rendicion_items').update({ cuenta_contable: cuenta.trim() || null, observacion_revisor: obs.trim() || null }).eq('id', it.id)
@@ -278,7 +295,18 @@ export default function Rendiciones() {
               <div><span style={label}>Monto ($)</span><input inputMode="numeric" value={iMonto} onChange={e => setIMonto(e.target.value)} style={input} /></div>
             </div>
             <div style={{ marginTop: '10px' }}><span style={label}>Detalle (qué se compró)</span><input value={iDet} onChange={e => setIDet(e.target.value)} style={input} /></div>
-            <div style={{ marginTop: '10px' }}><span style={label}>Foto de la boleta o factura</span><input type="file" accept="image/*,application/pdf" onChange={e => setIFoto(e.target.files?.[0] || null)} style={{ fontSize: '12.5px' }} /></div>
+            <div style={{ marginTop: '10px' }}>
+              <span style={label}>Foto de la boleta o factura</span>
+              <label
+                onDragOver={e => { e.preventDefault(); setArrastrando(true) }}
+                onDragLeave={() => setArrastrando(false)}
+                onDrop={e => { e.preventDefault(); setArrastrando(false); const f = e.dataTransfer.files?.[0]; if (f) { if (!/^image\/|application\/pdf/.test(f.type)) { alert('Solo se aceptan fotos o PDF.'); return } setIFoto(f) } }}
+                style={{ display: 'block', cursor: 'pointer', textAlign: 'center', padding: '18px 12px', borderRadius: '10px', border: '2px dashed ' + (arrastrando ? AZUL : '#c4cad6'), background: arrastrando ? '#E8F0FE' : '#fafbfd', fontSize: '13px', color: '#475467' }}>
+                {iFoto ? <>📎 <strong>{iFoto.name}</strong> <span style={{ color: '#8a94a6' }}>({Math.max(1, Math.round(iFoto.size / 1024))} KB)</span></> : <>Arrastra aquí la foto o el PDF, o <span style={{ color: AZUL, fontWeight: 600, textDecoration: 'underline' }}>haz clic para seleccionar</span></>}
+                <input type="file" accept="image/*,application/pdf" onChange={e => setIFoto(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+              </label>
+              {iFoto && <button type="button" onClick={() => setIFoto(null)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px', marginTop: '6px' }}>Quitar archivo</button>}
+            </div>
             <button onClick={() => agregarItem(r)} disabled={subiendo} style={{ ...btn(), marginTop: '12px', opacity: subiendo ? 0.6 : 1 }}>{subiendo ? 'Subiendo...' : '+ Agregar gasto'}</button>
           </div>
         )}
@@ -473,6 +501,17 @@ export default function Rendiciones() {
           )}
         </>)}
       </div>
+      {visor && (
+        <div onClick={() => setVisor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,0.78)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <a href={visor.url} target="_blank" rel="noreferrer" style={{ ...btn(false), textDecoration: 'none', background: '#fff' }}>Abrir en pestaña nueva</a>
+            <button onClick={() => setVisor(null)} style={btn()}>✕ Cerrar</button>
+          </div>
+          <div onClick={e => e.stopPropagation()} style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: '900px', overflow: 'auto', background: '#fff', borderRadius: '10px', display: 'flex', justifyContent: 'center' }}>
+            {visor.pdf ? <iframe src={visor.url} style={{ width: '100%', height: '100%', border: 0 }} /> : <img src={visor.url} alt="Comprobante" style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain', alignSelf: 'flex-start' }} />}
+          </div>
+        </div>
+      )}
     </main>
   )
 }

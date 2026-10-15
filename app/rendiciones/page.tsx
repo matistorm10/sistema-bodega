@@ -295,6 +295,7 @@ export default function Rendiciones() {
             </div>
             {chip(r.estado)}
           </div>
+          {puedeObservar && pendientesCorregir > 0 && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fef7e0', color: '#7a5600', borderRadius: '8px', fontSize: '12.5px' }}>Marcaste <strong>{pendientesCorregir}</strong> gasto(s) como rechazado(s). El trabajador <strong>aún no puede corregirlos</strong>: presiona <strong>"Devolver al trabajador"</strong> abajo para enviárselos.</p>}
           {r.estado === 'rechazada' && esDueno && pendientesCorregir > 0 && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Tienes <strong>{pendientesCorregir}</strong> gasto(s) con observaciones (marcados en rojo). Edítalos para corregirlos o quítalos, y luego envía de nuevo.</p>}
           {r.estado === 'rechazada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Devuelta: {r.motivo_rechazo}</p>}
           {r.aprobada_por && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Aprobada por {nombreUsuario(r.aprobada_por)} el {fechaCL(r.fecha_aprobacion)}{r.fecha_pago ? ' · Pagada el ' + fechaCL(r.fecha_pago) : ''}</p>}
@@ -372,11 +373,11 @@ export default function Rendiciones() {
           {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } if (pendientesCorregir > 0) { alert(`Aún tienes ${pendientesCorregir} gasto(s) con observaciones. Edítalos para corregirlos o quítalos antes de enviar.`); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a aprobación.') }}>Enviar a aprobación</button>}
           {editable && r.estado === 'borrador' && <button style={btn(false, true)} onClick={() => eliminarRendicion(r)}>Eliminar</button>}
           {aprueba && r.estado === 'enviada' && !(r.usuario_id === usuario!.id && !esAdmin) && <>
-            <button style={btn()} onClick={() => cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Pasa a revisión contable.')}>✔ Aprobar</button>
+            <button style={btn()} onClick={() => { if (pendientesCorregir > 0) { alert('Hay gastos rechazados. Devuelve la rendición al trabajador o deshaz los rechazos antes de aprobar.'); return } cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Pasa a revisión contable.') }}>✔ Aprobar</button>
             <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
           </>}
           {puedeRevisar && r.estado === 'aprobada' && <>
-            <button style={btn()} onClick={() => cambiar(r.id, { estado: 'revisada', revisada_por: usuario!.id, fecha_revision: new Date().toISOString() }, 'Marcada como revisada.')}>✔ Marcar revisada (cruzada con KAME)</button>
+            <button style={btn()} onClick={() => { if (pendientesCorregir > 0) { alert('Hay gastos rechazados. Devuelve la rendición al trabajador o deshaz los rechazos antes de marcarla revisada.'); return } cambiar(r.id, { estado: 'revisada', revisada_por: usuario!.id, fecha_revision: new Date().toISOString() }, 'Marcada como revisada.') }}>✔ Marcar revisada (cruzada con KAME)</button>
             <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
           </>}
           {puedeRevisar && r.estado === 'revisada' && <button style={btn()} onClick={() => { const f = prompt('Fecha de pago (AAAA-MM-DD):', hoy); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) cambiar(r.id, { estado: 'pagada', fecha_pago: f }, 'Marcada como pagada.') }}>💲 Marcar pagada</button>}

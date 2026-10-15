@@ -35,7 +35,7 @@ export default function Rendiciones() {
   const aprueba = esAdmin || !!usuario?.puedeAprobar
   const revisa = esAdmin || !!usuario?.esRevisor
 
-  const [tab, setTab] = useState<'mias' | 'aprobar' | 'revision' | 'fondos'>('mias')
+  const [tab, setTab] = useState<'mias' | 'aprobar' | 'revision' | 'fondos' | 'resumen' | 'todas'>('mias')
   const [rendiciones, setRendiciones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [fondos, setFondos] = useState<any[]>([])
@@ -59,6 +59,7 @@ export default function Rendiciones() {
     setCargando(false)
   }, [])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
+  useEffect(() => { if (usuario && (esAdmin || usuario.puedeAprobar || usuario.esRevisor)) setTab('resumen') }, [usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const nombreUsuario = (id: string) => usuarios.find(u => u.id === id)?.nombre || '—'
   const faena = (id?: string | null) => faenas.find(f => f.id === id)
@@ -310,7 +311,9 @@ export default function Rendiciones() {
   }
 
   const tabs: { k: typeof tab, t: string, v: boolean, n?: number }[] = [
+    { k: 'resumen', t: '📊 Resumen', v: aprueba || revisa },
     { k: 'mias', t: 'Mis rendiciones', v: true },
+    { k: 'todas', t: 'Todas', v: aprueba || revisa },
     { k: 'aprobar', t: 'Por aprobar', v: aprueba, n: porAprobar.length },
     { k: 'revision', t: 'Revisión contable', v: revisa, n: enRevision.length },
     { k: 'fondos', t: 'Fondos por rendir', v: revisa },
@@ -333,6 +336,67 @@ export default function Rendiciones() {
 
           {cargando && <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p>}
 
+
+          {!cargando && tab === 'resumen' && (() => {
+            const activas = rendiciones.filter(r => r.estado !== 'borrador')
+            const suma = (l: any[]) => l.reduce((a, r) => a + totalDe(r.id), 0)
+            const mesActual = hoy.slice(0, 7)
+            const delMes = activas.filter(r => (r.created_at || '').slice(0, 7) === mesActual)
+            const porEstado = (e: Estado) => activas.filter(r => r.estado === e)
+            const kpis = [
+              { t: 'Rendido este mes', v: peso(suma(delMes)), s: delMes.length + ' rendición(es)', c: AZUL },
+              { t: 'Esperando aprobación', v: peso(suma(porEstado('enviada'))), s: porEstado('enviada').length + ' rendición(es)', c: '#986a00' },
+              { t: 'En revisión contable', v: peso(suma(porEstado('aprobada'))), s: porEstado('aprobada').length + ' rendición(es)', c: AZUL },
+              { t: 'Revisadas, por pagar', v: peso(suma(porEstado('revisada'))), s: porEstado('revisada').length + ' rendición(es)', c: '#1e6b3a' },
+              { t: 'Pagado este mes', v: peso(suma(porEstado('pagada').filter(r => (r.fecha_pago || '').slice(0, 7) === mesActual))), s: 'rendiciones pagadas', c: '#14532d' },
+              { t: 'Devueltas', v: String(porEstado('rechazada').length), s: 'esperando corrección', c: '#9b1c1c' },
+            ]
+            const agrupar = (clave: (r: any) => string) => {
+              const m: Record<string, number> = {}
+              activas.filter(r => r.estado !== 'rechazada').forEach(r => { const k = clave(r); m[k] = (m[k] || 0) + totalDe(r.id) })
+              return Object.entries(m).sort((a, b) => b[1] - a[1])
+            }
+            const barras = (datos: [string, number][], vacio: string) => {
+              const max = Math.max(1, ...datos.map(d => d[1]))
+              if (!datos.length) return <p style={{ fontSize: '12.5px', color: '#999', margin: 0 }}>{vacio}</p>
+              return <div style={{ display: 'grid', gap: '8px' }}>{datos.slice(0, 8).map(([k, v]) => (
+                <div key={k}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '3px' }}><span>{k}</span><strong>{peso(v)}</strong></div>
+                  <div style={{ height: '8px', background: '#eef1f6', borderRadius: '6px' }}><div style={{ width: (v / max * 100) + '%', height: '100%', background: AZUL, borderRadius: '6px' }} /></div>
+                </div>))}</div>
+            }
+            const meses: [string, number][] = []
+            for (let k = 5; k >= 0; k--) {
+              const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k)
+              const clave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+              meses.push([clave.slice(5) + '/' + clave.slice(2, 4), suma(activas.filter(r => r.estado !== 'rechazada' && (r.created_at || '').slice(0, 7) === clave))])
+            }
+            const sinCuenta = activas.filter(r => r.estado === 'aprobada' || r.estado === 'revisada').reduce((a, r) => a + itemsDe(r.id).filter(i => !i.cuenta_contable).length, 0)
+            const enSistema = activas.filter(r => r.estado === 'aprobada').reduce((a, r) => a + itemsDe(r.id).filter(i => i.tipo_doc === 'en_sistema').length, 0)
+            return (
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '10px' }}>
+                  {kpis.map(k => (
+                    <div key={k.t} style={card}>
+                      <p style={{ margin: '0 0 4px', fontSize: '11.5px', color: '#667085', fontWeight: 600 }}>{k.t}</p>
+                      <p style={{ margin: '0 0 2px', fontSize: '21px', fontWeight: 800, color: k.c }}>{k.v}</p>
+                      <p style={{ margin: 0, fontSize: '11.5px', color: '#8a94a6' }}>{k.s}</p>
+                    </div>))}
+                </div>
+                {revisa && (sinCuenta > 0 || enSistema > 0) && (
+                  <div style={{ ...card, background: '#fef7e0', borderColor: '#f3e2a5' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#7a5600' }}>Para revisión contable: <strong>{sinCuenta}</strong> gasto(s) sin cuenta asignada · <strong>{enSistema}</strong> gasto(s) "en sistema" por cruzar.</p>
+                  </div>)}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '12px' }}>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por centro de costo</p>{barras(agrupar(r => nombreCC(r.centro_costo_id)), 'Sin datos todavía.')}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por trabajador</p>{barras(agrupar(r => nombreUsuario(r.usuario_id)), 'Sin datos todavía.')}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Últimos 6 meses</p>{barras(meses, '')}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Fondos por rendir pendientes</p>
+                    {barras(usuarios.filter(u => fondos.some(f => f.usuario_id === u.id)).map(u => [u.nombre, Math.max(0, saldoDe(u.id).saldo)] as [string, number]).filter(d => d[1] > 0), 'No hay saldos pendientes.')}</div>
+                </div>
+              </div>)
+          })()}
+
           {!cargando && tab === 'mias' && (
             <div style={{ display: 'grid', gap: '10px' }}>
               {miSaldo.entregado > 0 && (
@@ -354,6 +418,12 @@ export default function Rendiciones() {
                 <button onClick={crearRendicion} style={{ ...btn(), marginTop: '12px' }}>Crear y agregar gastos</button>
               </div>
               {mias.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>Aún no tienes rendiciones.</p> : mias.map(r => fila(r, false))}
+            </div>
+          )}
+
+          {!cargando && tab === 'todas' && (
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {rendiciones.filter(r => r.estado !== 'borrador' || r.usuario_id === usuario!.id).length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No hay rendiciones.</p> : rendiciones.filter(r => r.estado !== 'borrador' || r.usuario_id === usuario!.id).map(r => fila(r, true))}
             </div>
           )}
 

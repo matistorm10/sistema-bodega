@@ -120,9 +120,15 @@ export default function Rendiciones() {
   const [iMonto, setIMonto] = useState('')
   const [iFoto, setIFoto] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [arrastrando, setArrastrando] = useState(false)
   const [visor, setVisor] = useState<{ url: string, pdf: boolean } | null>(null)
 
+  const limpiarForm = () => { setINum(''); setIDet(''); setIMonto(''); setIFoto(null); setEditandoId(null); setIFecha(hoy); setITipo('boleta') }
+  const editarItem = (it: any) => {
+    setEditandoId(it.id); setIFecha(it.fecha); setITipo(it.tipo_doc); setINum(it.numero_doc || ''); setIDet(it.detalle); setIMonto(String(Math.round(Number(it.monto)))); setIFoto(null)
+    setTimeout(() => document.getElementById('form-gasto')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
   const agregarItem = async (r: any) => {
     const monto = Number(iMonto.replace(/\./g, '').replace(',', '.'))
     if (!iDet.trim() || !monto || monto <= 0) { alert('Indica el detalle y el monto.'); return }
@@ -134,13 +140,43 @@ export default function Rendiciones() {
       const { error: eUp } = await supabase.storage.from('comprobantes').upload(path, iFoto, { contentType: iFoto.type })
       if (eUp) { setSubiendo(false); alert('No se pudo subir la foto: ' + eUp.message); return }
     }
-    const { error } = await supabase.from('rendicion_items').insert({
-      rendicion_id: r.id, fecha: iFecha, tipo_doc: iTipo, numero_doc: iNum.trim() || null, detalle: iDet.trim(), monto, comprobante_path: path,
-    })
+    const campos: any = { fecha: iFecha, tipo_doc: iTipo, numero_doc: iNum.trim() || null, detalle: iDet.trim(), monto }
+    let error: any
+    if (editandoId) {
+      const previo = items.find(i => i.id === editandoId)
+      if (path) { campos.comprobante_path = path }
+      if (previo?.estado_item === 'rechazado') campos.estado_item = 'corregido'
+      ;({ error } = await supabase.from('rendicion_items').update(campos).eq('id', editandoId))
+      if (!error && path && previo?.comprobante_path) await supabase.storage.from('comprobantes').remove([previo.comprobante_path])
+    } else {
+      ;({ error } = await supabase.from('rendicion_items').insert({ ...campos, rendicion_id: r.id, comprobante_path: path }))
+    }
     setSubiendo(false)
-    if (error) { alert('No se pudo agregar: ' + error.message); return }
-    setINum(''); setIDet(''); setIMonto(''); setIFoto(null)
+    if (error) { alert('No se pudo guardar el gasto: ' + error.message); return }
+    limpiarForm()
     await cargar()
+  }
+  const observarItem = async (it: any) => {
+    const m = prompt('Motivo por el que se rechaza este gasto (lo verá el trabajador):')
+    if (!m || !m.trim()) return
+    const { error } = await supabase.from('rendicion_items').update({ estado_item: 'rechazado', motivo_rechazo: m.trim() }).eq('id', it.id)
+    if (error) { alert(error.message); return }
+    await cargar()
+  }
+  const deshacerRechazo = async (it: any) => {
+    const { error } = await supabase.from('rendicion_items').update({ estado_item: 'ok', motivo_rechazo: null }).eq('id', it.id)
+    if (error) { alert(error.message); return }
+    await cargar()
+  }
+  const devolver = async (r: any) => {
+    const marcados = itemsDe(r.id).filter(i => i.estado_item === 'rechazado')
+    if (marcados.length === 0) {
+      const m = prompt('Ningún gasto está marcado con observación. Si quieres devolver toda la rendición, escribe el motivo general (o cancela y usa "Rechazar" en cada gasto):')
+      if (m && m.trim()) await cambiar(r.id, { estado: 'rechazada', motivo_rechazo: m.trim() }, 'Devuelta al trabajador.')
+      return
+    }
+    if (!confirm(`Se devolverá la rendición al trabajador con ${marcados.length} gasto(s) observado(s). ¿Continuar?`)) return
+    await cambiar(r.id, { estado: 'rechazada', motivo_rechazo: `${marcados.length} gasto(s) con observaciones` }, 'Devuelta al trabajador con las observaciones por gasto.')
   }
   const quitarItem = async (it: any) => {
     if (!confirm('¿Quitar este gasto?')) return
@@ -223,7 +259,7 @@ export default function Rendiciones() {
     <div key={r.id} onClick={() => setAbierta(r.id)} style={{ ...card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
       <div style={{ flex: 1, minWidth: '180px' }}>
         <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{numRend(r.numero)}{conTrabajador ? ' · ' + nombreUsuario(r.usuario_id) : ''}</p>
-        <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{nombreCC(r.centro_costo_id)} · {itemsDe(r.id).length} gasto(s) · {fechaCL(r.created_at)}</p>
+        <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{nombreCC(r.centro_costo_id)} · {itemsDe(r.id).length} gasto(s) · {fechaCL(r.created_at)}{r.estado === 'rechazada' && itemsDe(r.id).some(i => i.estado_item === 'rechazado') ? ' · ' + itemsDe(r.id).filter(i => i.estado_item === 'rechazado').length + ' por corregir' : ''}</p>
       </div>
       <strong style={{ fontSize: '14px' }}>{peso(totalDe(r.id))}</strong>
       {chip(r.estado)}
@@ -238,6 +274,9 @@ export default function Rendiciones() {
     const esDueno = r.usuario_id === usuario!.id
     const editable = esDueno && (r.estado === 'borrador' || r.estado === 'rechazada')
     const puedeRevisar = revisa && (r.estado === 'aprobada' || r.estado === 'revisada')
+    const puedeAprobarEsta = aprueba && r.estado === 'enviada' && !(r.usuario_id === usuario!.id && !esAdmin)
+    const puedeObservar = puedeAprobarEsta || (revisa && r.estado === 'aprobada')
+    const pendientesCorregir = its.filter(i => i.estado_item === 'rechazado').length
     return (
       <div style={{ display: 'grid', gap: '12px' }}>
         <button onClick={() => setAbierta(null)} style={{ ...btn(false), width: 'fit-content' }}>← Volver al listado</button>
@@ -249,6 +288,7 @@ export default function Rendiciones() {
             </div>
             {chip(r.estado)}
           </div>
+          {r.estado === 'rechazada' && esDueno && pendientesCorregir > 0 && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Tienes <strong>{pendientesCorregir}</strong> gasto(s) con observaciones (marcados en rojo). Edítalos para corregirlos o quítalos, y luego envía de nuevo.</p>}
           {r.estado === 'rechazada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Devuelta: {r.motivo_rechazo}</p>}
           {r.aprobada_por && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Aprobada por {nombreUsuario(r.aprobada_por)} el {fechaCL(r.fecha_aprobacion)}{r.fecha_pago ? ' · Pagada el ' + fechaCL(r.fecha_pago) : ''}</p>}
         </div>
@@ -261,13 +301,17 @@ export default function Rendiciones() {
             <tbody>
               {its.length === 0 && <tr><td colSpan={7} style={{ padding: '14px', color: '#999' }}>Aún no hay gastos cargados.</td></tr>}
               {its.map(it => (
-                <tr key={it.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                <tr key={it.id} style={{ borderTop: '1px solid #eef1f6', background: it.estado_item === 'rechazado' ? '#fff5f5' : it.estado_item === 'corregido' ? '#f3faf5' : undefined }}>
                   <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{fechaCL(it.fecha)}</td>
                   <td style={{ padding: '8px 10px' }}>
                     {TIPOS[it.tipo_doc]?.split(' (')[0]} {it.numero_doc || ''}
                     {it.tipo_doc === 'en_sistema' && <span style={{ marginLeft: '6px', fontSize: '10.5px', background: '#fef7e0', color: '#986a00', padding: '2px 6px', borderRadius: '10px' }}>Angela: cruzar</span>}
                   </td>
-                  <td style={{ padding: '8px 10px' }}>{it.detalle}</td>
+                  <td style={{ padding: '8px 10px' }}>
+                    {it.detalle}
+                    {it.estado_item === 'rechazado' && <div style={{ marginTop: '4px', fontSize: '12px', color: '#9b1c1c', background: '#fde8e8', padding: '5px 8px', borderRadius: '6px' }}>❌ <strong>Observación:</strong> {it.motivo_rechazo}</div>}
+                    {it.estado_item === 'corregido' && <div style={{ marginTop: '4px', fontSize: '12px', color: '#1e6b3a' }}>✔ Corregido{it.motivo_rechazo ? <span style={{ color: '#667085' }}> · observación anterior: {it.motivo_rechazo}</span> : null}</div>}
+                  </td>
                   <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>{peso(it.monto)}</td>
                   {puedeRevisar ? (<>
                     <td style={{ padding: '6px 10px' }}><input defaultValue={it.cuenta_contable || ''} onBlur={e => guardarItemContable(it, e.target.value, it.observacion_revisor || '')} style={{ ...input, minWidth: '130px' }} placeholder="Cuenta" /></td>
@@ -275,7 +319,11 @@ export default function Rendiciones() {
                   </>) : (<><td /><td /></>)}
                   <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     {it.comprobante_path && <button onClick={() => verFoto(it.comprobante_path)} style={{ ...btn(false), padding: '4px 9px', fontSize: '11.5px' }}>📎 Ver foto</button>}{' '}
+                    {editable && <button onClick={() => editarItem(it)} style={{ ...btn(false), padding: '4px 9px', fontSize: '11.5px' }}>Editar</button>}{' '}
                     {(editable || esAdmin) && <button onClick={() => quitarItem(it)} style={{ ...btn(false, true), padding: '4px 9px', fontSize: '11.5px' }}>Quitar</button>}
+                    {puedeObservar && (it.estado_item === 'rechazado'
+                      ? <button onClick={() => deshacerRechazo(it)} style={{ ...btn(false), padding: '4px 9px', fontSize: '11.5px' }}>Deshacer rechazo</button>
+                      : <button onClick={() => observarItem(it)} style={{ ...btn(false, true), padding: '4px 9px', fontSize: '11.5px' }}>Rechazar gasto</button>)}
                   </td>
                 </tr>
               ))}
@@ -285,8 +333,8 @@ export default function Rendiciones() {
         </div>
 
         {editable && (
-          <div style={card}>
-            <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Agregar gasto</p>
+          <div style={card} id="form-gasto">
+            <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>{editandoId ? '✏️ Editando gasto' : 'Agregar gasto'}</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px' }}>
               <div><span style={label}>Fecha</span><input type="date" value={iFecha} onChange={e => setIFecha(e.target.value)} style={input} /></div>
               <div><span style={label}>Tipo de documento</span>
@@ -307,20 +355,22 @@ export default function Rendiciones() {
               </label>
               {iFoto && <button type="button" onClick={() => setIFoto(null)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px', marginTop: '6px' }}>Quitar archivo</button>}
             </div>
-            <button onClick={() => agregarItem(r)} disabled={subiendo} style={{ ...btn(), marginTop: '12px', opacity: subiendo ? 0.6 : 1 }}>{subiendo ? 'Subiendo...' : '+ Agregar gasto'}</button>
+            <button onClick={() => agregarItem(r)} disabled={subiendo} style={{ ...btn(), marginTop: '12px', opacity: subiendo ? 0.6 : 1 }}>{subiendo ? 'Guardando...' : editandoId ? 'Guardar cambios' : '+ Agregar gasto'}</button>
+            {editandoId && <button onClick={limpiarForm} style={{ ...btn(false), marginTop: '12px', marginLeft: '8px' }}>Cancelar edición</button>}
+            {editandoId && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Si no subes una foto nueva, se mantiene la actual.</p>}
           </div>
         )}
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a aprobación.') }}>Enviar a aprobación</button>}
+          {editable && <button style={btn()} onClick={() => { if (!its.length) { alert('Agrega al menos un gasto.'); return } if (pendientesCorregir > 0) { alert(`Aún tienes ${pendientesCorregir} gasto(s) con observaciones. Edítalos para corregirlos o quítalos antes de enviar.`); return } cambiar(r.id, { estado: 'enviada', motivo_rechazo: null }, 'Rendición enviada a aprobación.') }}>Enviar a aprobación</button>}
           {editable && r.estado === 'borrador' && <button style={btn(false, true)} onClick={() => eliminarRendicion(r)}>Eliminar</button>}
           {aprueba && r.estado === 'enviada' && !(r.usuario_id === usuario!.id && !esAdmin) && <>
             <button style={btn()} onClick={() => cambiar(r.id, { estado: 'aprobada', aprobada_por: usuario!.id, fecha_aprobacion: new Date().toISOString() }, 'Aprobada. Pasa a revisión contable.')}>✔ Aprobar</button>
-            <button style={btn(false, true)} onClick={() => { const m = prompt('Motivo de la devolución:'); if (m) cambiar(r.id, { estado: 'rechazada', motivo_rechazo: m }, 'Devuelta al trabajador.') }}>Devolver</button>
+            <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
           </>}
           {puedeRevisar && r.estado === 'aprobada' && <>
             <button style={btn()} onClick={() => cambiar(r.id, { estado: 'revisada', revisada_por: usuario!.id, fecha_revision: new Date().toISOString() }, 'Marcada como revisada.')}>✔ Marcar revisada (cruzada con KAME)</button>
-            <button style={btn(false, true)} onClick={() => { const m = prompt('Motivo de la devolución:'); if (m) cambiar(r.id, { estado: 'rechazada', motivo_rechazo: m }, 'Devuelta al trabajador.') }}>Devolver</button>
+            <button style={btn(false, true)} onClick={() => devolver(r)}>Devolver al trabajador{pendientesCorregir ? ` (${pendientesCorregir} observado${pendientesCorregir > 1 ? 's' : ''})` : ''}</button>
           </>}
           {puedeRevisar && r.estado === 'revisada' && <button style={btn()} onClick={() => { const f = prompt('Fecha de pago (AAAA-MM-DD):', hoy); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) cambiar(r.id, { estado: 'pagada', fecha_pago: f }, 'Marcada como pagada.') }}>💲 Marcar pagada</button>}
           <button style={btn(false)} onClick={() => exportarExcel([r])}>⬇ Excel</button>

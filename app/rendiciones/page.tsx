@@ -28,6 +28,26 @@ const btn = (primario = true, peligro = false): React.CSSProperties => ({
 })
 const label: React.CSSProperties = { fontSize: '11px', color: '#667085', display: 'block', marginBottom: '3px', fontWeight: 600 }
 
+// Barra de uso del fondo: muestra qué porcentaje del fondo entregado ya se rindió, y si se excedió
+function BarraFondo({ entregado, rendido, compacta = false }: { entregado: number, rendido: number, compacta?: boolean }) {
+  if (!(entregado > 0)) return null
+  const pct = Math.round(rendido / entregado * 100)
+  const exc = rendido > entregado
+  const color = exc ? '#c0392b' : pct >= 80 ? '#e0a100' : '#2e9e5b'
+  const resto = entregado - rendido
+  return (
+    <div style={{ marginTop: compacta ? '4px' : '8px' }}>
+      <div style={{ height: compacta ? '8px' : '12px', background: '#e6e9f0', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ width: Math.min(pct, 100) + '%', height: '100%', background: color, borderRadius: '8px', transition: 'width .3s' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px' }}>
+        <span style={{ color: '#667085' }}>{pct}% utilizado</span>
+        <strong style={{ color }}>{exc ? `Excedido por ${peso(-resto)} (+${pct - 100}%)` : `Queda ${peso(resto)} (${Math.max(0, 100 - pct)}%)`}</strong>
+      </div>
+    </div>
+  )
+}
+
 export default function Rendiciones() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
   const esAdmin = usuario?.rol === 'admin'
@@ -309,6 +329,7 @@ export default function Rendiciones() {
           {r.estado === 'enviada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fef7e0', color: '#7a5600', borderRadius: '8px', fontSize: '12.5px' }}>{r.motivo_rechazo}</p>}
           {r.estado === 'rechazada' && r.motivo_rechazo && <p style={{ margin: '10px 0 0', padding: '8px 10px', background: '#fde8e8', color: '#9b1c1c', borderRadius: '8px', fontSize: '12.5px' }}>Devuelta: {r.motivo_rechazo}</p>}
           {saldoCC.entregado > 0 && <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#344054' }}>Fondo por rendir en este centro de costo: entregado {peso(saldoCC.entregado)} · rendido {peso(saldoCC.rendido)} · <strong style={{ color: saldoCC.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{saldoCC.saldo < 0 ? 'se debe reintegrar ' + peso(-saldoCC.saldo) : 'saldo a favor ' + peso(saldoCC.saldo)}</strong></p>}
+          <BarraFondo entregado={saldoCC.entregado} rendido={saldoCC.rendido} />
           {r.aprobada_por && <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#8a94a6' }}>Aprobada por {nombreUsuario(r.aprobada_por)} el {fechaCL(r.fecha_aprobacion)}{r.fecha_pago ? ' · Pagada el ' + fechaCL(r.fecha_pago) : ''}</p>}
         </div>
 
@@ -492,8 +513,9 @@ export default function Rendiciones() {
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por centro de costo</p>{barras(agrupar(r => nombreCC(r.centro_costo_id)), 'Sin datos todavía.')}</div>
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Por trabajador</p>{barras(agrupar(r => nombreUsuario(r.usuario_id)), 'Sin datos todavía.')}</div>
                   <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Últimos 6 meses</p>{barras(meses, '')}</div>
-                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Fondos por rendir pendientes</p>
-                    {barras(paresFondo().map(x => [nombreUsuario(x.usuario_id) + ' · ' + (x.cc ? nombreCC(x.cc) : 'sin CECO'), Math.max(0, saldoDe(x.usuario_id, x.cc).saldo)] as [string, number]).filter(d => d[1] > 0), 'No hay saldos pendientes.')}</div>
+                  <div style={card}><p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '13.5px' }}>Uso de fondos por rendir</p>
+                    {paresFondo().length === 0 ? <p style={{ fontSize: '12.5px', color: '#999', margin: 0 }}>Aún no hay fondos cargados.</p> : <div style={{ display: 'grid', gap: '12px' }}>{paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
+                      <div key={x.usuario_id + (x.cc || '')}><div style={{ fontSize: '12.5px' }}><strong>{nombreUsuario(x.usuario_id)}</strong> <span style={{ color: '#667085' }}>· {x.cc ? nombreCC(x.cc) : 'sin CECO'} · {peso(sd.rendido)} de {peso(sd.entregado)}</span></div><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></div>) })}</div>}</div>
                 </div>
               </div>)
           })()}
@@ -508,6 +530,7 @@ export default function Rendiciones() {
                       <div key={x.cc || 'x'} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', fontSize: '13px', padding: '8px 10px', background: '#f6f8fb', borderRadius: '8px' }}>
                         <span><strong>{x.cc ? nombreCC(x.cc) : 'Sin centro de costo'}</strong> <span style={{ color: '#8a94a6' }}>· entregado {peso(sd.entregado)} · rendido {peso(sd.rendido)}</span></span>
                         <strong style={{ color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se te debe ' + peso(-sd.saldo) : 'A tu favor ' + peso(sd.saldo)}</strong>
+                        <div style={{ flexBasis: '100%' }}><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></div>
                       </div>) })}
                   </div>
                 </div>
@@ -568,15 +591,16 @@ export default function Rendiciones() {
               </div>
               <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-                  <thead><tr style={{ background: '#f6f8fb', textAlign: 'left' }}>{['Persona', 'Centro de costo', 'Entregado', 'Rendido', 'Saldo'].map(t => <th key={t} style={{ padding: '9px 10px', fontSize: '11px', color: '#667085' }}>{t}</th>)}</tr></thead>
+                  <thead><tr style={{ background: '#f6f8fb', textAlign: 'left' }}>{['Persona', 'Centro de costo', 'Entregado', 'Rendido', 'Saldo', 'Uso del fondo'].map(t => <th key={t} style={{ padding: '9px 10px', fontSize: '11px', color: '#667085' }}>{t}</th>)}</tr></thead>
                   <tbody>
                     {paresFondo().map(x => { const sd = saldoDe(x.usuario_id, x.cc); return (
                       <tr key={x.usuario_id + (x.cc || '')} style={{ borderTop: '1px solid #eef1f6' }}>
                         <td style={{ padding: '8px 10px', fontWeight: 600 }}>{nombreUsuario(x.usuario_id)}</td><td style={{ padding: '8px 10px' }}>{x.cc ? nombreCC(x.cc) : <span style={{ color: '#8a94a6' }}>Sin centro de costo</span>}</td>
                         <td style={{ padding: '8px 10px' }}>{peso(sd.entregado)}</td><td style={{ padding: '8px 10px' }}>{peso(sd.rendido)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: sd.saldo < 0 ? '#9b1c1c' : '#1e6b3a' }}>{sd.saldo < 0 ? 'Se le debe ' + peso(-sd.saldo) : peso(sd.saldo)}</td>
+                        <td style={{ padding: '8px 10px', minWidth: '170px' }}><BarraFondo entregado={sd.entregado} rendido={sd.rendido} compacta /></td>
                       </tr>) })}
-                    {fondos.length === 0 && <tr><td colSpan={5} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
+                    {fondos.length === 0 && <tr><td colSpan={6} style={{ padding: '14px', color: '#999' }}>Aún no hay fondos entregados.</td></tr>}
                   </tbody>
                 </table>
               </div>

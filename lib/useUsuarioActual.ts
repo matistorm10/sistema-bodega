@@ -15,8 +15,10 @@ export function useUsuarioActual() {
   const [cargando, setCargando] = useState(true)
   const [sinSesion, setSinSesion] = useState(false)
 
-  const cargar = async () => {
-    setCargando(true)
+  // silencioso=true: refresco en segundo plano (p. ej. al volver a la pestaña del navegador).
+  // No muestra "Cargando..." ni cambia el usuario si no cambió nada, para no reiniciar formularios a medias.
+  const cargar = async (silencioso = false) => {
+    if (!silencioso) setCargando(true)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setUsuario(null); setSinSesion(true); setCargando(false); return }
     const { data: perfil, error } = await supabase
@@ -24,21 +26,28 @@ export function useUsuarioActual() {
       .select('*, usuario_ubicaciones(ubicacion_id, puede_origen, puede_destino)')
       .eq('auth_id', session.user.id)
       .single()
-    if (error || !perfil) { setUsuario(null); setSinSesion(true); setCargando(false); return }
-    setUsuario({
+    if (error || !perfil) {
+      if (silencioso) return // fallo de red momentáneo: conservar la sesión actual
+      setUsuario(null); setSinSesion(true); setCargando(false); return
+    }
+    const nuevo: UsuarioActual = {
       id: perfil.id, nombre: perfil.nombre, cargo: perfil.cargo, telefono: perfil.telefono, email: perfil.email, rol: perfil.rol,
       accesoBodega: perfil.acceso_bodega !== false, accesoVehiculos: !!perfil.acceso_vehiculos, accesoLicitaciones: !!perfil.acceso_licitaciones,
       accesoContabilidad: !!perfil.acceso_contabilidad, accesoHsec: !!perfil.acceso_hsec,
       puedeAprobar: !!perfil.puede_aprobar_contabilidad, esRevisor: !!perfil.es_revisor_contabilidad,
       permisos: perfil.usuario_ubicaciones || []
-    })
+    }
+    setUsuario(prev => (prev && JSON.stringify(prev) === JSON.stringify(nuevo)) ? prev : nuevo)
     setSinSesion(false)
     setCargando(false)
   }
 
   useEffect(() => {
     cargar()
-    const { data: sub } = supabase.auth.onAuthStateChange(() => { cargar() })
+    const { data: sub } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === 'INITIAL_SESSION') return
+      cargar(evento !== 'SIGNED_OUT')
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 

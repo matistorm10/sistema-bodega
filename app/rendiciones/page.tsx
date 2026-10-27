@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
@@ -60,6 +60,7 @@ export default function Rendiciones() {
   const [tab, setTab] = useState<'mias' | 'aprobar' | 'revision' | 'fondos' | 'resumen' | 'todas' | 'historial'>('mias')
   const [rendiciones, setRendiciones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
+  const [cuentas, setCuentas] = useState<any[]>([])
   const [fondos, setFondos] = useState<any[]>([])
   const [pagos, setPagos] = useState<any[]>([])
   const [faenas, setFaenas] = useState<any[]>([])
@@ -79,16 +80,17 @@ export default function Rendiciones() {
 
   const cargar = useCallback(async () => {
     setCargando(true)
-    const [r, i, f, u, us, pg] = await Promise.all([
+    const [r, i, f, u, us, pg, pc] = await Promise.all([
       supabase.from('rendiciones').select('*').order('numero', { ascending: false }),
       supabase.from('rendicion_items').select('*').order('fecha').order('created_at'),
       supabase.from('fondos_rendir').select('*').order('fecha', { ascending: false }),
       supabase.from('ubicaciones').select('id,nombre,codigo,tipo,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('rendicion_pagos').select('*').order('created_at'),
+      supabase.from('plan_cuentas').select('codigo,nombre,imputable').eq('activa', true).order('codigo'),
     ])
     setRendiciones(r.data || []); setItems(i.data || []); setFondos(f.data || [])
-    setPagos(pg.data || [])
+    setPagos(pg.data || []); setCuentas(pc.data || [])
     setFaenas((u.data || []).filter((x: any) => x.activa !== false)); setUsuarios(us.data || [])
     setCargando(false)
   }, [])
@@ -300,9 +302,31 @@ export default function Rendiciones() {
     if (error || !data) { alert('No se pudo abrir la foto.'); return }
     setVisor({ url: data.signedUrl, pdf: /\.pdf$/i.test(path) })
   }
-  const guardarItemContable = async (it: any, cuenta: string, obs: string) => {
-    const { error } = await supabase.from('rendicion_items').update({ cuenta_contable: cuenta.trim() || null, observacion_revisor: obs.trim() || null }).eq('id', it.id)
-    if (error) alert(error.message)
+  // Plan de cuentas (KAME): lista agrupada. Egresos (4.xx) primero, que es lo habitual en rendiciones.
+  const gruposCuentas = useMemo((): { codigo: string, nombre: string, cuentas: any[] }[] => {
+    const cab: Record<string, string> = {}
+    cuentas.filter(c => !c.imputable).forEach(c => { cab[c.codigo] = c.nombre })
+    const grupos: Record<string, any[]> = {}
+    cuentas.filter(c => c.imputable).forEach(c => {
+      const g = c.codigo.split('.').slice(0, 3).join('.') + '.00'
+      ;(grupos[g] = grupos[g] || []).push(c)
+    })
+    return Object.keys(grupos)
+      .sort((a, b) => (a[0] === '4' ? '0' : '1') + a < (b[0] === '4' ? '0' : '1') + b ? -1 : 1)
+      .map(g => ({ codigo: g, nombre: cab[g] || g, cuentas: grupos[g] }))
+  }, [cuentas])
+  const etiquetaCuenta = (codigo?: string | null) => {
+    if (!codigo) return ''
+    const c = cuentas.find(x => x.codigo === codigo)
+    return c ? `${c.codigo} · ${c.nombre}` : codigo
+  }
+  const guardarItemContable = async (it: any, campos: { cuenta_contable?: string | null, observacion_revisor?: string | null }) => {
+    const limpio: any = {}
+    if ('cuenta_contable' in campos) limpio.cuenta_contable = campos.cuenta_contable || null
+    if ('observacion_revisor' in campos) limpio.observacion_revisor = (campos.observacion_revisor || '').trim() || null
+    const { error } = await supabase.from('rendicion_items').update(limpio).eq('id', it.id)
+    if (error) { alert(error.message); return }
+    setItems(prev => prev.map(x => x.id === it.id ? { ...x, ...limpio } : x))
   }
 
   const eliminarRendicion = async (r: any) => {
@@ -331,7 +355,7 @@ export default function Rendiciones() {
     for (const r of lista) {
       for (const it of itemsDe(r.id)) {
         ws.addRow([numRend(r.numero), nombreUsuario(r.usuario_id), nombreCC(r.centro_costo_id), fechaCL(it.fecha), TIPOS[it.tipo_doc]?.split(' (')[0] || it.tipo_doc,
-          it.numero_doc || '', it.detalle, Number(it.monto), it.cuenta_contable || '', ESTADOS[r.estado as Estado]?.texto || r.estado, fechaCL(r.fecha_pago), it.observacion_revisor || ''])
+          it.numero_doc || '', it.detalle, Number(it.monto), etiquetaCuenta(it.cuenta_contable), ESTADOS[r.estado as Estado]?.texto || r.estado, fechaCL(r.fecha_pago), it.observacion_revisor || ''])
       }
     }
     ws.getColumn(8).numFmt = '$#,##0'
@@ -430,8 +454,18 @@ export default function Rendiciones() {
                   </td>
                   <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>{peso(it.monto)}</td>
                   {puedeRevisar ? (<>
-                    <td style={{ padding: '6px 10px' }}><input defaultValue={it.cuenta_contable || ''} onBlur={e => guardarItemContable(it, e.target.value, it.observacion_revisor || '')} style={{ ...input, minWidth: '130px' }} placeholder="Cuenta" /></td>
-                    <td style={{ padding: '6px 10px' }}><input defaultValue={it.observacion_revisor || ''} onBlur={e => guardarItemContable(it, it.cuenta_contable || '', e.target.value)} style={{ ...input, minWidth: '140px' }} placeholder="Nota" /></td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <select value={it.cuenta_contable || ''} onChange={e => guardarItemContable(it, { cuenta_contable: e.target.value })} style={{ ...input, minWidth: '230px', maxWidth: '300px' }}>
+                        <option value="">Seleccionar cuenta…</option>
+                        {it.cuenta_contable && !cuentas.some(c => c.codigo === it.cuenta_contable) && <option value={it.cuenta_contable}>{it.cuenta_contable} (anterior)</option>}
+                        {gruposCuentas.map(g => (
+                          <optgroup key={g.codigo} label={`${g.codigo.slice(0, 7)} ${g.nombre}`}>
+                            {g.cuentas.map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{ padding: '6px 10px' }}><input defaultValue={it.observacion_revisor || ''} onBlur={e => { if (e.target.value.trim() !== (it.observacion_revisor || '')) guardarItemContable(it, { observacion_revisor: e.target.value }) }} style={{ ...input, minWidth: '140px' }} placeholder="Nota" /></td>
                   </>) : (<><td /><td /></>)}
                   <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     {it.comprobante_path && <button onClick={() => verFoto(it.comprobante_path)} style={{ ...btn(false), padding: '4px 9px', fontSize: '11.5px' }}>📎 Ver foto</button>}{' '}

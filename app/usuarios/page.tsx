@@ -106,6 +106,30 @@ export default function Usuarios() {
     cargar()
   }
 
+  const [pwId, setPwId] = useState<string | null>(null)
+  const [pwValor, setPwValor] = useState('')
+  const [pwMostrar, setPwMostrar] = useState(false)
+  const [pwGuardando, setPwGuardando] = useState(false)
+  const [pwMsg, setPwMsg] = useState<{ id: string, ok: boolean, texto: string } | null>(null)
+
+  const cambiarPassword = async (u: any) => {
+    if (pwValor.length < 6) { setPwMsg({ id: u.id, ok: false, texto: 'Debe tener al menos 6 caracteres.' }); return }
+    if (!confirm(`¿Cambiar la contraseña de ${u.nombre}? La contraseña anterior dejará de funcionar.`)) return
+    setPwGuardando(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    try {
+      const res = await fetch('/api/admin/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ usuarioId: u.id, password: pwValor })
+      })
+      const json = await res.json()
+      if (!res.ok) { setPwMsg({ id: u.id, ok: false, texto: json.error || 'No se pudo cambiar la contraseña.' }) }
+      else { setPwMsg({ id: u.id, ok: true, texto: `Contraseña de ${u.nombre} actualizada. Avísale la nueva clave.` }); setPwId(null); setPwValor('') }
+    } catch { setPwMsg({ id: u.id, ok: false, texto: 'Error de conexión. Intenta de nuevo.' }) }
+    setPwGuardando(false)
+  }
+
   const iniciarEdicion = (u: any) => {
     setEditandoId(u.id)
     setEditNombre(u.nombre)
@@ -413,7 +437,21 @@ export default function Usuarios() {
                       ))}
                     </div>
                   )}
-                  <button onClick={()=>iniciarEdicion(u)} style={{marginTop:'8px',padding:'6px 10px',borderRadius:'6px',border:'0.5px solid #ddd',background:'#fff',fontSize:'11px',cursor:'pointer'}}>Editar</button>
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                    <button onClick={()=>iniciarEdicion(u)} style={{marginTop:'8px',padding:'6px 10px',borderRadius:'6px',border:'0.5px solid #ddd',background:'#fff',fontSize:'11px',cursor:'pointer'}}>Editar</button>
+                    {usuario?.rol === 'admin' && (
+                      <button onClick={()=>{ setPwId(pwId === u.id ? null : u.id); setPwValor(''); setPwMostrar(false); setPwMsg(null) }} style={{marginTop:'8px',padding:'6px 10px',borderRadius:'6px',border:'0.5px solid #ddd',background:'#fff',fontSize:'11px',cursor:'pointer'}}>🔑 Cambiar contraseña</button>
+                    )}
+                  </div>
+                  {pwId === u.id && (
+                    <div style={{marginTop:'8px',display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center'}}>
+                      <input type={pwMostrar ? 'text' : 'password'} value={pwValor} onChange={e=>setPwValor(e.target.value)} placeholder="Nueva contraseña (mín. 6)" autoComplete="new-password" style={{...inputStyle, maxWidth:'240px'}}/>
+                      <label style={{fontSize:'11px',color:'#555',display:'flex',gap:'4px',alignItems:'center'}}><input type="checkbox" checked={pwMostrar} onChange={e=>setPwMostrar(e.target.checked)}/>Mostrar</label>
+                      <button onClick={()=>cambiarPassword(u)} disabled={pwGuardando} style={{padding:'7px 12px',borderRadius:'6px',border:'none',background:AZUL,color:'#fff',fontSize:'12px',cursor:'pointer'}}>{pwGuardando ? 'Guardando...' : 'Guardar'}</button>
+                      <button onClick={()=>{ setPwId(null); setPwValor('') }} style={{padding:'7px 12px',borderRadius:'6px',border:'0.5px solid #ddd',background:'#fff',fontSize:'12px',cursor:'pointer'}}>Cancelar</button>
+                    </div>
+                  )}
+                  {pwMsg && pwMsg.id === u.id && <p style={{fontSize:'12px',margin:'6px 0 0',color:pwMsg.ok?'#137333':'#c5221f'}}>{pwMsg.texto}</p>}
                 </>
               )}
             </div>

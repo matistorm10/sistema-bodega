@@ -458,11 +458,7 @@ export default function Rendiciones() {
                       <select value={it.cuenta_contable || ''} onChange={e => guardarItemContable(it, { cuenta_contable: e.target.value })} style={{ ...input, minWidth: '230px', maxWidth: '300px' }}>
                         <option value="">Seleccionar cuenta…</option>
                         {it.cuenta_contable && !cuentas.some(c => c.codigo === it.cuenta_contable) && <option value={it.cuenta_contable}>{it.cuenta_contable} (anterior)</option>}
-                        {gruposCuentas.map(g => (
-                          <optgroup key={g.codigo} label={`${g.codigo.slice(0, 7)} ${g.nombre}`}>
-                            {g.cuentas.map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
-                          </optgroup>
-                        ))}
+                        {gruposCuentas.flatMap(g => g.cuentas).map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
                       </select>
                     </td>
                     <td style={{ padding: '6px 10px' }}><input defaultValue={it.observacion_revisor || ''} onBlur={e => { if (e.target.value.trim() !== (it.observacion_revisor || '')) guardarItemContable(it, { observacion_revisor: e.target.value }) }} style={{ ...input, minWidth: '140px' }} placeholder="Nota" /></td>

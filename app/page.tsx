@@ -22,7 +22,7 @@ export default function Home() {
     { href:'/vehiculos', icon:'🚚', label:'Vehículos y Maquinaria', desc:'Documentos, kilometraje y mantenciones', visible: esAdmin || usuario?.accesoVehiculos },
     { href:'/licitaciones', icon:'📋', label:'Licitaciones', desc:'Seguimiento de licitaciones y propuestas', visible: esAdmin || usuario?.accesoLicitaciones },
     { href:'/contabilidad', icon:'🧾', label:'Contabilidad', desc:'Rendiciones y guías de traslado', visible: esAdmin || usuario?.accesoContabilidad },
-    { href:'/hsec', icon:'🦺', label:'HSEC', desc:'Salud, seguridad, medio ambiente y comunidad', visible: esAdmin || usuario?.accesoHsec },
+    { href:'/hsec', icon:'🦺', label:'Departamento Prevención de Riesgo', desc:'Panel de jefatura y espacio de cada prevencionista', visible: esAdmin || usuario?.accesoHsec },
     { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles y permisos de acceso', visible: esAdmin },
   ].filter(m => m.visible)
 

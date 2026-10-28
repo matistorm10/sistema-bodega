@@ -13,14 +13,14 @@ export default function Hsec() {
   const vePrevencionista = esAdmin || !!usuario?.esJefeHsec || !!usuario?.esPrevencionista
 
   const secciones = [
-    { href: '/hsec/jefatura', icon: '📊', label: 'Panel de Jefatura HSEC', desc: 'Dashboard con los números de todas las faenas y prevencionistas', visible: veJefatura },
+    { href: '/hsec/jefatura', icon: '📊', label: 'Panel de Jefatura', desc: 'Dashboard con los números de todas las faenas y prevencionistas', visible: veJefatura },
     { href: '/hsec/prevencionista', icon: '🦺', label: 'Espacio del Prevencionista', desc: 'Carga y seguimiento de la información de cada prevencionista', visible: vePrevencionista },
   ].filter(s => s.visible)
 
   const cabecera = (
     <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
       <Link href="/" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Inicio</Link>
-      <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>HSEC</h1>
+      <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Departamento Prevención de Riesgo</h1>
     </div>
   )
 
@@ -33,7 +33,7 @@ export default function Hsec() {
         {!puedeAcceder ? (
           <p style={{fontSize:'13px',color:'#999'}}>No tienes acceso a este módulo. Pídele al administrador que te lo habilite en Usuarios.</p>
         ) : secciones.length === 0 ? (
-          <p style={{fontSize:'13px',color:'#999'}}>Tienes acceso a HSEC, pero aún no tienes una función asignada (Jefatura o Prevencionista). Pídele al administrador que la asigne en Usuarios.</p>
+          <p style={{fontSize:'13px',color:'#999'}}>Tienes acceso al Departamento de Prevención de Riesgo, pero aún no tienes una función asignada (Jefatura o Prevencionista). Pídele al administrador que la asigne en Usuarios.</p>
         ) : (
           <div style={{display:'grid',gap:'10px'}}>
             {secciones.map(item => (

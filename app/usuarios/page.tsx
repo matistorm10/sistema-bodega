@@ -318,7 +318,7 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
-              <label style={checkboxLabel}><input type="checkbox" checked={accesoHsec} onChange={e=>setAccesoHsec(e.target.checked)}/>🦺 HSEC</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={accesoHsec} onChange={e=>setAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
             </div>
           </div>
         )}
@@ -335,9 +335,9 @@ export default function Usuarios() {
 
         {(rol === 'admin' || accesoHsec) && (
           <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en HSEC</label>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
             <div style={{display:'grid',gap:'8px'}}>
-              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>setEsJefeHsec(e.target.checked)}/>📊 Jefatura HSEC (panel de control con los números)</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>setEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
               <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>setEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
             </div>
           </div>
@@ -394,7 +394,7 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoHsec} onChange={e=>setEditAccesoHsec(e.target.checked)}/>🦺 HSEC</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editAccesoHsec} onChange={e=>setEditAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
                       </div>
                     </div>
                   )}
@@ -409,9 +409,9 @@ export default function Usuarios() {
                   )}
                   {(editRol === 'admin' || editAccesoHsec) && (
                     <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en HSEC</label>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
                       <div style={{display:'grid',gap:'8px'}}>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>setEditEsJefeHsec(e.target.checked)}/>📊 Jefatura HSEC (panel de control con los números)</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>setEditEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>setEditEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
                       </div>
                     </div>
@@ -445,7 +445,7 @@ export default function Usuarios() {
                       {u.acceso_vehiculos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fce8e6',color:'#c5221f'}}>🚚 Vehículos</span>}
                       {u.acceso_licitaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e8f0fe',color:AZUL}}>📋 Licitaciones</span>}
                       {u.acceso_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fef7e0',color:'#986a00'}}>🧾 Contabilidad</span>}
-                      {u.acceso_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🦺 HSEC</span>}
+                      {u.acceso_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🦺 Prevención de Riesgo</span>}
                     </div>
                   )}
                   {(u.puede_aprobar_contabilidad || u.es_revisor_contabilidad) && (
@@ -456,7 +456,7 @@ export default function Usuarios() {
                   )}
                   {(u.es_jefe_hsec || u.es_prevencionista) && (
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
-                      {u.es_jefe_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>📊 Jefatura HSEC</span>}
+                      {u.es_jefe_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>📊 Jefatura Prevención de Riesgo</span>}
                       {u.es_prevencionista && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>🦺 Prevencionista</span>}
                     </div>
                   )}

@@ -26,6 +26,8 @@ export default function Usuarios() {
   const [accesoHsec, setAccesoHsec] = useState(false)
   const [puedeAprobar, setPuedeAprobar] = useState(false)
   const [esRevisor, setEsRevisor] = useState(false)
+  const [esJefeHsec, setEsJefeHsec] = useState(false)
+  const [esPrevencionista, setEsPrevencionista] = useState(false)
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -44,6 +46,8 @@ export default function Usuarios() {
   const [editAccesoHsec, setEditAccesoHsec] = useState(false)
   const [editPuedeAprobar, setEditPuedeAprobar] = useState(false)
   const [editEsRevisor, setEditEsRevisor] = useState(false)
+  const [editEsJefeHsec, setEditEsJefeHsec] = useState(false)
+  const [editEsPrevencionista, setEditEsPrevencionista] = useState(false)
   const [editPermisos, setEditPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
@@ -95,14 +99,14 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`)
     setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
-    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setPermisos({})
+    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setPermisos({})
     cargar()
   }
 
@@ -143,6 +147,8 @@ export default function Usuarios() {
     setEditAccesoHsec(!!u.acceso_hsec)
     setEditPuedeAprobar(!!u.puede_aprobar_contabilidad)
     setEditEsRevisor(!!u.es_revisor_contabilidad)
+    setEditEsJefeHsec(!!u.es_jefe_hsec)
+    setEditEsPrevencionista(!!u.es_prevencionista)
     const p: Record<string, {origen:boolean, destino:boolean}> = {}
     ;(u.usuario_ubicaciones || []).forEach((x: any) => { p[x.ubicacion_id] = { origen: x.puede_origen, destino: x.puede_destino } })
     setEditPermisos(p)
@@ -160,7 +166,8 @@ export default function Usuarios() {
       nombre: editNombre.trim(), cargo: editCargo || null, telefono: editTelefono || null, rol: editRol,
       acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones,
       acceso_contabilidad: editAccesoContabilidad, acceso_hsec: editAccesoHsec,
-      puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor
+      puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor,
+      es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
@@ -326,6 +333,16 @@ export default function Usuarios() {
           </div>
         )}
 
+        {(rol === 'admin' || accesoHsec) && (
+          <div style={{marginBottom:'10px'}}>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en HSEC</label>
+            <div style={{display:'grid',gap:'8px'}}>
+              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>setEsJefeHsec(e.target.checked)}/>📊 Jefatura HSEC (panel de control con los números)</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>setEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+            </div>
+          </div>
+        )}
+
         {rol !== 'admin' && accesoBodega && (
           <div style={{marginBottom:'10px'}}>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega (marca si puede usarla como origen y/o destino en Traslado)</label>
@@ -390,6 +407,15 @@ export default function Usuarios() {
                       </div>
                     </div>
                   )}
+                  {(editRol === 'admin' || editAccesoHsec) && (
+                    <div style={{marginBottom:'10px'}}>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en HSEC</label>
+                      <div style={{display:'grid',gap:'8px'}}>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>setEditEsJefeHsec(e.target.checked)}/>📊 Jefatura HSEC (panel de control con los números)</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>setEditEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+                      </div>
+                    </div>
+                  )}
                   {editRol !== 'admin' && editAccesoBodega && (
                     <div style={{marginBottom:'10px'}}>
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega</label>
@@ -426,6 +452,12 @@ export default function Usuarios() {
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
                       {u.puede_aprobar_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>✅ Aprueba</span>}
                       {u.es_revisor_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>🔎 Revisor contable</span>}
+                    </div>
+                  )}
+                  {(u.es_jefe_hsec || u.es_prevencionista) && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
+                      {u.es_jefe_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>📊 Jefatura HSEC</span>}
+                      {u.es_prevencionista && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>🦺 Prevencionista</span>}
                     </div>
                   )}
                   {u.usuario_ubicaciones?.length > 0 && (

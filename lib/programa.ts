@@ -18,7 +18,7 @@ export const ACTIVIDADES: Record<string, { nombre: string, corto: string, tipo: 
   inspeccion_epp: { nombre: 'Inspección grupal de EPP', corto: 'Inspección EPP', tipo: 'formulario' },
   inspeccion_bloqueo: { nombre: 'Inspección de elementos de bloqueo', corto: 'Elementos de bloqueo', tipo: 'formulario' },
   verificacion_ds594: { nombre: 'Lista de verificación DS 594', corto: 'DS 594', tipo: 'formulario' },
-  verificacion_ds132: { nombre: 'Lista de verificación DS 132 (cuando aplique)', corto: 'DS 132', tipo: 'pendiente' },
+  verificacion_ds132: { nombre: 'Lista de verificación DS 132 (cuando aplique)', corto: 'DS 132', tipo: 'formulario' },
 }
 
 export const ORDEN_ACTIVIDADES = Object.keys(ACTIVIDADES)

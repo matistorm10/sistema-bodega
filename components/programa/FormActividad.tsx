@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { RBS } from '@/lib/rbs'
 import { DS594, TOTAL_DS594 } from '@/lib/ds594'
+import { DS132, TOTAL_DS132 } from '@/lib/ds132'
 import { estadoPlan, COLOR_PLAN } from '@/lib/estadoPlan'
 import { ACTIVIDADES, ARCHIVO_INFO, ITEMS_ABC, ITEMS_CDR, COLS_EPP, COLS_BLOQUEO, CARGOS_PROGRAMA, pct, Resp, Cnc } from '@/lib/programa'
 import { card, input, btn, Opciones, OP_SI, OP_C, Campo, Fila } from './ui'
@@ -58,7 +59,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   const [msg, setMsg] = useState('')
 
   const rbsActual = RBS.find(r => r.n === rbsN)!
-  const nItems = actividad === 'confirmacion_rol' ? ITEMS_CDR.length : actividad === 'confirmacion_abc' ? ITEMS_ABC.reduce((s, g) => s + g.items.length, 0) : actividad === 'cdp_rbs' ? rbsActual.items.length : actividad === 'verificacion_ds594' ? TOTAL_DS594 : 0
+  const nItems = actividad === 'confirmacion_rol' ? ITEMS_CDR.length : actividad === 'confirmacion_abc' ? ITEMS_ABC.reduce((s, g) => s + g.items.length, 0) : actividad === 'cdp_rbs' ? rbsActual.items.length : actividad === 'verificacion_ds594' ? TOTAL_DS594 : actividad === 'verificacion_ds132' ? TOTAL_DS132 : 0
   const resp = (i: number) => (items[i] ?? null) as Resp | null
   const setItem = (i: number, v: Resp) => setItems(prev => { const c = [...prev]; while (c.length < nItems) c.push(null); c[i] = v; return c })
 
@@ -109,10 +110,10 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
       porcentaje = pct(si, si + no)
       datos = { ...datos, rbs: rbsN, hora: h, observador: usuario.nombre, colaborador, lugar, tarea, items, fortalezas_txt: textoA, oportunidades_txt: textoB }
-    } else if (actividad === 'verificacion_ds594') {
+    } else if (actividad === 'verificacion_ds594' || actividad === 'verificacion_ds132') {
       if (!lugar.trim()) { setMsg('Indica el sector auditado.'); return }
       if (items.filter(Boolean).length < nItems) { setMsg(`Faltan ítems por responder (${items.filter(Boolean).length} de ${nItems}).`); return }
-      const planas = DS594.flatMap(s => s.items)
+      const planas = (actividad === 'verificacion_ds132' ? DS132 : DS594).flatMap(s => s.items)
       for (let i = 0; i < planas.length; i++) {
         if (items[i] === 'no') {
           const x = det[planas[i].n]
@@ -214,13 +215,14 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
         </>
       )}
 
-      {actividad === 'verificacion_ds594' && (() => {
+      {(actividad === 'verificacion_ds594' || actividad === 'verificacion_ds132') && (() => {
+        const LISTA = actividad === 'verificacion_ds132' ? DS132 : DS594, TOTAL = actividad === 'verificacion_ds132' ? TOTAL_DS132 : TOTAL_DS594, NORMA = actividad === 'verificacion_ds132' ? 'DS 132' : 'DS 594'
         let off = 0
         return (
           <>
             <Fila><Campo titulo="Sector auditado">{txt(lugar, setLugar, 'Ej: Oficina y casino faena Pozo 2')}</Campo></Fila>
-            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>Check-list de autoevaluación de cumplimiento legal DS 594. Si respondes <strong>NO</strong>, indica la justificación y el plan de acción de mejora. Respondidos: <strong>{items.filter(Boolean).length} de {TOTAL_DS594}</strong>.</p>
-            {DS594.map(sec => {
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>Check-list de autoevaluación de cumplimiento legal {NORMA}. Si respondes <strong>NO</strong>, indica la justificación y el plan de acción de mejora. Respondidos: <strong>{items.filter(Boolean).length} de {TOTAL}</strong>.</p>
+            {LISTA.map(sec => {
               const o = off; off += sec.items.length
               const resp0 = sec.items.filter((_, i) => items[o + i]).length
               let ultimaSub = ''

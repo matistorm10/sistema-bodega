@@ -5,6 +5,7 @@ import { cargarLogo, normalizarImagen } from '@/lib/generarGuiaTraslado'
 import { ACTIVIDADES, ITEMS_CDR, ITEMS_ABC, COLS_EPP, COLS_BLOQUEO } from '@/lib/programa'
 import { RBS } from '@/lib/rbs'
 import { DS594 } from '@/lib/ds594'
+import { DS132 } from '@/lib/ds132'
 
 export type RegistroPDF = {
   actividad: string, fecha: string, faena: string, nombre: string, cargo: string,
@@ -45,7 +46,7 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   const gen: [string, string][] = [['Realizado por', r.nombre], ['Cargo', r.cargo], ['Faena / centro de costo', r.faena], ['Fecha', fcl(r.fecha)]]
   if (d.hora) gen.push(['Hora', d.hora])
   if (d.empresa) gen.push(['Empresa', d.empresa])
-  if (d.lugar) gen.push([r.actividad === 'verificacion_ds594' ? 'Sector auditado' : 'Lugar / área', d.lugar])
+  if (d.lugar) gen.push([(r.actividad === 'verificacion_ds594' || r.actividad === 'verificacion_ds132') ? 'Sector auditado' : 'Lugar / área', d.lugar])
   if (d.tarea) gen.push(['Tarea', d.tarea])
   if (d.supervisor) gen.push(['Supervisor', d.supervisor])
   if (d.colaborador) gen.push(['Colaborador observado', d.colaborador])
@@ -70,11 +71,12 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   } else if (r.actividad === 'cdp_rbs') {
     const rb = RBS.find(x => x.n === d.rbs)
     if (rb) autoTable(doc, { ...base, startY: titulo('Comportamientos observados'), head: [['Comportamiento', 'Resp.']], body: rb.items.map((t, i) => [t, resp(i)]), columnStyles: { 1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' } } })
-  } else if (r.actividad === 'verificacion_ds594') {
+  } else if (r.actividad === 'verificacion_ds594' || r.actividad === 'verificacion_ds132') {
+    const esD132 = r.actividad === 'verificacion_ds132'
     let n = 0
     const body: any[] = []
-    DS594.forEach(sec => { body.push([{ content: sec.titulo, colSpan: 3, styles: k }]); sec.items.forEach(it => { body.push([it.n, it.t, resp(n++)]) }) })
-    autoTable(doc, { ...base, startY: titulo('Auditoría DS 594'), head: [['N°', 'Requisito', 'Resp.']], body, columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 14, halign: 'center', fontStyle: 'bold' } } })
+    ;(esD132 ? DS132 : DS594).forEach(sec => { body.push([{ content: sec.titulo, colSpan: 3, styles: k }]); sec.items.forEach(it => { body.push([it.n, it.t, resp(n++)]) }) })
+    autoTable(doc, { ...base, startY: titulo(esD132 ? 'Autoverificación de cumplimiento legal DS 132' : 'Auditoría DS 594'), head: [['N°', 'Requisito', 'Resp.']], body, columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 14, halign: 'center', fontStyle: 'bold' } } })
     const det = Object.entries(d.det || {}).filter(([, v]: any) => v && (v.justif || v.accion))
     if (det.length) autoTable(doc, { ...base, startY: titulo('Plan de acción de los ítems «NO»'), head: [['Ítem', 'Justificación', 'Acción', 'Responsable', 'Fecha', 'Estado']], body: det.map(([n, v]: any) => [n, v.justif, v.accion, v.responsable, (v.status === 'Ejecutado' || v.status === 'Cerrado') ? '—' : fcl(v.fecha), estadoPlan(v.status, v.fecha)]) })
   } else if (r.actividad === 'cdp_tarea_critica') {

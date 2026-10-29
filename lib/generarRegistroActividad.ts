@@ -50,7 +50,7 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   if (d.tarea) gen.push(['Tarea', d.tarea])
   if (d.supervisor) gen.push(['Supervisor', d.supervisor])
   if (d.colaborador) gen.push(['Colaborador observado', d.colaborador])
-  if (d.duracion) gen.push(['Duración', d.duracion])
+  if (d.duracion) gen.push(['Duración', /^\d+$/.test(String(d.duracion)) ? d.duracion + ' min' : d.duracion])
   if (r.actividad === 'cdp_rbs' && d.rbs) { const rb = RBS.find(x => x.n === d.rbs); gen.push(['RBS', `N° ${d.rbs}${rb ? ' · ' + rb.titulo : ''}`]) }
   const filasGen: any[][] = []
   for (let i = 0; i < gen.length; i += 2) {

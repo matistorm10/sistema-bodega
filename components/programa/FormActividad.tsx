@@ -27,7 +27,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   const [lugar, setLugar] = useState<string>(d0.lugar || '')
   const [tarea, setTarea] = useState<string>(d0.tarea || '')
   const [supervisor, setSupervisor] = useState<string>(d0.supervisor || '')
-  const [duracion, setDuracion] = useState<string>(d0.duracion || '')
+  const [duracion, setDuracion] = useState<string>(String(d0.duracion || '').replace(/[^0-9]/g, ''))
   const [colaborador, setColaborador] = useState<string>(d0.colaborador || '')
   const [items, setItems] = useState<(Resp | null)[]>(d0.items || [])
   const [rbsN, setRbsN] = useState<number>(d0.rbs || 1)
@@ -189,7 +189,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
           <Fila>
             <Campo titulo="Tarea confirmada">{txt(tarea, setTarea)}</Campo>
             <Campo titulo="Supervisor confirmado">{txt(supervisor, setSupervisor)}</Campo>
-            <Campo titulo="Duración" ancho="120px">{txt(duracion, setDuracion, 'Ej: 30 min')}</Campo>
+            <Campo titulo="Duración (minutos)" ancho="140px">{num(duracion, setDuracion)}</Campo>
           </Fila>
           {checklist(ITEMS_CDR)}
           <div style={{ marginTop: '10px' }}><Fila>

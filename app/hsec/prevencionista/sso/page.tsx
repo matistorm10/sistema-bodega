@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FirmaCanvas from '@/components/programa/FirmaCanvas'
+import { formatearRut } from '@/lib/rut'
 import { descargarDescriptorFirmado } from '@/lib/descriptorFirmado'
 import { ITEMS_SSO, DOC_DESCRIPTOR } from '@/lib/prevencion'
 
@@ -31,6 +32,8 @@ export default function SsoFaena() {
   const [msg, setMsg] = useState('')
   const [canvasKey, setCanvasKey] = useState(0)
   const [verificador, setVerificador] = useState('')
+  const [datos, setDatos] = useState({ nombre: '', rut: '', faena: '' })
+  const [datosOk, setDatosOk] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!usuario) return
@@ -44,6 +47,7 @@ export default function SsoFaena() {
     if (d.data?.ubicacion_id) {
       const f = await supabase.from('ubicaciones').select('nombre').eq('id', d.data.ubicacion_id).maybeSingle()
       setFaena(f.data?.nombre || '')
+      setDatos(x => ({ nombre: x.nombre || usuario.nombre, rut: x.rut, faena: x.faena || f.data?.nombre || '' }))
     }
     setCargando(false)
   }, [usuario])
@@ -58,10 +62,10 @@ export default function SsoFaena() {
   const firmar = async () => {
     if (!desc || !firma) return
     setGuardando(true); setMsg('')
-    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado' }).eq('id', desc.id)
+    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: datos.faena.trim() }).eq('id', desc.id)
     setGuardando(false)
     if (error) { setMsg('No se pudo guardar la firma: ' + error.message); return }
-    setFirma(null); setAcepto(false); await cargar()
+    setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
   }
 
   const verificado = desc?.estado === 'verificado'
@@ -95,13 +99,25 @@ export default function SsoFaena() {
                     Faena asignada: <strong style={{ color: '#344054' }}>{faena || '—'}</strong>
                     {doc?.codigo ? <> · Documento {doc.codigo}{doc.revision ? ` Rev. ${doc.revision}` : ''}{doc.fecha_doc ? ` (${doc.fecha_doc})` : ''}</> : null}
                   </p>
-                  {doc?.path ? (
+                  {desc.estado === 'pendiente' && doc?.path && !datosOk ? (
+                    <div style={{ border: '1px solid #cfe0f5', background: '#f4f8fd', borderRadius: '10px', padding: '12px' }}>
+                      <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px' }}>Antes de abrir tu descriptor, completa tus datos</p>
+                      <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Se escribirán en el punto IX del documento, junto con la fecha y tu firma (automáticas).</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '10px', marginBottom: '10px' }}>
+                        <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Nombre completo</label><input value={datos.nombre} onChange={e => setDatos({ ...datos, nombre: e.target.value })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
+                        <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>RUT</label><input value={datos.rut} maxLength={12} onChange={e => setDatos({ ...datos, rut: formatearRut(e.target.value) })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
+                        <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Faena / contrato</label><input value={datos.faena} onChange={e => setDatos({ ...datos, faena: e.target.value })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
+                      </div>
+                      <button onClick={() => { if (!datos.nombre.trim() || datos.rut.replace(/\D/g, '').length < 8 || !datos.faena.trim()) { setMsg('Completa nombre, RUT y faena / contrato.'); return } setMsg(''); setDatosOk(true) }} style={btn()}>Continuar</button>
+                      {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
+                    </div>
+                  ) : doc?.path ? (
                     <button onClick={verDocumento} style={btn(false)}>📄 Abrir descriptor de cargo (PDF)</button>
                   ) : (
                     <p style={{ fontSize: '12.5px', color: '#986a00', margin: 0 }}>La jefatura aún no ha cargado el documento del descriptor.</p>
                   )}
 
-                  {desc.estado === 'pendiente' && doc?.path && (
+                  {desc.estado === 'pendiente' && doc?.path && datosOk && (
                     <div style={{ marginTop: '14px', borderTop: '1px solid #eef1f6', paddingTop: '12px' }}>
                       <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '13px', marginBottom: '10px', cursor: 'pointer' }}>
                         <input type="checkbox" checked={acepto} onChange={e => setAcepto(e.target.checked)} style={{ marginTop: '2px' }} />

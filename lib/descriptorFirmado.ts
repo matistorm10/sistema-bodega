@@ -2,46 +2,38 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { supabase } from '@/lib/supabase'
 import { esMobile } from '@/lib/abrirPDF'
 
-const fh = (f?: string | null) => f ? new Date(f).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+const fechaCL = (f?: string | null) => f ? new Date(f).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : ''
 
-// Descriptor de cargo firmado: el PDF original del descriptor + una hoja final con la firma del APR y la verificación de la jefatura.
+// Descriptor de cargo firmado: el mismo PDF del descriptor con los datos y la firma estampados en el punto IX (última página).
 export async function descargarDescriptorFirmado(d: { desc: any, nombre: string, faena: string, doc: any | null, verificador?: string }) {
   const ventana = esMobile() ? window.open('', '_blank') : null
   try {
-    let pdf: PDFDocument
-    if (d.doc?.path) {
-      const { data, error } = await supabase.storage.from('hsec-documentos').download(d.doc.path)
-      if (error || !data) throw new Error('No se pudo leer el documento del descriptor.')
-      pdf = await PDFDocument.load(await data.arrayBuffer())
-    } else pdf = await PDFDocument.create()
+    if (!d.doc?.path) throw new Error('No hay documento de descriptor cargado.')
+    const { data, error } = await supabase.storage.from('hsec-documentos').download(d.doc.path)
+    if (error || !data) throw new Error('No se pudo leer el documento del descriptor.')
+    const pdf = await PDFDocument.load(await data.arrayBuffer())
+    const pag = pdf.getPage(pdf.getPageCount() - 1)
+    const { height: H } = pag.getSize()
+    const f = await pdf.embedFont(StandardFonts.Helvetica)
+    const negro = rgb(0.06, 0.12, 0.3)
 
-    const pag = pdf.addPage([595, 842])
-    const f = await pdf.embedFont(StandardFonts.Helvetica), fb = await pdf.embedFont(StandardFonts.HelveticaBold)
-    const azul = rgb(0.106, 0.31, 0.612), gris = rgb(0.4, 0.45, 0.52)
-    let y = 790
-    pag.drawText('CONSTANCIA DE FIRMA', { x: 50, y, size: 18, font: fb, color: azul }); y -= 22
-    pag.drawText('Descriptor de cargo · Asesor(a) en Prevención de Riesgos', { x: 50, y, size: 12, font: f }); y -= 14
-    pag.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 1, color: azul }); y -= 30
-    const fila = (k: string, v: string) => { pag.drawText(k, { x: 50, y, size: 10, font: fb, color: gris }); pag.drawText(v || '—', { x: 190, y, size: 11, font: f }); y -= 20 }
-    fila('Nombre', d.nombre)
-    fila('Faena / ubicación', d.faena)
-    fila('Documento', [d.doc?.codigo, d.doc?.revision ? `Rev. ${d.doc.revision}` : '', d.doc?.fecha_doc].filter(Boolean).join(' · '))
-    fila('Firmado el', fh(d.desc.firmado_at))
-    fila('Verificado por la jefatura', d.desc.estado === 'verificado' ? `${d.verificador || 'Jefatura'} · ${fh(d.desc.verificado_at)}` : 'Pendiente de verificación')
-    y -= 10
-    pag.drawText('Declaración', { x: 50, y, size: 10, font: fb, color: gris }); y -= 16
-    for (const l of ['La persona indicada declara haber leído su descriptor de cargo y asume las responsabilidades', 'que en él se señalan. La firma fue registrada digitalmente en el Sistema INDELI.']) { pag.drawText(l, { x: 50, y, size: 10.5, font: f }); y -= 15 }
-    y -= 20
-    pag.drawText('Firma del APR', { x: 50, y, size: 10, font: fb, color: gris }); y -= 6
+    // Posiciones de la tabla del punto IX (formato DC-APR Rev. 01, medidas desde el borde superior de la hoja)
+    const X = 312, maxW = 238
+    const escribir = (texto: string, topCentro: number) => {
+      let size = 10.5
+      while (size > 6 && f.widthOfTextAtSize(texto, size) > maxW) size -= 0.5
+      pag.drawText(texto, { x: X, y: H - topCentro - size * 0.35, size, font: f, color: negro })
+    }
+    escribir(d.desc.nombre_firma || d.nombre, 427.7)
+    escribir(d.desc.rut_firma || '', 446.8)
+    escribir(d.desc.faena_contrato || d.faena, 465.9)
+    escribir(fechaCL(d.desc.firmado_at), 485)
     if (d.desc.firma) {
       const img = await pdf.embedPng(d.desc.firma)
-      const esc = Math.min(260 / img.width, 100 / img.height)
+      const esc = Math.min(maxW / img.width, 44 / img.height)
       const w = img.width * esc, h = img.height * esc
-      pag.drawImage(img, { x: 50, y: y - h - 4, width: w, height: h }); y -= h + 8
+      pag.drawImage(img, { x: X, y: H - 496 - 46 + (46 - h) / 2, width: w, height: h })
     }
-    pag.drawLine({ start: { x: 50, y }, end: { x: 330, y }, thickness: 0.8, color: gris }); y -= 14
-    pag.drawText(d.nombre, { x: 50, y, size: 11, font: fb })
-    pag.drawText('INDELI Construcción y Montaje Limitada · Sistema INDELI', { x: 50, y: 40, size: 8, font: f, color: gris })
 
     const bytes = await pdf.save()
     const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' })

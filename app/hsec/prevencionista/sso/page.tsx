@@ -62,7 +62,7 @@ export default function SsoFaena() {
   const firmar = async () => {
     if (!desc || !firma) return
     setGuardando(true); setMsg('')
-    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: datos.faena.trim() }).eq('id', desc.id)
+    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: faena }).eq('id', desc.id)
     setGuardando(false)
     if (error) { setMsg('No se pudo guardar la firma: ' + error.message); return }
     setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
@@ -106,9 +106,9 @@ export default function SsoFaena() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '10px', marginBottom: '10px' }}>
                         <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Nombre completo</label><input value={datos.nombre} onChange={e => setDatos({ ...datos, nombre: e.target.value })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
                         <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>RUT</label><input value={datos.rut} maxLength={12} onChange={e => setDatos({ ...datos, rut: formatearRut(e.target.value) })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
-                        <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Faena / contrato</label><input value={datos.faena} onChange={e => setDatos({ ...datos, faena: e.target.value })} style={{ width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }} /></div>
+                        <div><label style={{ fontSize: '11px', color: '#667085', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Faena / contrato</label><input value={faena} readOnly style={{ width: '100%', padding: '9px 10px', border: '1px solid #e2e6ed', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', background: '#f3f5f9', color: '#475467' }} /><p style={{ margin: '3px 0 0', fontSize: '11px', color: '#98a2b3' }}>Asignada por la jefatura</p></div>
                       </div>
-                      <button onClick={() => { if (!datos.nombre.trim() || datos.rut.replace(/\D/g, '').length < 8 || !datos.faena.trim()) { setMsg('Completa nombre, RUT y faena / contrato.'); return } setMsg(''); setDatosOk(true) }} style={btn()}>Continuar</button>
+                      <button onClick={() => { if (!datos.nombre.trim() || datos.rut.replace(/\D/g, '').length < 8 || !faena) { setMsg(faena ? 'Completa nombre y RUT.' : 'Aún no tienes faena asignada.'); return } setMsg(''); setDatosOk(true) }} style={btn()}>Continuar</button>
                       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
                     </div>
                   ) : doc?.path ? (

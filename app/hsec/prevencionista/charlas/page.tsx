@@ -36,6 +36,8 @@ export default function Prevencionista() {
   const [fecha, setFecha] = useState(hoy())
   const [tipo, setTipo] = useState('charla_5min')
   const [tema, setTema] = useState('')
+  const [programas, setProgramas] = useState<any[]>([])
+  const [progId, setProgId] = useState('')
   const [faena, setFaena] = useState('')
   const [relator, setRelator] = useState('')
   const [duracion, setDuracion] = useState('')
@@ -48,12 +50,14 @@ export default function Prevencionista() {
   const [msg, setMsg] = useState('')
 
   const cargar = useCallback(async () => {
-    const [c, a, f, u] = await Promise.all([
+    const [c, a, f, u, pg] = await Promise.all([
       supabase.from('pr_charlas').select('*').order('fecha', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('pr_charla_asistentes').select('*').order('nombre'),
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('pr_cap_programa').select('id,n,tematica,horas,tipo').eq('activo', true).order('n'),
     ])
+    setProgramas(pg.data || [])
     setCharlas(c.data || []); setAsistentes(a.data || [])
     const propias = veTodas || !usuario ? null : await misUbicacionesIds(usuario.id)
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setUsuarios(u.data || [])
@@ -65,8 +69,20 @@ export default function Prevencionista() {
   const nombreUsuario = (id: string) => usuarios.find(u => u.id === id)?.nombre || '—'
   const asistDe = (id: string) => asistentes.filter(a => a.charla_id === id)
 
+  const elegirPrograma = (id: string) => {
+    setProgId(id)
+    const p = programas.find(x => x.id === id)
+    if (p) { setTema(p.tematica); setTipo('capacitacion'); if (p.horas) setDuracion(String(Math.round(Number(p.horas) * 60))) }
+  }
+  // Si llegan desde "Capacitaciones" con ?prog=ID, se abre el formulario ya vinculado al programa.
+  useEffect(() => {
+    if (cargando || programas.length === 0 || typeof window === 'undefined') return
+    const id = new URLSearchParams(window.location.search).get('prog')
+    if (id && programas.some(p => p.id === id)) { abrirForm(); elegirPrograma(id); window.history.replaceState(null, '', window.location.pathname) }
+  }, [cargando, programas]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const abrirForm = () => {
-    setNueva(true); setMsg(''); setFecha(hoy()); setTipo('charla_5min'); setTema(''); setFaena(''); setRelator(usuario?.nombre || '')
+    setProgId(''); setNueva(true); setMsg(''); setFecha(hoy()); setTipo('charla_5min'); setTema(''); setFaena(''); setRelator(usuario?.nombre || '')
     setDuracion(''); setObs(''); setLista([]); setANombre(''); setARut(''); setPegar('')
   }
   const agregarAsistente = () => {
@@ -91,7 +107,7 @@ export default function Prevencionista() {
     setGuardando(true); setMsg('')
     const { data, error } = await supabase.from('pr_charlas').insert({
       fecha, tipo, tema: tema.trim(), ubicacion_id: faena, relator: relator.trim() || null,
-      duracion_min: duracion ? Number(duracion) : null, observaciones: obs.trim() || null, creado_por: usuario.id,
+      duracion_min: duracion ? Number(duracion) : null, observaciones: obs.trim() || null, creado_por: usuario.id, programa_id: progId || null,
     }).select().single()
     if (error || !data) { setGuardando(false); setMsg('No se pudo guardar: ' + (error?.message || '')); return }
     if (lista.length) {
@@ -127,6 +143,8 @@ export default function Prevencionista() {
             {nueva && (
               <div style={{ ...card, marginBottom: '14px' }}>
                 <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Nueva charla o capacitación</p>
+                <div style={{ marginBottom: '10px' }}><label style={label}>Vincular al Programa Anual de Capacitaciones (opcional)</label>
+                  <select value={progId} onChange={e => elegirPrograma(e.target.value)} style={input}><option value="">— Charla libre (no es del programa) —</option>{programas.map(p => <option key={p.id} value={p.id}>{p.n}. {p.tematica}</option>)}</select></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px', marginBottom: '10px' }}>
                   <div><label style={label}>Fecha</label><input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={input} /></div>
                   <div><label style={label}>Tipo</label>

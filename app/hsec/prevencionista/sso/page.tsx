@@ -150,8 +150,8 @@ export default function SsoFaena() {
                     <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>{i.n}. {i.titulo}</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{i.detalle}</p>
                   </div>
-                  {(i.n === '2' || i.n === '3' || i.n === '4' || i.n === '6') && verificado
-                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : '/hsec/prevencionista/epp'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
+                  {(i.n === '2' || i.n === '3' || i.n === '4' || i.n === '5' || i.n === '6') && verificado
+                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : i.n === '5' ? '/hsec/prevencionista/capacitaciones' : '/hsec/prevencionista/epp'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
                     : <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', whiteSpace: 'nowrap' }}>{verificado ? 'Próximamente' : 'Bloqueado'}</span>}
                 </div>
               ))}

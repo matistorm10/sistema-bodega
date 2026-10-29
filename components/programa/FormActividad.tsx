@@ -139,7 +139,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   }
 
   const lect = !!soloLectura
-  const num = (v: string, set: (s: string) => void) => <input type="number" min={0} step={1} inputMode="numeric" value={v} onChange={e => set(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={e => { if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault() }} disabled={lect} placeholder="0" style={input} />
+  const num = (v: string, set: (s: string) => void) => <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={v} onChange={e => set(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={e => { if (e.key.length === 1 && !/[0-9]/.test(e.key) && !e.metaKey && !e.ctrlKey) e.preventDefault() }} disabled={lect} placeholder="0" style={input} />
   const txt = (v: string, set: (s: string) => void, ph?: string, tipo = 'text') => <input type={tipo} value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} style={input} />
   const area = (v: string, set: (s: string) => void, ph?: string) => <textarea value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} rows={3} style={{ ...input, resize: 'vertical' }} />
 

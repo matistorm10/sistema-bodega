@@ -56,12 +56,17 @@ export default function JefaturaPrograma() {
     const filas = ORDEN_ACTIVIDADES.filter(k => ms.some(m => m.actividad === k)).map(k => {
       const meta = ms.find(m => m.actividad === k)!.meta as number
       const reg = mine.filter(a => a.actividad === k)
-      return { k, meta, real: reg.length, reg }
+      return { k, meta, real: reg.filter(a => a.revision_estado !== 'rechazado').length, reg }
     })
     const tm = filas.reduce((s, f) => s + f.meta, 0), tr = filas.reduce((s, f) => s + Math.min(f.real, f.meta), 0)
     return { filas, cumplimiento: pct(tr, tm) ?? 0 }
   }
 
+  const revisar = async (a: any, estado: 'aprobado' | 'rechazado', comentario?: string) => {
+    const { error } = await supabase.from('pr_prog_actividades').update({ revision_estado: estado, revision_comentario: comentario || null }).eq('id', a.id)
+    if (error) { alert('No se pudo guardar la revisión: ' + error.message); return }
+    await cargar()
+  }
   const resolver = async (u: any, estado: 'aprobado' | 'devuelto') => {
     const m = mensuales.find(x => x.usuario_id === u.id)
     if (!m) return
@@ -104,12 +109,11 @@ export default function JefaturaPrograma() {
                 </p>
                 <p style={{ margin: 0, fontSize: '12.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#7a5600' }}>{prevPend.map(u => u.nombre).join(' · ')}</p>
               </div>) })()}
-            {mensuales.filter(x => x.estado === 'enviado').length > 0 && (
+            {(() => { const pend = acts.filter((a: any) => a.firmado_at && a.revision_estado === 'pendiente'); return pend.length > 0 ? (
               <div style={{ ...card, marginBottom: '12px', background: '#fff8e5', borderColor: '#f0d98a' }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📥 Programas esperando tu aprobación o rechazo ({mes})</p>
-                {mensuales.filter(x => x.estado === 'enviado').map(x => { const p = personas.find(u => u.id === x.usuario_id); return p ? <button key={x.id} onClick={() => { setAbierto(p.id); setComentario('') }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', margin: '2px 6px 2px 0' }}>{p.nombre} → Revisar</button> : null })}
-              </div>
-            )}
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📥 {pend.length} documento(s) esperando tu aprobación o rechazo</p>
+                {personas.filter(u => pend.some((a: any) => a.usuario_id === u.id)).map(u => <button key={u.id} onClick={() => setAbierto(u.id)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', margin: '2px 6px 2px 0' }}>{u.nombre} ({pend.filter((a: any) => a.usuario_id === u.id).length}) → Revisar</button>)}
+              </div>) : null })()}
             {usuario && <MiFirma usuarioId={usuario.id} />}
             <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '12px' }}>
               {Array.from(new Set([mes, ...mesesRecientes(12)])).sort().reverse().map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
@@ -134,7 +138,7 @@ export default function JefaturaPrograma() {
                       </div>
                       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
                         <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: bg, color: col, fontWeight: 600 }}>{et}</span>
-                        {m?.estado === 'enviado' && <span style={{ fontSize: '11px', color: '#986a00', fontWeight: 700 }}>👉 Revisar: aprobar o rechazar</span>}
+                        {(() => { const n = acts.filter((x: any) => x.usuario_id === u.id && x.firmado_at && x.revision_estado === 'pendiente').length; return n > 0 ? <span style={{ fontSize: '11px', color: '#986a00', fontWeight: 700 }}>👉 {n} por revisar</span> : null })()}
                         {(() => { const pl = estadoPlazo(mes, m?.estado, m?.enviado_at); return pl.tipo === 'vigente' ? null : <span style={{ fontSize: '10.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#14532d' }}>{pl.tipo === 'atraso' ? '⚠️' : '✓'} {pl.texto}</span> })()}
                       </span>
                     </div>
@@ -145,25 +149,18 @@ export default function JefaturaPrograma() {
                             <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 600, color: '#344054' }}>{ACTIVIDADES[f.k].nombre} <span style={{ fontWeight: 400, color: f.real >= f.meta ? '#1e8e4e' : '#c0392b' }}>· {f.real} de {f.meta}</span></p>
                             {f.reg.map((a: any) => (
                               <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', padding: '3px 0 3px 12px', color: '#475467' }}>
-                                <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
+                                <span>{a.firmado_at && <strong style={{ marginRight: '6px', color: a.revision_estado === 'aprobado' ? '#14532d' : a.revision_estado === 'rechazado' ? '#9b1c1c' : '#986a00' }}>{a.revision_estado === 'aprobado' ? '✅' : a.revision_estado === 'rechazado' ? '❌' : '⏳'}</strong>}{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
                                 <span style={{ display: 'flex', gap: '6px' }}>
                                   {a.pdf_path && <button onClick={async () => { const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(a.pdf_path, 600); if (error || !data) { alert('No se pudo abrir el PDF.'); return } window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>📄 PDF firmado</button>}
                                   <button onClick={() => setVer(a)} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Ver</button>
+                                  {a.firmado_at && a.revision_estado !== 'aprobado' && <button onClick={() => revisar(a, 'aprobado')} style={{ ...btn(), padding: '3px 10px', fontSize: '12px' }}>✓ Aprobar</button>}
+                                  {a.firmado_at && a.revision_estado !== 'rechazado' && <button onClick={() => { const c = prompt('Comentario para el APR (obligatorio):'); if (c && c.trim()) revisar(a, 'rechazado', c.trim()) }} style={{ ...btn(false, true), padding: '3px 10px', fontSize: '12px' }}>✗ Rechazar</button>}
                                 </span>
                               </div>
                             ))}
                           </div>
                         ))}
                         <button onClick={() => descargarProgramaMensual({ persona: { id: u.id, nombre: u.nombre, cargo: u.cargo_programa }, mes, metas, acts, mensual: m || null, faenas })} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px', marginTop: '4px' }}>📄 Descargar PDF del mes</button>
-                        {m && (m.estado === 'enviado' || m.estado === 'aprobado' || m.estado === 'devuelto') ? (
-                          <div style={{ marginTop: '10px' }}>
-                            <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={2} placeholder="Comentarios para el APR (obligatorios si rechazas)" style={{ ...input, resize: 'vertical' }} />
-                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                              {m.estado !== 'aprobado' && <button onClick={() => resolver(u, 'aprobado')} style={btn()}>✓ Aprobar programa</button>}
-                              {m.estado !== 'devuelto' && <button onClick={() => resolver(u, 'devuelto')} style={btn(false, true)}>✗ Rechazar y devolver al APR</button>}
-                            </div>
-                          </div>
-                        ) : <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#98a2b3' }}>La persona aún no envía su programa del mes.</p>}
                       </div>
                     )}
                   </div>

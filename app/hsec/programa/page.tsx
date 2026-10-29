@@ -68,11 +68,12 @@ export default function Programa() {
 
   const estado = mensual?.estado || 'abierto'
   const plazo = estadoPlazo(mes, estado, mensual?.enviado_at)
-  const cerrado = estado === 'enviado' || estado === 'aprobado'
+  const cerrado = false // la revisión ahora es por documento
   const filas = useMemo(() => ORDEN_ACTIVIDADES.filter(k => metas.some(m => m.actividad === k)).map(k => {
     const meta = metas.find(m => m.actividad === k)!.meta as number
     const reg = acts.filter(a => a.actividad === k)
-    return { k, meta, real: reg.length, reg, p: pct(Math.min(reg.length, meta), meta) ?? 0 }
+    const validos = reg.filter(a => a.revision_estado !== 'rechazado').length
+    return { k, meta, real: validos, reg, p: pct(Math.min(validos, meta), meta) ?? 0 }
   }), [metas, acts])
   const totalMeta = filas.reduce((s, f) => s + f.meta, 0)
   const totalReal = filas.reduce((s, f) => s + Math.min(f.real, f.meta), 0)
@@ -165,7 +166,7 @@ export default function Programa() {
             )}
             {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
             <div style={{ display: pendiente ? 'none' : 'block' }}>
-              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={cerrado}
+              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={form.registro?.revision_estado === 'aprobado'}
                 onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
             </div>
           </>
@@ -191,16 +192,22 @@ export default function Programa() {
               <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: estBg, color: estCol, fontWeight: 600 }}>{estTxt}</span>
                 <button onClick={() => descargarProgramaMensual({ persona: { id: usuario!.id, nombre: usuario!.nombre, cargo: cargo! }, mes, metas, acts, mensual, faenas })} style={{ ...btn(false), padding: '7px 14px', fontSize: '12.5px' }}>📄 Descargar PDF del mes</button>
-                {!cerrado && <button onClick={enviar} style={{ ...btn(), padding: '7px 14px', fontSize: '12.5px' }}>Enviar programa a aprobación</button>}
               </div>
               <p style={{ margin: '10px 0 0', fontSize: '12.5px', padding: '7px 10px', borderRadius: '8px',
                 background: plazo.tipo === 'atraso' ? '#fde8e8' : plazo.tipo === 'ok' ? '#e7f6ec' : '#fff8e5',
                 color: plazo.tipo === 'atraso' ? '#9b1c1c' : plazo.tipo === 'ok' ? '#14532d' : '#7a5600' }}>
                 {plazo.tipo === 'atraso' ? '⚠️' : plazo.tipo === 'ok' ? '✅' : '🗓️'} {plazo.texto}
               </p>
-              {estado === 'devuelto' && <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#9b1c1c', background: '#fde8e8', border: '1px solid #f5c2c2', borderRadius: '8px', padding: '10px 12px' }}><strong>❌ Tu jefatura rechazó el programa del mes.</strong> {mensual?.comentario ? <>Motivo: {mensual.comentario}</> : null}<br />Corrige los registros que correspondan (botón «Modificar» o «Eliminar»), vuelve a firmarlos y presiona «Enviar programa a aprobación».</p>}
-              {estado === 'aprobado' && <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#14532d', background: '#e7f6ec', borderRadius: '8px', padding: '8px 12px' }}>✅ Programa aprobado por la jefatura.{mensual?.comentario ? <> Comentario: {mensual.comentario}</> : null}</p>}
-              {estado !== 'devuelto' && estado !== 'aprobado' && mensual?.comentario && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#344054', background: '#f6f8fb', borderRadius: '8px', padding: '8px 10px' }}><strong>Comentario de la jefatura:</strong> {mensual.comentario}</p>}
+              {(() => { const rech = acts.filter(a => a.revision_estado === 'rechazado'); const pend = acts.filter(a => a.revision_estado === 'pendiente' && a.firmado_at).length; const apr = acts.filter(a => a.revision_estado === 'aprobado').length
+                return <>
+                  <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#475467' }}>Revisión de la jefatura: ✅ {apr} aprobados · ⏳ {pend} pendientes · ❌ {rech.length} rechazados</p>
+                  {rech.length > 0 && <div style={{ margin: '8px 0 0', fontSize: '13px', color: '#9b1c1c', background: '#fde8e8', border: '1px solid #f5c2c2', borderRadius: '8px', padding: '10px 12px' }}>
+                    <strong>❌ Tienes documentos rechazados por corregir:</strong>
+                    {rech.map(a => <div key={a.id} style={{ marginTop: '4px' }}>• {ACTIVIDADES[a.actividad as keyof typeof ACTIVIDADES]?.nombre} ({fechaCL(a.fecha)}): {a.revision_comentario}</div>)}
+                    <div style={{ marginTop: '6px', fontSize: '12px' }}>Abre el documento con «Modificar», corrígelo y vuelve a firmarlo: queda otra vez pendiente de revisión.</div>
+                  </div>}
+                </>
+              })()}
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
             </div>
 
@@ -224,11 +231,13 @@ export default function Programa() {
                       <div style={{ marginTop: '10px', borderTop: '1px solid #eef1f6' }}>
                         {f.reg.map((a: any) => (
                           <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f3f5f9', fontSize: '12.5px' }}>
-                            <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
+                            <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}
+                              {a.firmado_at && <span style={{ marginLeft: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: a.revision_estado === 'aprobado' ? '#e7f6ec' : a.revision_estado === 'rechazado' ? '#fde8e8' : '#fef7e0', color: a.revision_estado === 'aprobado' ? '#14532d' : a.revision_estado === 'rechazado' ? '#9b1c1c' : '#986a00' }}>{a.revision_estado === 'aprobado' ? 'Aprobado' : a.revision_estado === 'rechazado' ? 'Rechazado' : 'Pendiente de revisión'}</span>}
+                              {a.revision_estado === 'rechazado' && a.revision_comentario && <span style={{ display: 'block', color: '#9b1c1c', fontSize: '12px' }}>Motivo: {a.revision_comentario}</span>}</span>
                             <span style={{ display: 'flex', gap: '6px' }}>
                               {a.pdf_path && <button onClick={() => verPdf(a.pdf_path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>📄 PDF</button>}
-                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{cerrado ? 'Ver' : a.firmado_at ? 'Modificar' : 'Abrir'}</button>
-                              {!cerrado && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
+                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{a.revision_estado === 'aprobado' ? 'Ver' : a.firmado_at ? 'Modificar' : 'Abrir'}</button>
+                              {a.revision_estado !== 'aprobado' && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
                             </span>
                           </div>
                         ))}

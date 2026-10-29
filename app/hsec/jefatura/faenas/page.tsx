@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { LUGARES } from '@/lib/capacitaciones'
+import { DIAS } from '@/lib/semanal'
 
 // Un solo lugar para armar cada faena: quién la atiende, qué cliente (informes semanales) y qué grupo del programa de capacitaciones.
 export default function FaenasAsignaciones() {
@@ -23,6 +24,7 @@ export default function FaenasAsignaciones() {
   const [sel, setSel] = useState<Record<string, string>>({})
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
+  const [nuevoCli, setNuevoCli] = useState<{ ub: string, nombre: string, dia: string, plazo: string, hora: string } | null>(null)
 
   const cargar = useCallback(async () => {
     const [u, p, a, c, f, l, d, s] = await Promise.all([
@@ -63,6 +65,20 @@ export default function FaenasAsignaciones() {
       if (err((await supabase.from('pr_semanal_asignaciones').delete().eq('ubicacion_id', ub)).error)) return
     }
     await cargar()
+  }
+  const crearCliente = async () => {
+    if (!nuevoCli) return
+    if (!nuevoCli.nombre.trim()) { alert('Escribe el nombre del cliente.'); return }
+    const nombre = nuevoCli.nombre.trim()
+    let { data, error } = await supabase.from('pr_clientes_informe').insert({ nombre, dia_cierre: Number(nuevoCli.dia), dias_plazo: Number(nuevoCli.plazo) || 0, hora_limite: nuevoCli.hora || '23:59' }).select('id').maybeSingle()
+    if (error?.code === '23505') { // ya existe: se reutiliza
+      const ex = await supabase.from('pr_clientes_informe').select('id').eq('nombre', nombre).maybeSingle()
+      data = ex.data as any; error = null
+    }
+    if (err(error) || !data) return
+    const ub = nuevoCli.ub
+    setNuevoCli(null)
+    await setCliente(ub, data.id)
   }
   const agregar = async (ub: string) => {
     const uid = sel[ub]; if (!uid || !usuario) return
@@ -112,10 +128,26 @@ export default function FaenasAsignaciones() {
                     <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{u.nombre}{u.tipo !== 'faena' && <span style={{ fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}> · {u.tipo}</span>}</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '10px', marginBottom: '12px' }}>
                       <div><label style={label}>Cliente (informes semanales)</label>
-                        <select value={cli} onChange={e => setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
+                        <select value={cli} onChange={e => e.target.value === '__nuevo' ? setNuevoCli({ ub: u.id, nombre: '', dia: '7', plazo: '1', hora: '23:59' }) : setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}<option value="__nuevo">➕ Crear cliente nuevo…</option></select></div>
                       <div><label style={label}>Grupo del programa de capacitaciones</label>
                         <select value={lugares.find(l => l.ubicacion_id === u.id)?.lugar || ''} onChange={e => setLugar(u.id, e.target.value)} style={input}><option value="">Sin clasificar</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                     </div>
+                    {nuevoCli?.ub === u.id && (
+                      <div style={{ border: '1px solid #cfe0f5', background: '#f4f8fd', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>
+                        <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13px' }}>Nuevo cliente para informes semanales</p>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                          <div style={{ flex: '1 1 160px' }}><label style={label}>Nombre (ej. SQM, ENGIE)</label><input value={nuevoCli.nombre} onChange={e => setNuevoCli({ ...nuevoCli, nombre: e.target.value })} style={input} autoFocus /></div>
+                          <div style={{ flex: '0 1 140px' }}><label style={label}>La semana cierra el</label><select value={nuevoCli.dia} onChange={e => setNuevoCli({ ...nuevoCli, dia: e.target.value })} style={input}>{DIAS.slice(1).map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></div>
+                          <div style={{ flex: '0 1 100px' }}><label style={label}>Plazo (días)</label><input type="number" min="0" max="30" value={nuevoCli.plazo} onChange={e => setNuevoCli({ ...nuevoCli, plazo: e.target.value })} style={input} /></div>
+                          <div style={{ flex: '0 1 100px' }}><label style={label}>Hora límite</label><input type="time" value={nuevoCli.hora} onChange={e => setNuevoCli({ ...nuevoCli, hora: e.target.value })} style={input} /></div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                          <button onClick={crearCliente} style={{ ...btn(), padding: '8px 14px', fontSize: '12.5px' }}>Crear y asignar a esta faena</button>
+                          <button onClick={() => setNuevoCli(null)} style={{ ...btn(false), padding: '8px 14px', fontSize: '12.5px' }}>Cancelar</button>
+                        </div>
+                        <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#667085' }}>El formato del cliente (Word/Excel) se sube después en «Informes semanales por cliente».</p>
+                      </div>
+                    )}
                     <label style={label}>Prevencionistas de esta faena</label>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                       {mias.length === 0 && <span style={{ fontSize: '12.5px', color: '#98a2b3' }}>Ninguno todavía.</span>}

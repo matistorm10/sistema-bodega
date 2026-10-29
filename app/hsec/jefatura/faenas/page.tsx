@@ -132,14 +132,14 @@ export default function FaenasAsignaciones() {
                       <div><label style={label}>Grupo del programa de capacitaciones</label>
                         <select value={lugares.find(l => l.ubicacion_id === u.id)?.lugar || ''} onChange={e => setLugar(u.id, e.target.value)} style={input}><option value="">Sin clasificar</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                     </div>
-                    {nuevoCli?.ub === u.id && (
+                    {nuevoCli && nuevoCli.ub === u.id && (
                       <div style={{ border: '1px solid #cfe0f5', background: '#f4f8fd', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>
                         <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13px' }}>Nuevo cliente para informes semanales</p>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                          <div style={{ flex: '1 1 160px' }}><label style={label}>Nombre (ej. SQM, ENGIE)</label><input value={nuevoCli.nombre} onChange={e => setNuevoCli({ ...nuevoCli, nombre: e.target.value })} style={input} autoFocus /></div>
-                          <div style={{ flex: '0 1 140px' }}><label style={label}>La semana cierra el</label><select value={nuevoCli.dia} onChange={e => setNuevoCli({ ...nuevoCli, dia: e.target.value })} style={input}>{DIAS.slice(1).map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></div>
-                          <div style={{ flex: '0 1 100px' }}><label style={label}>Plazo (días)</label><input type="number" min="0" max="30" value={nuevoCli.plazo} onChange={e => setNuevoCli({ ...nuevoCli, plazo: e.target.value })} style={input} /></div>
-                          <div style={{ flex: '0 1 100px' }}><label style={label}>Hora límite</label><input type="time" value={nuevoCli.hora} onChange={e => setNuevoCli({ ...nuevoCli, hora: e.target.value })} style={input} /></div>
+                          <div style={{ flex: '1 1 160px' }}><label style={label}>Nombre (ej. SQM, ENGIE)</label><input value={nuevoCli.nombre} onChange={e => { const v = e.target.value; setNuevoCli(n => n && { ...n, nombre: v }) }} style={input} autoFocus /></div>
+                          <div style={{ flex: '0 1 140px' }}><label style={label}>La semana cierra el</label><select value={nuevoCli.dia} onChange={e => { const v = e.target.value; setNuevoCli(n => n && { ...n, dia: v }) }} style={input}>{DIAS.slice(1).map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></div>
+                          <div style={{ flex: '0 1 100px' }}><label style={label}>Plazo (días)</label><input type="number" min="0" max="30" value={nuevoCli.plazo} onChange={e => { const v = e.target.value; setNuevoCli(n => n && { ...n, plazo: v }) }} style={input} /></div>
+                          <div style={{ flex: '0 1 100px' }}><label style={label}>Hora límite</label><input type="time" value={nuevoCli.hora} onChange={e => { const v = e.target.value; setNuevoCli(n => n && { ...n, hora: v }) }} style={input} /></div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                           <button onClick={crearCliente} style={{ ...btn(), padding: '8px 14px', fontSize: '12.5px' }}>Crear y asignar a esta faena</button>

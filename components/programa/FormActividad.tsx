@@ -121,9 +121,9 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
       datos = { ...datos, lugar, items, det }
     } else if (actividad === 'cdp_tarea_critica') {
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
-      const s = Number(nSeguros || 0), o = Number(nOport || 0)
+      const s = fort.filter(x => x.trim()).length, o = oport.filter(x => x.trim()).length
       porcentaje = pct(s, s + o)
-      datos = { ...datos, hora: h, empresa, lugar, tarea, n_seguros: nSeguros, n_oport: nOport, fortalezas: fort, oportunidades: oport, compromisos_lista: comps.filter(c => c.texto.trim()) }
+      datos = { ...datos, hora: h, empresa, lugar, tarea, n_seguros: String(fort.filter(x => x.trim()).length), n_oport: String(oport.filter(x => x.trim()).length), fortalezas: fort.filter(x => x.trim()), oportunidades: oport.filter(x => x.trim()), compromisos_lista: comps.filter(c => c.texto.trim()) }
     } else if (actividad === 'inspeccion_epp' || actividad === 'inspeccion_bloqueo') {
       const validas = filas.filter(f => f.nombre.trim())
       if (validas.length === 0) { setMsg('Agrega al menos un trabajador.'); return }
@@ -284,13 +284,15 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
           </Fila>
           <Fila><Campo titulo="Tarea observada (sobre un estándar PTS / HCR / ART / SOP)">{txt(tarea, setTarea)}</Campo></Fila>
           <Fila>
-            <Campo titulo="N° comportamientos seguros" ancho="150px">{txt(String(nSeguros), setNSeguros, '', 'number')}</Campo>
-            <Campo titulo="N° oportunidades" ancho="150px">{txt(String(nOport), setNOport, '', 'number')}</Campo>
+            <Campo titulo="N° comportamientos seguros (automático)" ancho="150px"><input value={fort.filter(x => x.trim()).length} readOnly disabled style={{ ...input, background: '#f3f5f9', color: '#475467', fontWeight: 700 }} /></Campo>
+            <Campo titulo="N° oportunidades (automático)" ancho="150px"><input value={oport.filter(x => x.trim()).length} readOnly disabled style={{ ...input, background: '#f3f5f9', color: '#475467', fontWeight: 700 }} /></Campo>
           </Fila>
           <p style={{ margin: '4px 0 6px', fontWeight: 700, fontSize: '13px', color: '#1B4F9C' }}>Fortalezas del equipo de trabajo</p>
-          {fort.map((v, i) => <div key={i} style={{ marginBottom: '6px' }}><input value={v} onChange={e => setFort(f => f.map((x, j) => j === i ? e.target.value : x))} disabled={lect} placeholder={`${i + 1}.-`} style={input} /></div>)}
+          {fort.map((v, i) => <div key={i} style={{ marginBottom: '6px', display: 'flex', gap: '6px' }}><input value={v} onChange={e => setFort(f => f.map((x, j) => j === i ? e.target.value : x))} disabled={lect} placeholder={`${i + 1}.-`} style={input} />{!lect && fort.length > 1 && <button type="button" onClick={() => setFort(f => f.filter((_, j) => j !== i))} title="Quitar fila" style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>}</div>)}
+          {!lect && <button type="button" onClick={() => setFort(f => [...f, ''])} style={{ ...btn(false), padding: '5px 12px', fontSize: '12px' }}>+ Agregar fortaleza</button>}
           <p style={{ margin: '10px 0 6px', fontWeight: 700, fontSize: '13px', color: '#1B4F9C' }}>Oportunidades de mejora</p>
-          {oport.map((v, i) => <div key={i} style={{ marginBottom: '6px' }}><input value={v} onChange={e => setOport(f => f.map((x, j) => j === i ? e.target.value : x))} disabled={lect} placeholder={`${i + 1}.-`} style={input} /></div>)}
+          {oport.map((v, i) => <div key={i} style={{ marginBottom: '6px', display: 'flex', gap: '6px' }}><input value={v} onChange={e => setOport(f => f.map((x, j) => j === i ? e.target.value : x))} disabled={lect} placeholder={`${i + 1}.-`} style={input} />{!lect && oport.length > 1 && <button type="button" onClick={() => setOport(f => f.filter((_, j) => j !== i))} title="Quitar fila" style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>}</div>)}
+          {!lect && <button type="button" onClick={() => setOport(f => [...f, ''])} style={{ ...btn(false), padding: '5px 12px', fontSize: '12px' }}>+ Agregar oportunidad</button>}
           <p style={{ margin: '10px 0 6px', fontWeight: 700, fontSize: '13px', color: '#1B4F9C' }}>Compromisos adquiridos</p>
           {comps.map((c, i) => (
             <div key={i} style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>

@@ -104,6 +104,12 @@ export default function JefaturaPrograma() {
                 </p>
                 <p style={{ margin: 0, fontSize: '12.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#7a5600' }}>{prevPend.map(u => u.nombre).join(' · ')}</p>
               </div>) })()}
+            {mensuales.filter(x => x.estado === 'enviado').length > 0 && (
+              <div style={{ ...card, marginBottom: '12px', background: '#fff8e5', borderColor: '#f0d98a' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📥 Programas esperando tu aprobación o rechazo ({mes})</p>
+                {mensuales.filter(x => x.estado === 'enviado').map(x => { const p = personas.find(u => u.id === x.usuario_id); return p ? <button key={x.id} onClick={() => { setAbierto(p.id); setComentario('') }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', margin: '2px 6px 2px 0' }}>{p.nombre} → Revisar</button> : null })}
+              </div>
+            )}
             {usuario && <MiFirma usuarioId={usuario.id} />}
             <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '12px' }}>
               {Array.from(new Set([mes, ...mesesRecientes(12)])).sort().reverse().map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
@@ -128,6 +134,7 @@ export default function JefaturaPrograma() {
                       </div>
                       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
                         <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: bg, color: col, fontWeight: 600 }}>{et}</span>
+                        {m?.estado === 'enviado' && <span style={{ fontSize: '11px', color: '#986a00', fontWeight: 700 }}>👉 Revisar: aprobar o rechazar</span>}
                         {(() => { const pl = estadoPlazo(mes, m?.estado, m?.enviado_at); return pl.tipo === 'vigente' ? null : <span style={{ fontSize: '10.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#14532d' }}>{pl.tipo === 'atraso' ? '⚠️' : '✓'} {pl.texto}</span> })()}
                       </span>
                     </div>

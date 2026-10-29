@@ -98,8 +98,10 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
     } else if (actividad === 'confirmacion_abc') {
       if (items.filter(Boolean).length < nItems) { setMsg('Responde los 14 ítems (SÍ / NO / N/A).'); return }
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
+      const entero = (v: string) => /^\d+$/.test(String(v).trim())
+      if (!entero(oLev) || !entero(oVen)) { setMsg('Oportunidades levantadas y vencidas deben ser números enteros, 0 o mayores (sin decimales ni negativos).'); return }
       porcentaje = pct(si, si + no)
-      datos = { ...datos, hora: h, empresa, items, oport_levantadas: oLev, oport_vencidas: oVen, peligro }
+      datos = { ...datos, hora: h, empresa, items, oport_levantadas: Number(oLev), oport_vencidas: Number(oVen), peligro }
     } else if (actividad === 'cdp_rbs') {
       if (items.filter(Boolean).length < nItems) { setMsg('Responde todos los comportamientos (SÍ / NO / N/A).'); return }
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
@@ -137,6 +139,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   }
 
   const lect = !!soloLectura
+  const num = (v: string, set: (s: string) => void) => <input type="number" min={0} step={1} inputMode="numeric" value={v} onChange={e => set(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={e => { if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault() }} disabled={lect} placeholder="0" style={input} />
   const txt = (v: string, set: (s: string) => void, ph?: string, tipo = 'text') => <input type={tipo} value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} style={input} />
   const area = (v: string, set: (s: string) => void, ph?: string) => <textarea value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} rows={3} style={{ ...input, resize: 'vertical' }} />
 
@@ -199,8 +202,8 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
               {checklist(g.items, o)}
             </div>) }) })()}
           <Fila>
-            <Campo titulo="Oportunidades levantadas" ancho="140px">{txt(String(oLev), setOLev, '', 'number')}</Campo>
-            <Campo titulo="Oportunidades vencidas" ancho="140px">{txt(String(oVen), setOVen, '', 'number')}</Campo>
+            <Campo titulo="Oportunidades levantadas" ancho="140px">{num(String(oLev), setOLev)}</Campo>
+            <Campo titulo="Oportunidades vencidas" ancho="140px">{num(String(oVen), setOVen)}</Campo>
           </Fila>
           <Fila><Campo titulo="Peligro (comportamiento, condición u omisión que pueda generar daño o lesión) · acción + característica">{area(peligro, setPeligro)}</Campo></Fila>
         </>

@@ -125,6 +125,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
       const s = fort.filter(x => x.trim()).length, o = oport.filter(x => x.trim()).length
       porcentaje = pct(s, s + o)
+      if (comps.some(c => c.texto.trim() && c.plazo && c.plazo < hoy())) { setMsg('La fecha de un compromiso no puede ser anterior a hoy.'); return }
       datos = { ...datos, hora: h, empresa, lugar, tarea, n_seguros: String(fort.filter(x => x.trim()).length), n_oport: String(oport.filter(x => x.trim()).length), fortalezas: fort.filter(x => x.trim()), oportunidades: oport.filter(x => x.trim()), compromisos_lista: comps.filter(c => c.texto.trim()) }
     } else if (actividad === 'inspeccion_epp' || actividad === 'inspeccion_bloqueo') {
       const validas = filas.filter(f => f.nombre.trim())
@@ -301,7 +302,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
             <div key={i} style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
               <input value={c.texto} onChange={e => setComps(l => l.map((x, j) => j === i ? { ...x, texto: e.target.value } : x))} disabled={lect} placeholder="Compromiso" style={{ ...input, flex: '3 1 200px', width: 'auto' }} />
               <input value={c.responsable} onChange={e => setComps(l => l.map((x, j) => j === i ? { ...x, responsable: e.target.value } : x))} disabled={lect} placeholder="Responsable" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
-              <input type="date" value={c.plazo} onChange={e => setComps(l => l.map((x, j) => j === i ? { ...x, plazo: e.target.value } : x))} disabled={lect} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
+              <input type="date" min={hoy()} value={c.plazo} onChange={e => setComps(l => l.map((x, j) => j === i ? { ...x, plazo: e.target.value && e.target.value < hoy() ? hoy() : e.target.value } : x))} disabled={lect} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
             </div>
           ))}
           {!lect && <button type="button" onClick={() => setComps(l => [...l, { texto: '', responsable: '', plazo: '' }])} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>+ Compromiso</button>}

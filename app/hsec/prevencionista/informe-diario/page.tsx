@@ -184,7 +184,7 @@ export default function InformeDiario() {
                     <input type="checkbox" disabled={ro} checked={d.ptsSel.includes(p.nombre)} onChange={e => set({ ptsSel: e.target.checked ? [...d.ptsSel, p.nombre] : d.ptsSel.filter(x => x !== p.nombre) })} />
                     <span>{p.nombre} <span style={{ color: '#98a2b3', fontSize: '11px' }}>Rev. {p.rev}</span></span>
                   </label>))}</div>}
-            <Link href="/hsec/prevencionista/contratos" style={{ fontSize: '12px', color: AZUL }}>Ver todos los documentos del contrato →</Link>
+            <a href="/hsec/prevencionista/contratos" target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: AZUL }}>Ver los documentos del contrato (se abre en otra pestaña, no pierdes tu informe) ↗</a>
           </div>
         </div>
 

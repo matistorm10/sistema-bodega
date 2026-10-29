@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
@@ -9,6 +10,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import { CATEGORIAS as CATS, COLOR_DOC as COL_EST } from '@/lib/contratos'
 
 export default function ContratosPrevencionista() {
+  const router = useRouter()
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
   const puede = usuario?.rol === 'admin' || !!usuario?.esJefeHsec || !!usuario?.esPrevencionista
   const [contratos, setContratos] = useState<any[]>([])
@@ -36,7 +38,7 @@ export default function ContratosPrevencionista() {
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '820px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', background: '#fff', borderRadius: '16px', padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
-          <Link href="/hsec/prevencionista" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← Espacio del Prevencionista</Link>
+          <a href="/hsec/prevencionista" onClick={e => { e.preventDefault(); if (window.opener) window.close(); else if (window.history.length > 1) router.back(); else router.push('/hsec/prevencionista') }} style={{ fontSize: '13px', color: AZUL, textDecoration: 'none', cursor: 'pointer' }}>← Volver</a>
           <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Documentos de contratos</h1>
         </div>
         {cargandoUsuario || cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : !puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : contratos.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>La jefatura aún no ha creado contratos.</p> : (

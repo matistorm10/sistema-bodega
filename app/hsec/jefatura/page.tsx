@@ -152,6 +152,14 @@ export default function Jefatura() {
               </select>
             </div>
 
+            <Link href="/hsec/jefatura/faenas" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px', borderColor: AZUL }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>🏗️</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Faenas y asignaciones</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Por faena: prevencionistas, cliente de informes semanales y grupo del programa de capacitaciones</p>
+              </div>
+            </Link>
+
             <Link href="/hsec/jefatura/sso" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>📋</div>
               <div style={{ flex: 1 }}>

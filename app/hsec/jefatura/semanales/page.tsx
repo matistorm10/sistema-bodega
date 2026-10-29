@@ -134,7 +134,6 @@ export default function JefaturaSemanales() {
                       <div key={a.id} style={{ borderTop: '1px solid #eef1f6', padding: '8px 0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
                           <span style={{ fontSize: '13px', fontWeight: 600 }}>{nombreU(a.usuario_id)}{a.ubicacion_id ? <span style={{ fontWeight: 400, color: '#667085' }}> · {faenas.find(f => f.id === a.ubicacion_id)?.nombre}</span> : null}</span>
-                          <button onClick={() => quitar(a.id)} style={{ ...btn(false, true), padding: '3px 9px', fontSize: '11.5px' }}>Quitar</button>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
                           {ps.map(fin => {
@@ -151,15 +150,7 @@ export default function JefaturaSemanales() {
                         </div>
                       </div>
                     ))}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
-                      <select value={s.u} onChange={e => setAsigSel({ ...asigSel, [c.id]: { ...s, u: e.target.value } })} style={{ ...input, flex: '1 1 180px', width: 'auto' }}>
-                        <option value="">Asignar prevencionista…</option>{prevs.filter(p => !mias.some(a => a.usuario_id === p.id)).map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                      </select>
-                      <select value={s.f} onChange={e => setAsigSel({ ...asigSel, [c.id]: { ...s, f: e.target.value } })} style={{ ...input, flex: '1 1 160px', width: 'auto' }}>
-                        <option value="">Faena (opcional)</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
-                      </select>
-                      <button onClick={() => asignar(c)} style={btn()}>Asignar</button>
-                    </div>
+                    <p style={{ margin: '8px 0 0', borderTop: '1px solid #eef1f6', paddingTop: '8px', fontSize: '12px', color: '#667085' }}>Los prevencionistas se asignan según la faena de cada cliente. <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Faenas y asignaciones →</Link></p>
                   </div>
                 )
               })}

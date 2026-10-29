@@ -117,17 +117,8 @@ export default function JefaturaEpp() {
               <div style={card}>
                 <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Prevencionistas por ubicación</p>
                 {asigs.length === 0 && <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#999' }}>Sin asignaciones.</p>}
-                {asigs.map(a => (
-                  <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #eef1f6', padding: '6px 0', fontSize: '13px' }}>
-                    <span><strong>{nUser(a.usuario_id)}</strong> · {nUbic(a.ubicacion_id)}</span>
-                    <button onClick={() => quitar(a.id)} style={{ ...btn(false, true), padding: '3px 9px', fontSize: '11.5px' }}>Quitar</button>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
-                  <select value={asigSel.u} onChange={e => setAsigSel({ ...asigSel, u: e.target.value })} style={{ ...input, flex: '1 1 130px', width: 'auto' }}><option value="">Prevencionista…</option>{prevs.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
-                  <select value={asigSel.ub} onChange={e => setAsigSel({ ...asigSel, ub: e.target.value })} style={{ ...input, flex: '1 1 130px', width: 'auto' }}><option value="">Ubicación…</option>{ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
-                  <button onClick={asignar} style={btn()}>Asignar</button>
-                </div>
+                {asigs.map(a => <div key={a.id} style={{ borderTop: '1px solid #eef1f6', padding: '6px 0', fontSize: '13px' }}><strong>{nUser(a.usuario_id)}</strong> · {nUbic(a.ubicacion_id)}</div>)}
+                <p style={{ margin: '10px 0 0', fontSize: '12px', color: '#667085' }}>Se asignan en <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Faenas y asignaciones →</Link></p>
               </div>
 
               <div style={card}>

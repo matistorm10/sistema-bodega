@@ -73,16 +73,7 @@ export default function JefaturaCap() {
         {cab}
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
-            <div style={{ ...card, marginBottom: '12px' }}>
-              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>1 · Clasifica cada faena</p>
-              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Indica a qué grupo del programa pertenece cada ubicación (Oficina central, ENGIE, SACYR - EUROHINCA o SQM). Así se sabe qué capacitaciones le corresponden.</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '8px' }}>
-                {ubics.map(u => (
-                  <div key={u.id}><label style={label}>{u.nombre}</label>
-                    <select value={lugarDe(u.id) || ''} onChange={e => guardarLugar(u.id, e.target.value)} style={input}><option value="">Sin clasificar</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                ))}
-              </div>
-            </div>
+            <div style={{ ...card, marginBottom: '12px', background: '#f6f8fb' }}><p style={{ margin: 0, fontSize: '12.5px', color: '#475467' }}>El grupo de cada faena (ENGIE, SQM, SACYR - EUROHINCA u oficina) se define en un solo lugar. <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Ir a Faenas y asignaciones →</Link></p></div>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
               <select value={fLugar} onChange={e => setFLugar(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los grupos</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>

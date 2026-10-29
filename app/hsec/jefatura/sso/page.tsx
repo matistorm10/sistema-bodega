@@ -132,25 +132,9 @@ export default function JefaturaSso() {
               </div>
             </div>
 
-            <div style={{ ...card, marginBottom: '12px' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>2. Asignar prevencionista a una faena</p>
-              {prevs.length === 0 ? (
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#986a00' }}>Todavía no hay usuarios con la facultad «Prevencionista». Márcala en Usuarios.</p>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <select value={aUsuario} onChange={e => setAUsuario(e.target.value)} style={{ ...input, flex: '1 1 200px', width: 'auto' }}>
-                    <option value="">Prevencionista…</option>{sinAsignar.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
-                  <select value={aFaena} onChange={e => setAFaena(e.target.value)} style={{ ...input, flex: '1 1 200px', width: 'auto' }}>
-                    <option value="">Faena…</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
-                  </select>
-                  <button onClick={asignar} style={btn()}>Asignar</button>
-                </div>
-              )}
-              {msg && <p style={{ fontSize: '12.5px', color: msg === 'Documento guardado.' ? '#137333' : '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
-            </div>
+            <div style={{ ...card, marginBottom: '12px', background: '#f6f8fb' }}><p style={{ margin: 0, fontSize: '12.5px', color: '#475467' }}>La asignación de prevencionistas a faenas se hace ahora en un solo lugar; al asignarlos aquí se crea su descriptor. <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Ir a Faenas y asignaciones →</Link></p></div>
 
-            <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>3. Firmas y verificación</p>
+            <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>2. Firmas y verificación</p>
             {descs.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay prevencionistas asignados.</p> : (
               <div style={{ display: 'grid', gap: '8px' }}>
                 {descs.map(d => {

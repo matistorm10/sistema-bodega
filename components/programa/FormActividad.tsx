@@ -90,7 +90,8 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
     if (meta.tipo === 'archivo') {
       if (!tema.trim()) { setMsg('Escribe el tema.'); return }
       if (respaldos.length === 0) { setMsg('Sube el registro firmado (foto o PDF).'); return }
-      datos = { ...datos, tema: tema.trim(), asistentes: asistentes === '' ? null : Number(asistentes) }
+      if (!/^[1-9]\d*$/.test(String(asistentes))) { setMsg('El N° de asistentes debe ser un número entero desde 1 en adelante.'); return }
+      datos = { ...datos, tema: tema.trim(), asistentes: Number(asistentes) }
     } else if (actividad === 'confirmacion_rol') {
       if (!supervisor.trim() || !tarea.trim()) { setMsg('Completa la tarea confirmada y el supervisor.'); return }
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
@@ -145,7 +146,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   }
 
   const lect = !!soloLectura
-  const num = (v: string, set: (s: string) => void) => <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={v} onChange={e => set(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={e => { if (e.key.length === 1 && !/[0-9]/.test(e.key) && !e.metaKey && !e.ctrlKey) e.preventDefault() }} disabled={lect} placeholder="0" style={input} />
+  const num = (v: string, set: (s: string) => void) => <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={v} onChange={e => set(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={e => { if (e.key.length === 1 && !/[0-9]/.test(e.key) && !e.metaKey && !e.ctrlKey) e.preventDefault() }} disabled={lect} placeholder="Ej: 5" style={input} />
   const txt = (v: string, set: (s: string) => void, ph?: string, tipo = 'text') => <input type={tipo} value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} style={input} />
   const area = (v: string, set: (s: string) => void, ph?: string) => <textarea value={v} onChange={e => set(e.target.value)} disabled={lect} placeholder={ph} rows={3} style={{ ...input, resize: 'vertical' }} />
 
@@ -179,7 +180,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
           <p style={{ fontSize: '12.5px', color: '#986a00', background: '#fff8e5', borderRadius: '8px', padding: '8px 10px', margin: '0 0 10px' }}>{ARCHIVO_INFO[actividad]}</p>
           <Fila>
             <Campo titulo="Tema desarrollado" ancho="260px">{txt(tema, setTema, 'Ej: Trabajo en altura')}</Campo>
-            <Campo titulo="N° de asistentes" ancho="120px">{txt(String(asistentes), setAsistentes, '', 'number')}</Campo>
+            <Campo titulo="N° de asistentes" ancho="120px">{num(String(asistentes), v => setAsistentes(v.replace(/^0+/, '')))}</Campo>
           </Fila>
         </>
       )}

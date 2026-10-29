@@ -6,8 +6,8 @@ import FirmaCanvas from './FirmaCanvas'
 import { card, btn } from './ui'
 
 // Paso final de un registro: vista previa del PDF → consentimiento → firma. Al confirmar entrega la firma a usar.
-export default function FirmaPreview({ registro, usuarioId, onVolver, onConfirmar }: {
-  registro: Omit<RegistroPDF, 'firma' | 'firmadoAt'>, usuarioId: string, onVolver: () => void,
+export default function FirmaPreview({ registro, usuarioId, exigeDescriptor = true, onVolver, onConfirmar }: {
+  registro: Omit<RegistroPDF, 'firma' | 'firmadoAt'>, usuarioId: string, exigeDescriptor?: boolean, onVolver: () => void,
   onConfirmar: (firma: string, firmaNueva: boolean) => Promise<void>,
 }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -51,13 +51,16 @@ export default function FirmaPreview({ registro, usuarioId, onVolver, onConfirma
           {usarGuardada ? (
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
               <img src={firmaGuardada!} alt="Tu firma" style={{ maxHeight: '56px', border: '1px solid #e2e6ed', borderRadius: '6px', background: '#fff', padding: '2px' }} />
-              <button type="button" onClick={() => setCambiar(true)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>Usar otra firma</button>
+              <span style={{ fontSize: '12px', color: '#667085' }}>Tu firma del descriptor de cargo</span>
+            </div>
+          ) : exigeDescriptor ? (
+            <div style={{ marginBottom: '8px', background: '#fff8e5', border: '1px solid #f0d98a', borderRadius: '8px', padding: '10px 12px', fontSize: '12.5px', color: '#7a5600' }}>
+              Aún no tienes firma registrada. Tu firma es la del descriptor de cargo: firma primero tu descriptor en <a href="/hsec/prevencionista/sso" style={{ color: '#1B4F9C', fontWeight: 600 }}>SSO Faena → Descriptor de cargo</a> y luego vuelve a firmar este documento.
             </div>
           ) : (
             <div style={{ marginBottom: '8px' }}>
-              <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 600, color: '#667085' }}>{firmaGuardada ? 'Dibuja o sube la firma a usar' : 'Aún no tienes una firma guardada. Dibújala o súbela:'}</p>
+              <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 600, color: '#667085' }}>Dibuja o sube tu firma:</p>
               <FirmaCanvas onChange={setDibujada} />
-              {firmaGuardada && <button type="button" onClick={() => { setCambiar(false); setDibujada(null) }} style={{ ...btn(false), marginTop: '6px', padding: '5px 10px', fontSize: '12px' }}>Usar mi firma guardada</button>}
             </div>
           )}
           <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12.5px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '9px 10px', cursor: 'pointer' }}>

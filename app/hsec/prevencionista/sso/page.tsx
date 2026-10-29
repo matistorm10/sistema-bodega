@@ -34,7 +34,7 @@ export default function SsoFaena() {
   const [verificador, setVerificador] = useState('')
   const [datos, setDatos] = useState({ nombre: '', rut: '', faena: '' })
   const [datosOk, setDatosOk] = useState(false)
-  const [consiente, setConsiente] = useState(false)
+  const [refirmando, setRefirmando] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!usuario) return
@@ -63,14 +63,15 @@ export default function SsoFaena() {
   const firmar = async () => {
     if (!desc || !firma) return
     setGuardando(true); setMsg('')
-    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: faena }).eq('id', desc.id)
-    if (!error && consiente) {
-      // La firma del descriptor queda como firma del usuario para sus demás documentos (con su consentimiento)
-      await supabase.from('firmas_usuario').upsert({ usuario_id: usuario!.id, imagen: firma, consentimiento_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    const ahora = new Date().toISOString()
+    const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', firmado_at: ahora, verificado_por: null, verificado_at: null, nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: faena }).eq('id', desc.id)
+    if (!error) {
+      // Una sola firma por persona: la del descriptor es la que se usa en todos los demás documentos
+      await supabase.from('firmas_usuario').upsert({ usuario_id: usuario!.id, imagen: firma, consentimiento_at: ahora, updated_at: ahora })
     }
     setGuardando(false)
     if (error) { setMsg('No se pudo guardar la firma: ' + error.message); return }
-    setConsiente(false); setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
+    setRefirmando(false); setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
   }
 
   const verificado = desc?.estado === 'verificado'
@@ -104,7 +105,7 @@ export default function SsoFaena() {
                     Faena asignada: <strong style={{ color: '#344054' }}>{faena || '—'}</strong>
                     {doc?.codigo ? <> · Documento {doc.codigo}{doc.revision ? ` Rev. ${doc.revision}` : ''}{doc.fecha_doc ? ` (${doc.fecha_doc})` : ''}</> : null}
                   </p>
-                  {desc.estado === 'pendiente' && doc?.path && !datosOk ? (
+                  {(desc.estado === 'pendiente' || refirmando) && doc?.path && !datosOk ? (
                     <div style={{ border: '1px solid #cfe0f5', background: '#f4f8fd', borderRadius: '10px', padding: '12px' }}>
                       <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px' }}>Antes de abrir tu descriptor, completa tus datos</p>
                       <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Se escribirán en el punto IX del documento, junto con la fecha y tu firma (automáticas).</p>
@@ -123,7 +124,7 @@ export default function SsoFaena() {
                     <p style={{ fontSize: '12.5px', color: '#986a00', margin: 0 }}>La jefatura aún no ha cargado el documento del descriptor.</p>
                   )}
 
-                  {desc.estado === 'pendiente' && doc?.path && datosOk && (
+                  {(desc.estado === 'pendiente' || refirmando) && doc?.path && datosOk && (
                     <div style={{ marginTop: '14px', borderTop: '1px solid #eef1f6', paddingTop: '12px' }}>
                       <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '13px', marginBottom: '10px', cursor: 'pointer' }}>
                         <input type="checkbox" checked={acepto} onChange={e => setAcepto(e.target.checked)} style={{ marginTop: '2px' }} />
@@ -143,22 +144,21 @@ export default function SsoFaena() {
                             </div>
                           )}
                           {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
-                          <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12.5px', margin: '12px 0 0', cursor: 'pointer', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '9px 10px' }}>
-                            <input type="checkbox" checked={consiente} onChange={e => setConsiente(e.target.checked)} style={{ marginTop: '2px' }} />
-                            <span>Autorizo al Sistema INDELI a usar esta firma como mi firma en los documentos que yo genere o revise (informes, programas y otros). Puedo retirar esta autorización cuando quiera en «Mi firma».</span>
-                          </label>
+                          <p style={{ margin: '12px 0 0', fontSize: '12px', color: '#475467', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '9px 10px' }}>Esta será tu <strong>única firma</strong> en el sistema: se usará en todos los documentos que generes, y en cada uno se te pedirá tu autorización antes de firmar. Para cambiarla, debes volver a firmar este descriptor.</p>
                           <div style={{ marginTop: '12px' }}>
                             <button onClick={firmar} disabled={!firma || guardando} style={{ ...btn(), opacity: !firma || guardando ? 0.5 : 1 }}>{guardando ? 'Guardando...' : 'Firmar descriptor'}</button>
+                            {refirmando && <button onClick={() => { setRefirmando(false); setDatosOk(false); setFirma(null); setAcepto(false) }} style={{ ...btn(false), marginLeft: '8px' }}>Cancelar</button>}
                           </div>
                         </>
                       )}
                     </div>
                   )}
 
-                  {desc.estado !== 'pendiente' && (
+                  {desc.estado !== 'pendiente' && !refirmando && (
                     <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
                       {desc.firma && <img src={desc.firma} alt="Tu firma" style={{ maxHeight: '80px', border: '1px solid #e2e6ed', borderRadius: '6px', background: '#fff' }} />}
                       <button onClick={() => descargarDescriptorFirmado({ desc, nombre: usuario!.nombre, faena, doc, verificador })} style={{ ...btn(false), marginTop: '8px', fontSize: '12.5px', padding: '7px 12px' }}>📄 Descargar descriptor firmado (PDF)</button>
+                      <button onClick={() => { setRefirmando(true); setDatosOk(false); setAcepto(false); setFirma(null); setMsg('') }} style={{ ...btn(false), marginTop: '8px', marginLeft: '8px', fontSize: '12.5px', padding: '7px 12px' }}>✍️ Cambiar mi firma (volver a firmar)</button>
                       <p style={{ fontSize: '12px', color: '#667085', margin: '6px 0 0' }}>
                         Firmado el {fechaHoraCL(desc.firmado_at)}
                         {verificado ? ` · verificado por la jefatura el ${fechaHoraCL(desc.verificado_at)}` : ' · la jefatura debe verificar tu firma'}

@@ -14,7 +14,6 @@ export default function Hsec() {
 
   const secciones = [
     { href: '/hsec/jefatura', icon: '📊', label: 'Panel de Jefatura', desc: 'Dashboard con los números de todas las faenas y prevencionistas', visible: veJefatura },
-    { href: '/hsec/programa', icon: '📈', label: 'Programa de liderazgo percibido', desc: 'Tus actividades del mes (confirmaciones, inspecciones, charlas) y su cumplimiento', visible: esAdmin || !!usuario?.esJefeHsec || !!usuario?.cargoPrograma },
     { href: '/hsec/prevencionista', icon: '🦺', label: 'Espacio del Prevencionista', desc: 'Carga y seguimiento de la información de cada prevencionista', visible: vePrevencionista },
   ].filter(s => s.visible)
 

@@ -9,7 +9,6 @@ import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
 import FirmaPreview from '@/components/programa/FirmaPreview'
 import { generarRegistroActividad } from '@/lib/generarRegistroActividad'
-import MiFirma from '@/components/programa/MiFirma'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
 import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior } from '@/lib/programa'
 
@@ -165,7 +164,7 @@ export default function Programa() {
         {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : form ? (
           <>
             {pendiente && (
-              <FirmaPreview usuarioId={usuario!.id} onVolver={() => setPendiente(null)} onConfirmar={firmarYGuardar}
+              <FirmaPreview usuarioId={usuario!.id} exigeDescriptor={!!usuario!.esPrevencionista} onVolver={() => setPendiente(null)} onConfirmar={firmarYGuardar}
                 registro={{ actividad: pendiente.actividad, fecha: pendiente.r.fecha, faena: faenas.find(x => x.id === pendiente.r.ubicacion_id)?.nombre || '', nombre: usuario!.nombre, cargo: cargo ? CARGOS_PROGRAMA[cargo] : '', datos: pendiente.r.datos, porcentaje: pendiente.r.porcentaje }} />
             )}
             {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
@@ -176,7 +175,6 @@ export default function Programa() {
           </>
         ) : (
           <>
-            <MiFirma usuarioId={usuario!.id} />
             <div style={{ ...card, marginBottom: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <div>

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { RBS } from '@/lib/rbs'
 import { DS594, TOTAL_DS594 } from '@/lib/ds594'
+import { estadoPlan, COLOR_PLAN } from '@/lib/estadoPlan'
 import { ACTIVIDADES, ARCHIVO_INFO, ITEMS_ABC, ITEMS_CDR, COLS_EPP, COLS_BLOQUEO, CARGOS_PROGRAMA, pct, Resp, Cnc } from '@/lib/programa'
 import { card, input, btn, Opciones, OP_SI, OP_C, Campo, Fila } from './ui'
 
@@ -49,7 +50,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   const [hall, setHall] = useState<{ trabajador: string, hallazgo: string, accion: string, responsable: string }[]>(d0.hallazgos || [])
   // DS 594
   const [det, setDet] = useState<Record<string, { justif: string, accion: string, fecha: string, responsable: string, status: string }>>(d0.det || {})
-  const setDetalle = (n: string, campo: string, v: string) => setDet(p => { const base = p[n] || { justif: '', accion: '', fecha: '', responsable: '', status: 'Abierto' }; return { ...p, [n]: { ...base, [campo]: v } } })
+  const setDetalle = (n: string, campo: string, v: string) => setDet(p => { const base = p[n] || { justif: '', accion: '', fecha: '', responsable: '', status: 'En ejecución' }; return { ...p, [n]: { ...base, [campo]: v } } })
   // respaldos
   const [respaldos, setRespaldos] = useState<string[]>(d0.respaldos || [])
   const [subiendo, setSubiendo] = useState(false)
@@ -116,6 +117,9 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
         if (items[i] === 'no') {
           const x = det[planas[i].n]
           if (!x?.justif?.trim() || !x?.accion?.trim()) { setMsg(`El ítem ${planas[i].n} es «NO»: completa la justificación y el plan de acción.`); return }
+          const ejec = x.status === 'Ejecutado' || x.status === 'Cerrado'
+          if (!ejec && !x.fecha) { setMsg(`Ítem ${planas[i].n}: indica la fecha comprometida del plan de acción (o márcalo como Ejecutado).`); return }
+          if (!ejec && x.fecha < hoy() && x.fecha !== d0.det?.[planas[i].n]?.fecha) { setMsg(`Ítem ${planas[i].n}: la fecha comprometida no puede ser anterior a hoy.`); return }
         }
       }
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
@@ -239,11 +243,12 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
                             <input value={x?.justif || ''} onChange={e => setDetalle(it.n, 'justif', e.target.value)} disabled={lect} placeholder="Justificación" style={input} />
                             <input value={x?.accion || ''} onChange={e => setDetalle(it.n, 'accion', e.target.value)} disabled={lect} placeholder="Plan de acción de mejora" style={input} />
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              <input type="date" value={x?.fecha || ''} onChange={e => setDetalle(it.n, 'fecha', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
+                              {(x?.status === 'Ejecutado' || x?.status === 'Cerrado') ? null : <input type="date" min={hoy()} value={x?.fecha || ''} onChange={e => setDetalle(it.n, 'fecha', e.target.value && e.target.value < hoy() ? hoy() : e.target.value)} disabled={lect} title="Fecha comprometida (no puede ser anterior a hoy)" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />}
                               <input value={x?.responsable || ''} onChange={e => setDetalle(it.n, 'responsable', e.target.value)} disabled={lect} placeholder="Responsable" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
-                              <select value={x?.status || 'Abierto'} onChange={e => setDetalle(it.n, 'status', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 110px', width: 'auto' }}>
-                                <option>Abierto</option><option>En curso</option><option>Cerrado</option>
+                              <select value={(x?.status === 'Ejecutado' || x?.status === 'Cerrado') ? 'Ejecutado' : 'En ejecución'} onChange={e => setDetalle(it.n, 'status', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 110px', width: 'auto' }}>
+                                <option>En ejecución</option><option>Ejecutado</option>
                               </select>
+                              {(() => { const e = estadoPlan(x?.status, x?.fecha); return <span style={{ alignSelf: 'center', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: COLOR_PLAN[e][0], color: COLOR_PLAN[e][1] }}>{e}</span> })()}
                             </div>
                           </div>
                         )}

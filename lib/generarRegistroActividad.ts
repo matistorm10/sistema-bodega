@@ -1,3 +1,4 @@
+import { estadoPlan } from './estadoPlan'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { cargarLogo, normalizarImagen } from '@/lib/generarGuiaTraslado'
@@ -75,7 +76,7 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
     DS594.forEach(sec => { body.push([{ content: sec.titulo, colSpan: 3, styles: k }]); sec.items.forEach(it => { body.push([it.n, it.t, resp(n++)]) }) })
     autoTable(doc, { ...base, startY: titulo('Auditoría DS 594'), head: [['N°', 'Requisito', 'Resp.']], body, columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 14, halign: 'center', fontStyle: 'bold' } } })
     const det = Object.entries(d.det || {}).filter(([, v]: any) => v && (v.justif || v.accion))
-    if (det.length) autoTable(doc, { ...base, startY: titulo('Plan de acción de los ítems «NO»'), head: [['Ítem', 'Justificación', 'Acción', 'Responsable', 'Fecha', 'Estado']], body: det.map(([n, v]: any) => [n, v.justif, v.accion, v.responsable, fcl(v.fecha), v.status]) })
+    if (det.length) autoTable(doc, { ...base, startY: titulo('Plan de acción de los ítems «NO»'), head: [['Ítem', 'Justificación', 'Acción', 'Responsable', 'Fecha', 'Estado']], body: det.map(([n, v]: any) => [n, v.justif, v.accion, v.responsable, (v.status === 'Ejecutado' || v.status === 'Cerrado') ? '—' : fcl(v.fecha), estadoPlan(v.status, v.fecha)]) })
   } else if (r.actividad === 'cdp_tarea_critica') {
     autoTable(doc, { ...base, startY: titulo('Resultado de la observación'), theme: 'grid', body: [[{ content: 'Comportamientos seguros', styles: k }, String(d.n_seguros ?? ''), { content: 'Oportunidades de mejora', styles: k }, String(d.n_oport ?? '')]] })
     const lista = (a: string[]) => (a || []).filter(x => x && x.trim()).map((x, i) => [String(i + 1), x])

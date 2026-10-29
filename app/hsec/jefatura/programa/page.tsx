@@ -139,7 +139,10 @@ export default function JefaturaPrograma() {
                             {f.reg.map((a: any) => (
                               <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', padding: '3px 0 3px 12px', color: '#475467' }}>
                                 <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
-                                <button onClick={() => setVer(a)} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Ver</button>
+                                <span style={{ display: 'flex', gap: '6px' }}>
+                                  {a.pdf_path && <button onClick={async () => { const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(a.pdf_path, 600); if (error || !data) { alert('No se pudo abrir el PDF.'); return } window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>📄 PDF firmado</button>}
+                                  <button onClick={() => setVer(a)} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Ver</button>
+                                </span>
                               </div>
                             ))}
                           </div>

@@ -7,6 +7,8 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { misUbicacionesIds } from '@/lib/prevencion'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
+import FirmaPreview from '@/components/programa/FirmaPreview'
+import { generarRegistroActividad } from '@/lib/generarRegistroActividad'
 import MiFirma from '@/components/programa/MiFirma'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
 import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior } from '@/lib/programa'
@@ -33,6 +35,7 @@ export default function Programa() {
   const [form, setForm] = useState<{ actividad: string, registro?: any } | null>(null)
   const [abierta, setAbierta] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [pendiente, setPendiente] = useState<{ actividad: string, registro?: any, r: { fecha: string, ubicacion_id: string | null, datos: any, porcentaje: number | null } } | null>(null)
   const [inicial, setInicial] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -77,6 +80,7 @@ export default function Programa() {
 
   const guardar = async (r: { fecha: string, ubicacion_id: string | null, datos: any, porcentaje: number | null }) => {
     if (!usuario || !form) return
+    if (ACTIVIDADES[form.actividad].tipo === 'formulario') { setPendiente({ actividad: form.actividad, registro: form.registro, r }); return }
     const cuerpo = { ...r, actividad: form.actividad, usuario_id: usuario.id }
     const { error } = form.registro
       ? await supabase.from('pr_prog_actividades').update({ fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje }).eq('id', form.registro.id)
@@ -85,6 +89,51 @@ export default function Programa() {
     // si la fecha cae en otro mes, cambia a ese mes para que la persona vea el registro
     if (r.fecha.slice(0, 7) !== mes) setMes(r.fecha.slice(0, 7))
     setForm(null); setMsg(''); await cargar()
+  }
+  const verPdf = async (path: string) => {
+    const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600)
+    if (error || !data) { alert('No se pudo abrir el PDF.'); return }
+    window.open(data.signedUrl, '_blank')
+  }
+  // Confirmar y firmar: guarda el registro, genera el PDF firmado, lo archiva y lo deja bloqueado.
+  const firmarYGuardar = async (firma: string, firmaNueva: boolean) => {
+    if (!usuario || !pendiente) return
+    const { actividad, registro, r } = pendiente
+    const ahora = new Date().toISOString()
+    // 1) firma del usuario (con su consentimiento)
+    {
+      const { error } = firmaNueva
+        ? await supabase.from('firmas_usuario').upsert({ usuario_id: usuario.id, imagen: firma, consentimiento_at: ahora, updated_at: ahora })
+        : await supabase.from('firmas_usuario').update({ consentimiento_at: ahora }).eq('usuario_id', usuario.id)
+      if (error) throw new Error('No se pudo guardar tu firma: ' + error.message)
+    }
+    // 2) registro
+    let id: string = registro?.id
+    const nuevoRegistro = !registro
+    if (registro) {
+      const { error } = await supabase.from('pr_prog_actividades').update({ fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje }).eq('id', registro.id)
+      if (error) throw new Error('No se pudo guardar: ' + error.message)
+    } else {
+      const { data, error } = await supabase.from('pr_prog_actividades').insert({ ...r, actividad, usuario_id: usuario.id }).select('id').single()
+      if (error || !data) throw new Error(error?.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día.' : error?.message.includes('fecha') ? 'La fecha debe ser la de hoy.' : 'No se pudo guardar: ' + (error?.message || ''))
+      id = data.id
+    }
+    // 3) PDF firmado + 4) archivo + 5) vínculo
+    try {
+      const blob = await generarRegistroActividad({
+        actividad, fecha: r.fecha, faena: faenas.find(x => x.id === r.ubicacion_id)?.nombre || '', nombre: usuario.nombre,
+        cargo: usuario.cargoPrograma ? CARGOS_PROGRAMA[usuario.cargoPrograma] : '', datos: r.datos, porcentaje: r.porcentaje, firma, firmadoAt: ahora,
+      })
+      const path = `programa/${usuario.id}/registros/${id}.pdf`
+      const up = await supabase.storage.from('hsec-documentos').upload(path, blob, { contentType: 'application/pdf', upsert: true })
+      if (up.error) throw new Error(up.error.message)
+      const { error } = await supabase.from('pr_prog_actividades').update({ pdf_path: path, firmado_at: ahora }).eq('id', id)
+      if (error) throw new Error(error.message)
+    } catch (e: any) {
+      if (nuevoRegistro) await supabase.from('pr_prog_actividades').delete().eq('id', id)
+      throw new Error('No se pudo firmar y archivar el documento: ' + (e?.message || e))
+    }
+    setPendiente(null); setForm(null); setMsg(''); await cargar()
   }
   const eliminar = async (a: any) => {
     if (!confirm('¿Eliminar este registro?')) return
@@ -121,8 +170,17 @@ export default function Programa() {
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '820px', margin: '0 auto' }}>
         {cab}
         {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : form ? (
-          <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={cerrado}
-            onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
+          <>
+            {pendiente && (
+              <FirmaPreview usuarioId={usuario!.id} onVolver={() => setPendiente(null)} onConfirmar={firmarYGuardar}
+                registro={{ actividad: pendiente.actividad, fecha: pendiente.r.fecha, faena: faenas.find(x => x.id === pendiente.r.ubicacion_id)?.nombre || '', nombre: usuario!.nombre, cargo: cargo ? CARGOS_PROGRAMA[cargo] : '', datos: pendiente.r.datos, porcentaje: pendiente.r.porcentaje }} />
+            )}
+            {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
+            <div style={{ display: pendiente ? 'none' : 'block' }}>
+              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={cerrado || !!form.registro?.firmado_at}
+                onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
+            </div>
+          </>
         ) : (
           <>
             <MiFirma usuarioId={usuario!.id} />
@@ -178,8 +236,9 @@ export default function Programa() {
                           <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f3f5f9', fontSize: '12.5px' }}>
                             <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
                             <span style={{ display: 'flex', gap: '6px' }}>
-                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{cerrado ? 'Ver' : 'Abrir'}</button>
-                              {!cerrado && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
+                              {a.pdf_path && <button onClick={() => verPdf(a.pdf_path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>📄 PDF</button>}
+                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{cerrado || a.firmado_at ? 'Ver' : 'Abrir'}</button>
+                              {!cerrado && !a.firmado_at && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
                             </span>
                           </div>
                         ))}

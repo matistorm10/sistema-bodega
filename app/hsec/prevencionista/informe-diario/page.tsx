@@ -6,22 +6,26 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, Campo, Fila, Opciones, OP_C } from '@/components/programa/ui'
 import { fechaCL, misUbicacionesIds } from '@/lib/prevencion'
-import { DatosInforme, Fila as FilaT, informeNuevo, vacias, COLS, SUGERENCIAS_ACTIVIDAD } from '@/lib/informeDiario'
+import { DatosInforme, Fila as FilaT, informeNuevo, vacias, COLS, SUGERENCIAS_ACTIVIDAD, CARGO_APR } from '@/lib/informeDiario'
+import { estadoPlan, COLOR_PLAN } from '@/lib/estadoPlan'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { generarInformeDiario } from '@/lib/generarInformeDiario'
 
-const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const iso = (ms: number) => new Date(ms - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const hoy = () => iso(Date.now())
+const hace3 = () => iso(Date.now() - 3 * 86400000)
 const OP_SN = [{ v: 'si', t: 'SÍ', col: '#1e8e4e' }, { v: 'no', t: 'NO', col: '#667085' }]
 const OP_SN_ALERTA = [{ v: 'si', t: 'SÍ', col: '#c0392b' }, { v: 'no', t: 'NO', col: '#1e8e4e' }]
 const Titulo = ({ t }: { t: string }) => <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{t}</p>
 
 // Tabla editable por tarjetas (cómoda en celular)
-function Lista({ filas, cols, onChange, vacia, addTxt }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, lista?: string }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string }) {
+function Lista({ filas, cols, onChange, vacia, addTxt }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, lista?: string, tipo?: 'time' | 'date' | 'num' }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string }) {
   return (
     <>
       {filas.map((f, i) => (
         <div key={i} style={{ border: '1px solid #eef1f6', borderRadius: '10px', padding: '10px', marginBottom: '8px', background: '#fafbfd' }}>
-          <Fila>{cols.map(c => <Campo key={c.k} titulo={c.t} ancho="140px"><input list={c.lista} value={f[c.k] || ''} placeholder={c.ph} onChange={e => onChange(filas.map((x, j) => j === i ? { ...x, [c.k]: e.target.value } : x))} style={input} /></Campo>)}</Fila>
+          <Fila>{cols.map(c => <Campo key={c.k} titulo={c.t} ancho="140px"><input list={c.lista} type={c.tipo === 'time' ? 'time' : c.tipo === 'date' ? 'date' : 'text'} min={c.tipo === 'date' ? hoy() : undefined} inputMode={c.tipo === 'num' ? 'numeric' : undefined} value={f[c.k] || ''} placeholder={c.ph}
+            onChange={e => { let v = e.target.value; if (c.tipo === 'num') v = v.replace(/[^0-9]/g, ''); if (c.tipo === 'date' && v && v < hoy()) v = hoy(); onChange(filas.map((x, j) => j === i ? { ...x, [c.k]: v } : x)) }} style={input} /></Campo>)}</Fila>
           <button type="button" onClick={() => onChange(filas.filter((_, j) => j !== i))} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Quitar fila</button>
         </div>
       ))}
@@ -40,26 +44,45 @@ export default function InformeDiario() {
   const [msg, setMsg] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [usuarios, setUsuarios] = useState<any[]>([])
+  const [contratos, setContratos] = useState<any[]>([])
+  const [faenaCli, setFaenaCli] = useState<any[]>([])
+  const [ptsDocs, setPtsDocs] = useState<any[]>([])
   const verTodos = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
 
   const cargar = useCallback(async () => {
-    const [f, l, us] = await Promise.all([
+    const [f, l, us, ct, fc] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('pr_informes_diarios').select('*').order('fecha', { ascending: false }).limit(60),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
+      supabase.from('pr_faena_cliente').select('*'),
     ])
-    setUsuarios(us.data || [])
+    setUsuarios(us.data || []); setContratos(ct.data || []); setFaenaCli(fc.data || [])
     const propias = verTodos || !usuario ? null : await misUbicacionesIds(usuario.id)
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setLista(l.data || []); setCargando(false)
   }, [usuario, verTodos])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
-  const nuevo = () => setEdit({ fecha: hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(usuario?.esPrevencionista ? 'Prevencionista de terreno' : '') })
-  const abrir = async (r: any) => setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(''), ...r.datos } })
+  const contratoId = edit?.d.contratoId
+  useEffect(() => {
+    if (!contratoId) { setPtsDocs([]); return }
+    supabase.from('pr_contrato_docs').select('id,nombre,estado,path').eq('contrato_id', contratoId).eq('categoria', 'PTS').order('nombre').then(({ data }) => setPtsDocs(data || []))
+  }, [contratoId])
+  const nuevo = () => setEdit({ fecha: hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(CARGO_APR) })
+  const abrir = async (r: any) => setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } })
 
   const guardar = async (cerrar: boolean) => {
     if (!usuario || !edit) return
     if (!edit.ubicacion_id) { setMsg('Elige la faena.'); return }
+    if (!edit.id && (edit.fecha > hoy() || edit.fecha < hace3())) { setMsg('La fecha debe ser hoy o hasta 3 días antes.'); return }
+    if (cerrar) {
+      if (!edit.d.contratoId) { setMsg('Elige el contrato.'); return }
+      if (!edit.d.horaIni || !edit.d.horaFin) { setMsg('Indica el horario (inicio y término).'); return }
+      const falta = edit.d.condiciones.find(c => c.estado === 'NC' && (!c.accion?.trim() || !c.responsable?.trim() || (c.status !== 'Ejecutado' && !c.fecha)))
+      if (falta) { setMsg(`Condición «${falta.item || 'sin nombre'}»: al ser No conforme completa acción, responsable y fecha del plan de acción.`); return }
+      const sinNombre = edit.d.condiciones.find(c => !c.item.trim() && (c.estado || c.obs))
+      if (sinNombre) { setMsg('Hay una condición agregada sin nombre.'); return }
+    }
     if (cerrar && !confirm('Al cerrar el informe ya no podrás editarlo. ¿Cerrarlo?')) return
     setGuardando(true); setMsg('')
     const cuerpo: any = { fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos: edit.d, updated_at: new Date().toISOString() }
@@ -105,16 +128,32 @@ export default function InformeDiario() {
     const set = (p: Partial<DatosInforme>) => setEdit({ ...edit, d: { ...d, ...p } })
     const T = (k: keyof DatosInforme) => <input value={(d[k] as string) || ''} onChange={e => set({ [k]: e.target.value } as any)} disabled={ro} style={input} />
     const dot = (Number(d.dotH) || 0) + (Number(d.dotM) || 0)
+    const cliF = faenaCli.find(x => x.ubicacion_id === edit.ubicacion_id)?.cliente_id
+    const contratosFaena = contratos.filter(c => !cliF || !c.cliente_id || c.cliente_id === cliF)
+    const setCond = (i: number, p: Record<string, string>) => set({ condiciones: d.condiciones.map((x, j) => j === i ? { ...x, ...p } : x) })
     return wrap(
       <fieldset disabled={ro} style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gap: '12px' }}>
         <datalist id="sug-act">{SUGERENCIAS_ACTIVIDAD.map(s => <option key={s} value={s} />)}</datalist>
         <div style={card}>
           <Fila>
             <Campo titulo="Faena / proyecto *"><select value={edit.ubicacion_id} onChange={e => setEdit({ ...edit, ubicacion_id: e.target.value })} disabled={!!edit.id} style={input}><option value="">— elegir —</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></Campo>
-            <Campo titulo="Fecha *"><input type="date" value={edit.fecha} onChange={e => setEdit({ ...edit, fecha: e.target.value })} disabled={!!edit.id} style={input} /></Campo>
-            <Campo titulo="Turno / horario">{T('turno')}</Campo>
+            <Campo titulo="Fecha * (hoy o hasta 3 días antes)"><input type="date" min={hace3()} max={hoy()} value={edit.fecha} onChange={e => { const v = e.target.value; setEdit({ ...edit, fecha: v > hoy() ? hoy() : v && v < hace3() ? hace3() : v }) }} disabled={!!edit.id} style={input} /></Campo>
+            <Campo titulo="Horario *" ancho="220px">
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input type="time" value={d.horaIni} onChange={e => set({ horaIni: e.target.value })} disabled={ro} style={input} /><span style={{ fontSize: '12px', color: '#667085' }}>a</span><input type="time" value={d.horaFin} onChange={e => set({ horaFin: e.target.value })} disabled={ro} style={input} />
+              </div>
+            </Campo>
           </Fila>
-          <Fila><Campo titulo="Contrato">{T('contrato')}</Campo><Campo titulo="Empresa mandante">{T('mandante')}</Campo><Campo titulo="Cargo">{T('cargo')}</Campo></Fila>
+          <Fila>
+            <Campo titulo="Contrato *">
+              <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c?.nombre || '', mandante: c?.empresa || '', ptsSel: [] }) }} style={input}>
+                <option value="">— elegir contrato —</option>{contratosFaena.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+              {contratosFaena.length === 0 && <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#986a00' }}>La jefatura aún no ha creado contratos{edit.ubicacion_id ? ' para el cliente de esta faena' : ''}.</p>}
+            </Campo>
+            <Campo titulo="Empresa mandante (automática)"><input value={d.mandante} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
+            <Campo titulo="Cargo"><input value={CARGO_APR} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
+          </Fila>
           <Fila>
             <Campo titulo="Dotación INDELI · Hombres" ancho="110px"><input type="number" min="0" value={d.dotH} onChange={e => set({ dotH: e.target.value })} style={input} /></Campo>
             <Campo titulo="Mujeres" ancho="110px"><input type="number" min="0" value={d.dotM} onChange={e => set({ dotM: e.target.value })} style={input} /></Campo>
@@ -124,7 +163,26 @@ export default function InformeDiario() {
 
         <div style={card}><Titulo t="1 · Resumen de la jornada" />
           <Fila><Campo titulo="Área / frente">{T('area')}</Campo><Campo titulo="Tarea principal">{T('tarea')}</Campo></Fila>
-          <Fila><Campo titulo="Trabajos críticos">{T('criticos')}</Campo><Campo titulo="PTS / permiso">{T('pts')}</Campo></Fila>
+          <Campo titulo="Trabajos críticos (puedes agregar más de uno)">
+            {(d.criticosL.length ? d.criticosL : ['']).map((t, i, arr) => (
+              <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                <input value={t} placeholder={`Trabajo crítico ${i + 1}`} disabled={ro} onChange={e => set({ criticosL: arr.map((x, j) => j === i ? e.target.value : x) })} style={input} />
+                {arr.length > 1 && !ro && <button type="button" onClick={() => set({ criticosL: arr.filter((_, j) => j !== i) })} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Quitar</button>}
+              </div>
+            ))}
+            {!ro && <button type="button" onClick={() => set({ criticosL: [...(d.criticosL.length ? d.criticosL : ['']), ''] })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>+ Agregar trabajo crítico</button>}
+          </Campo>
+          <div style={{ marginTop: '10px' }}>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>PTS / permisos del contrato</label>
+            {!d.contratoId ? <p style={{ margin: 0, fontSize: '12px', color: '#98a2b3' }}>Elige primero el contrato.</p>
+              : ptsDocs.length === 0 ? <p style={{ margin: 0, fontSize: '12px', color: '#986a00' }}>Este contrato aún no tiene PTS cargados por la jefatura.</p>
+              : <div style={{ display: 'grid', gap: '4px' }}>{ptsDocs.map(p => (
+                  <label key={p.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={ro} checked={d.ptsSel.includes(p.nombre)} onChange={e => set({ ptsSel: e.target.checked ? [...d.ptsSel, p.nombre] : d.ptsSel.filter(x => x !== p.nombre) })} />
+                    <span>{p.nombre}</span>{p.estado !== 'Vigente' && <span style={{ fontSize: '11px', color: '#9b1c1c' }}>({p.estado})</span>}
+                  </label>))}</div>}
+            <Link href="/hsec/prevencionista/contratos" style={{ fontSize: '12px', color: AZUL }}>Ver todos los documentos del contrato →</Link>
+          </div>
         </div>
 
         <div style={card}><Titulo t="2 · Actividades preventivas realizadas" />
@@ -133,19 +191,36 @@ export default function InformeDiario() {
         </div>
 
         <div style={card}><Titulo t="3 · Condiciones de seguridad y salud ocupacional" />
-          {d.condiciones.map((c, i) => (
-            <div key={i} style={{ borderBottom: '1px solid #eef1f6', padding: '8px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#344054', flex: '1 1 200px' }}>{c.item}</span>
-                <Opciones valor={c.estado === 'C' || c.estado === 'NC' || c.estado === 'NA' ? c.estado : null} opciones={OP_C} disabled={ro}
-                  onChange={v => set({ condiciones: d.condiciones.map((x, j) => j === i ? { ...x, estado: v } : x) })} />
+          {d.condiciones.map((c, i) => {
+            const propia = i >= 7
+            const e = estadoPlan(c.status, c.fecha)
+            return (
+              <div key={i} style={{ borderBottom: '1px solid #eef1f6', padding: '8px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {propia
+                    ? <input value={c.item} placeholder="Nombre de la condición (ej: Iluminación del área)" disabled={ro} onChange={ev => setCond(i, { item: ev.target.value })} style={{ ...input, flex: '1 1 200px', width: 'auto', fontWeight: 600 }} />
+                    : <span style={{ fontSize: '13px', fontWeight: 600, color: '#344054', flex: '1 1 200px' }}>{c.item}</span>}
+                  <Opciones valor={c.estado === 'C' || c.estado === 'NC' || c.estado === 'NA' ? c.estado : null} opciones={OP_C} disabled={ro} onChange={v => setCond(i, { estado: v })} />
+                  {propia && !ro && <button type="button" onClick={() => set({ condiciones: d.condiciones.filter((_, j) => j !== i) })} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Quitar</button>}
+                </div>
+                <input value={c.obs || ''} placeholder="Observación" disabled={ro} onChange={ev => setCond(i, { obs: ev.target.value })} style={{ ...input, marginTop: '6px' }} />
+                {c.estado === 'NC' && (
+                  <div style={{ background: '#fff5f5', borderRadius: '8px', padding: '8px', marginTop: '6px', display: 'grid', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#9b1c1c' }}>No cumple: plan de acción</p>
+                    <input value={c.accion || ''} placeholder="Acción a realizar" disabled={ro} onChange={ev => setCond(i, { accion: ev.target.value })} style={input} />
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {c.status !== 'Ejecutado' && <input type="date" min={hoy()} value={c.fecha || ''} disabled={ro} onChange={ev => setCond(i, { fecha: ev.target.value && ev.target.value < hoy() ? hoy() : ev.target.value })} title="Fecha comprometida (desde hoy)" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />}
+                      <input value={c.responsable || ''} placeholder="Responsable" disabled={ro} onChange={ev => setCond(i, { responsable: ev.target.value })} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
+                      <select value={c.status === 'Ejecutado' ? 'Ejecutado' : 'En ejecución'} disabled={ro} onChange={ev => setCond(i, { status: ev.target.value })} style={{ ...input, flex: '1 1 110px', width: 'auto' }}><option>En ejecución</option><option>Ejecutado</option></select>
+                      <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: COLOR_PLAN[e][0], color: COLOR_PLAN[e][1] }}>{e}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <input value={c.obs || ''} placeholder="Observación" disabled={ro} onChange={e => set({ condiciones: d.condiciones.map((x, j) => j === i ? { ...x, obs: e.target.value } : x) })} style={{ ...input, marginTop: '6px' }} />
-            </div>
-          ))}
-          <div style={{ marginTop: '8px' }}><button type="button" onClick={() => set({ condiciones: [...d.condiciones, { item: '', estado: '', obs: '' }] })} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>+ Agregar otra condición</button></div>
-          {d.condiciones.slice(7).map((c, i) => <input key={i} value={c.item} placeholder="Nombre de la condición" disabled={ro} onChange={e => set({ condiciones: d.condiciones.map((x, j) => j === i + 7 ? { ...x, item: e.target.value } : x) })} style={{ ...input, marginTop: '6px' }} />)}
-          <p style={{ fontSize: '11px', color: '#98a2b3', margin: '6px 0 0' }}>C = conforme · NC = no conforme · NA = no aplica</p>
+            )
+          })}
+          {!ro && <div style={{ marginTop: '8px' }}><button type="button" onClick={() => set({ condiciones: [...d.condiciones, { item: '', estado: '', obs: '', accion: '', responsable: '', fecha: '', status: 'En ejecución' }] })} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>+ Agregar otra condición</button></div>}
+          <p style={{ fontSize: '11px', color: '#98a2b3', margin: '6px 0 0' }}>C = conforme · NC = no cumple (genera plan de acción) · NA = no aplica</p>
         </div>
 
         <div style={card}><Titulo t="4 · Incidentes y atención de salud" />
@@ -163,12 +238,12 @@ export default function InformeDiario() {
 
         <div style={card}><Titulo t="6 · Coordinaciones y comunicaciones relevantes" />
           <Lista filas={d.coordinaciones} onChange={f => set({ coordinaciones: f })} vacia={vacias(1, COLS.coordinaciones)[0]} addTxt="Agregar coordinación"
-            cols={[{ k: 'hora', t: 'Hora', ph: '08:30' }, { k: 'con', t: 'Con quién / área' }, { k: 'tema', t: 'Tema e instrucción o acuerdo' }]} />
+            cols={[{ k: 'hora', t: 'Hora', tipo: 'time' }, { k: 'duracion', t: 'Duración (horas:minutos)', tipo: 'time' }, { k: 'con', t: 'Con quién / área' }, { k: 'tema', t: 'Tema e instrucción o acuerdo' }]} />
         </div>
 
         <div style={card}><Titulo t="7 · Pendientes para el siguiente turno" />
           <Lista filas={d.pendientes} onChange={f => set({ pendientes: f })} vacia={vacias(1, COLS.pendientes)[0]} addTxt="Agregar pendiente"
-            cols={[{ k: 'pendiente', t: 'Pendiente' }, { k: 'responsable', t: 'Responsable' }, { k: 'fecha', t: 'Fecha comprometida', ph: 'dd-mm-aaaa' }]} />
+            cols={[{ k: 'pendiente', t: 'Pendiente' }, { k: 'responsable', t: 'Responsable' }, { k: 'fecha', t: 'Fecha comprometida (desde hoy)', tipo: 'date' }]} />
         </div>
 
         <div style={card}><Titulo t="8 · Cierre de la jornada" />
@@ -176,7 +251,7 @@ export default function InformeDiario() {
             <div><label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>Sin novedades</label><Opciones valor={d.sinNovedades} opciones={OP_SN} onChange={v => set({ sinNovedades: v })} disabled={ro} /></div>
             <div><label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>Reporte al cliente</label><Opciones valor={d.reporteCliente} opciones={OP_SN} onChange={v => set({ reporteCliente: v })} disabled={ro} /></div>
           </div>
-          <Fila><Campo titulo="Hora de cierre"><input type="time" value={d.horaCierre} onChange={e => set({ horaCierre: e.target.value })} style={input} /></Campo><Campo titulo="Próximo turno">{T('proximoTurno')}</Campo><Campo titulo="Revisó / Supervisor (nombre)">{T('supervisor')}</Campo></Fila>
+          <Fila><Campo titulo="Hora de cierre"><input type="time" value={d.horaCierre} onChange={e => set({ horaCierre: e.target.value })} style={input} /></Campo><Campo titulo="Próximo turno">{T('proximoTurno')}</Campo><Campo titulo="Revisó"><input value={usuario?.nombre ? `${usuario.nombre} (APR de terreno)` : 'APR de terreno'} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo></Fila>
           <Campo titulo="Observaciones generales"><textarea value={d.observaciones} onChange={e => set({ observaciones: e.target.value })} rows={3} style={{ ...input, resize: 'vertical' }} /></Campo>
         </div>
 

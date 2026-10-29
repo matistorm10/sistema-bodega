@@ -192,6 +192,14 @@ export default function Jefatura() {
               </div>
             </Link>
 
+            <Link href="/hsec/jefatura/contratos" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>📁</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Contratos y documentos</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Crea contratos, asócialos a un cliente y carga PTS, matrices y documentos con su estatus</p>
+              </div>
+            </Link>
+
             <Link href="/hsec/jefatura/semanales" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>🗓️</div>
               <div style={{ flex: 1 }}>

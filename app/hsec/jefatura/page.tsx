@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { TIPOS_CHARLA, fechaCL } from '@/lib/prevencion'
+import { periodos, estadoSemanal } from '@/lib/semanal'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }
 const input: React.CSSProperties = { padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', background: '#fff' }
@@ -39,6 +40,10 @@ export default function Jefatura() {
   const [asistentes, setAsistentes] = useState<any[]>([])
   const [faenas, setFaenas] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
+  const [informes, setInformes] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>([])
+  const [asigs, setAsigs] = useState<any[]>([])
+  const [semanales, setSemanales] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [periodo, setPeriodo] = useState('mes')
   const [fFaena, setFFaena] = useState('')
@@ -47,12 +52,17 @@ export default function Jefatura() {
   useEffect(() => {
     if (!usuario || !puede) return
     ;(async () => {
-      const [c, a, f, u] = await Promise.all([
+      const [c, a, f, u, inf, cl, asg, sem] = await Promise.all([
         supabase.from('pr_charlas').select('*').order('fecha', { ascending: false }),
         supabase.from('pr_charla_asistentes').select('id,charla_id,nombre,rut'),
         supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
         supabase.from('usuarios').select('id,nombre'),
+        supabase.from('pr_informes_diarios').select('id,fecha,ubicacion_id,creado_por,estado').order('fecha', { ascending: false }),
+        supabase.from('pr_clientes_informe').select('*').eq('activo', true),
+        supabase.from('pr_semanal_asignaciones').select('*'),
+        supabase.from('pr_informes_semanales').select('cliente_id,usuario_id,periodo_fin'),
       ])
+      setInformes(inf.data || []); setClientes(cl.data || []); setAsigs(asg.data || []); setSemanales(sem.data || [])
       setCharlas(c.data || []); setAsistentes(a.data || [])
       setFaenas((f.data || []).filter((x: any) => x.activa !== false)); setUsuarios(u.data || [])
       setCargando(false)
@@ -90,6 +100,13 @@ export default function Jefatura() {
   const porFaena = contar(c => nombreFaena(c.ubicacion_id))
   const porPrev = contar(c => nombreUsuario(c.creado_por))
   const porTipo = contar(c => TIPOS_CHARLA[c.tipo] || c.tipo)
+  const infFiltrados = informes.filter(i => i.fecha >= desde && (!fFaena || i.ubicacion_id === fFaena) && (!fPrev || i.creado_por === fPrev))
+  const infPorPrev = (() => { const m: Record<string, number> = {}; infFiltrados.forEach(i => { const k = nombreUsuario(i.creado_por); m[k] = (m[k] || 0) + 1 }); return Object.entries(m).map(([nombre, valor]) => ({ nombre, valor })).sort((a, b) => b.valor - a.valor) })()
+  const semAtrasados = asigs.flatMap(a => {
+    const c = clientes.find(x => x.id === a.cliente_id); if (!c) return []
+    return periodos(c.dia_cierre, 4).filter(fin => estadoSemanal(fin, c.dias_plazo, semanales.some(s => s.cliente_id === c.id && s.usuario_id === a.usuario_id && s.periodo_fin === fin)).tipo === 'atraso')
+      .map(fin => ({ k: a.id + fin, texto: `${nombreUsuario(a.usuario_id)} · ${c.nombre} · semana al ${fin.split('-').reverse().join('-').slice(0, 5)}` }))
+  })
   const faenasSinActividad = faenas.filter(f => (!fFaena || f.id === fFaena) && !filtradas.some(c => c.ubicacion_id === f.id))
 
   // últimos 6 meses (ignora el filtro de período, respeta faena y prevencionista)
@@ -150,6 +167,28 @@ export default function Jefatura() {
                 <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Cumplimiento de cada persona, revisión de sus actividades y aprobación del mes</p>
               </div>
             </Link>
+
+            <Link href="/hsec/jefatura/semanales" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>🗓️</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Informes semanales por cliente</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Formato y calendario de cada cliente, asignación de prevencionistas y semáforo de entregas</p>
+              </div>
+              {semAtrasados.length > 0 && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c', fontWeight: 700 }}>🔴 {semAtrasados.length} atrasado{semAtrasados.length === 1 ? '' : 's'}</span>}
+            </Link>
+
+            {semAtrasados.length > 0 && (
+              <div style={{ ...card, background: '#fde8e8', borderColor: '#f3b4b4', marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#9b1c1c' }}>⚠️ Informes semanales atrasados</p>
+                {semAtrasados.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#9b1c1c' }}>{x.texto}</p>)}
+              </div>
+            )}
+
+            <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>📝 Informes diarios SSO</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '10px', marginBottom: '16px' }}>
+              {kpi(infFiltrados.length, 'Informes diarios en el período')}
+              <Barras titulo="Informes diarios por prevencionista" filas={infPorPrev} vacio="Sin informes en el período." />
+            </div>
 
             <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>🗣️ Charlas y capacitaciones</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>

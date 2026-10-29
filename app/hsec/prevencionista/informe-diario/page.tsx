@@ -39,12 +39,16 @@ export default function InformeDiario() {
   const [edit, setEdit] = useState<{ id?: string, fecha: string, ubicacion_id: string, estado: string, d: DatosInforme } | null>(null)
   const [msg, setMsg] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [usuarios, setUsuarios] = useState<any[]>([])
+  const verTodos = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
 
   const cargar = useCallback(async () => {
-    const [f, l] = await Promise.all([
+    const [f, l, us] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('pr_informes_diarios').select('*').order('fecha', { ascending: false }).limit(60),
+      supabase.from('usuarios').select('id,nombre'),
     ])
+    setUsuarios(us.data || [])
     setFaenas((f.data || []).filter((x: any) => x.activa !== false)); setLista(l.data || []); setCargando(false)
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
@@ -197,7 +201,7 @@ export default function InformeDiario() {
         {lista.map(r => (
           <div key={r.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{fechaCL(r.fecha)} · {faenas.find(x => x.id === r.ubicacion_id)?.nombre || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{fechaCL(r.fecha)} · {faenas.find(x => x.id === r.ubicacion_id)?.nombre || '—'}{verTodos ? <span style={{ fontWeight: 400, color: '#667085' }}> · {usuarios.find(u => u.id === r.creado_por)?.nombre || '—'}</span> : null}</p>
               <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, background: r.estado === 'cerrado' ? '#d7efe0' : '#fef7e0', color: r.estado === 'cerrado' ? '#14532d' : '#986a00' }}>{r.estado === 'cerrado' ? 'Cerrado' : 'Borrador'}</span>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>

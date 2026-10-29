@@ -24,11 +24,12 @@ export default function FaenasAsignaciones() {
   const [sel, setSel] = useState<Record<string, string>>({})
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
+  const [norm, setNorm] = useState<any[]>([])
   const [renombrar, setRenombrar] = useState<{ id: string, nombre: string } | null>(null)
   const [nuevoCli, setNuevoCli] = useState<{ ub: string, nombre: string, dia: string, plazo: string, hora: string } | null>(null)
 
   const cargar = useCallback(async () => {
-    const [u, p, a, c, f, l, d, s] = await Promise.all([
+    const [u, p, a, c, f, l, d, s, nm] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,tipo,activa').order('nombre'),
       supabase.from('usuarios').select('id,nombre').eq('es_prevencionista', true).order('nombre'),
       supabase.from('pr_epp_ubicaciones').select('*'),
@@ -37,7 +38,9 @@ export default function FaenasAsignaciones() {
       supabase.from('pr_cap_ubic_lugar').select('*'),
       supabase.from('pr_descriptores').select('id,usuario_id,ubicacion_id'),
       supabase.from('pr_semanal_asignaciones').select('*'),
+      supabase.from('pr_faena_normativa').select('*'),
     ])
+    setNorm(nm.data || [])
     setUbics((u.data || []).filter((x: any) => x.activa !== false)); setPrevs(p.data || []); setAsig(a.data || []); setClientes(c.data || [])
     setFc(f.data || []); setLugares(l.data || []); setDescs(d.data || []); setSem(s.data || []); setCargando(false)
   }, [])
@@ -109,6 +112,11 @@ export default function FaenasAsignaciones() {
   }
 
   const lista = ubics.filter(u => otras || u.tipo === 'faena' || asig.some(a => a.ubicacion_id === u.id) || lugares.some(l => l.ubicacion_id === u.id))
+  const setDs132 = async (ub: string, aplica: boolean) => {
+    const { error } = await supabase.from('pr_faena_normativa').upsert({ ubicacion_id: ub, aplica_ds132: aplica, definido_por: usuario?.id, definido_at: new Date().toISOString() }, { onConflict: 'ubicacion_id' })
+    if (error) { setMsg('No se pudo guardar: ' + error.message); return }
+    setMsg(''); await cargar()
+  }
   const sinFaena = prevs.filter(p => !asig.some(a => a.usuario_id === p.id))
 
   const cab = (
@@ -136,6 +144,8 @@ export default function FaenasAsignaciones() {
                   <div key={u.id} style={card}>
                     <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{u.nombre}{u.tipo !== 'faena' && <span style={{ fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}> · {u.tipo}</span>}</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '10px', marginBottom: '12px' }}>
+                      <div><label style={label}>Normativa DS 132 en esta faena</label>
+                        <select value={norm.find(n => n.ubicacion_id === u.id)?.aplica_ds132 ? 'si' : 'no'} onChange={e => setDs132(u.id, e.target.value === 'si')} style={input}><option value="no">No aplica</option><option value="si">Aplica (el Asesor PRL debe completar la lista DS 132)</option></select></div>
                       <div><label style={label}>Cliente (informes semanales)</label>
                         <select value={cli} onChange={e => e.target.value === '__nuevo' ? setNuevoCli({ ub: u.id, nombre: '', dia: '7', plazo: '1', hora: '23:59' }) : setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}<option value="__nuevo">➕ Crear cliente nuevo…</option></select>
                         {cli && (renombrar && renombrar.id === cli ? (

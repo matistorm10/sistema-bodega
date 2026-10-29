@@ -26,6 +26,7 @@ export default function JefaturaPrograma() {
   const [personas, setPersonas] = useState<any[]>([])
   const [metas, setMetas] = useState<any[]>([])
   const [acts, setActs] = useState<any[]>([])
+  const [conDs132, setConDs132] = useState<Set<string>>(new Set())
   const [mensuales, setMensuales] = useState<any[]>([])
   const [faenas, setFaenas] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
@@ -35,13 +36,16 @@ export default function JefaturaPrograma() {
   const [prevPend, setPrevPend] = useState<any[]>([])
 
   const cargar = useCallback(async () => {
-    const [p, m, a, mm, f] = await Promise.all([
+    const [p, m, a, mm, f, nm, asg] = await Promise.all([
       supabase.from('usuarios').select('id,nombre,cargo_programa').not('cargo_programa', 'is', null).order('nombre'),
       supabase.from('pr_prog_metas').select('*'),
       supabase.from('pr_prog_actividades').select('*').eq('mes', mes).order('fecha'),
       supabase.from('pr_prog_mensual').select('*').eq('mes', mes),
       supabase.from('ubicaciones').select('id,nombre').eq('tipo', 'faena'),
+      supabase.from('pr_faena_normativa').select('ubicacion_id').eq('aplica_ds132', true),
+      supabase.from('pr_epp_ubicaciones').select('usuario_id,ubicacion_id'),
     ])
+    const ap = new Set((nm.data || []).map((x: any) => x.ubicacion_id)); setConDs132(new Set((asg.data || []).filter((x: any) => ap.has(x.ubicacion_id)).map((x: any) => x.usuario_id)))
     const prev = mesAnterior(mesActual())
     const { data: mp } = await supabase.from('pr_prog_mensual').select('usuario_id,estado').eq('mes', prev)
     setPrevPend((p.data || []).filter((u: any) => { const x = (mp || []).find((y: any) => y.usuario_id === u.id); return !x || x.estado === 'abierto' || x.estado === 'devuelto' }))
@@ -51,7 +55,7 @@ export default function JefaturaPrograma() {
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
   const resumen = (u: any) => {
-    const ms = metas.filter(m => m.cargo === u.cargo_programa)
+    const ms = metas.filter(m => m.cargo === u.cargo_programa && (m.actividad !== 'verificacion_ds132' || conDs132.has(u.id) || acts.some(a => a.usuario_id === u.id && a.actividad === 'verificacion_ds132')))
     const mine = acts.filter(a => a.usuario_id === u.id)
     const filas = ORDEN_ACTIVIDADES.filter(k => ms.some(m => m.actividad === k)).map(k => {
       const meta = ms.find(m => m.actividad === k)!.meta as number

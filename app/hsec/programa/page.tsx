@@ -30,6 +30,7 @@ export default function Programa() {
   const [acts, setActs] = useState<any[]>([])
   const [mensual, setMensual] = useState<any | null>(null)
   const [faenas, setFaenas] = useState<any[]>([])
+  const [ds132ids, setDs132ids] = useState<Set<string>>(new Set())
   const [descVerificado, setDescVerificado] = useState<boolean | null>(null)
   const [cargando, setCargando] = useState(true)
   const [form, setForm] = useState<{ actividad: string, registro?: any } | null>(null)
@@ -40,13 +41,15 @@ export default function Programa() {
 
   const cargar = useCallback(async () => {
     if (!usuario || !cargo) { setCargando(false); return }
-    const [m, a, mm, f, d] = await Promise.all([
+    const [m, a, mm, f, nm, d] = await Promise.all([
       supabase.from('pr_prog_metas').select('*').eq('cargo', cargo),
       supabase.from('pr_prog_actividades').select('*').eq('usuario_id', usuario.id).eq('mes', mes).order('fecha', { ascending: false }),
       supabase.from('pr_prog_mensual').select('*').eq('usuario_id', usuario.id).eq('mes', mes).maybeSingle(),
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
+      supabase.from('pr_faena_normativa').select('ubicacion_id').eq('aplica_ds132', true),
       usuario.esPrevencionista ? supabase.from('pr_descriptores').select('estado').eq('usuario_id', usuario.id).maybeSingle() : Promise.resolve({ data: null } as any),
     ])
+    setDs132ids(new Set((nm.data || []).map((x: any) => x.ubicacion_id)))
     setMetas(m.data || []); setActs(a.data || []); setMensual(mm.data || null)
     const propias = usuario.esPrevencionista && usuario.rol !== 'admin' && !usuario.esJefeHsec ? await misUbicacionesIds(usuario.id) : null
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id))))
@@ -69,12 +72,13 @@ export default function Programa() {
   const estado = mensual?.estado || 'abierto'
   const plazo = estadoPlazo(mes, estado, mensual?.enviado_at)
   const cerrado = false // la revisión ahora es por documento
-  const filas = useMemo(() => ORDEN_ACTIVIDADES.filter(k => metas.some(m => m.actividad === k)).map(k => {
+  const hayDs132 = faenas.some(f => ds132ids.has(f.id))
+  const filas = useMemo(() => ORDEN_ACTIVIDADES.filter(k => metas.some(m => m.actividad === k) && (k !== 'verificacion_ds132' || hayDs132 || acts.some(a => a.actividad === k))).map(k => {
     const meta = metas.find(m => m.actividad === k)!.meta as number
     const reg = acts.filter(a => a.actividad === k)
     const validos = reg.filter(a => a.revision_estado !== 'rechazado').length
     return { k, meta, real: validos, reg, p: pct(Math.min(validos, meta), meta) ?? 0 }
-  }), [metas, acts])
+  }), [metas, acts, hayDs132])
   const totalMeta = filas.reduce((s, f) => s + f.meta, 0)
   const totalReal = filas.reduce((s, f) => s + Math.min(f.real, f.meta), 0)
   const cumplimiento = pct(totalReal, totalMeta) ?? 0
@@ -166,7 +170,7 @@ export default function Programa() {
             )}
             {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
             <div style={{ display: pendiente ? 'none' : 'block' }}>
-              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={form.registro?.revision_estado === 'aprobado'}
+              <FormActividad actividad={form.actividad} usuario={usuario} faenas={form.actividad === 'verificacion_ds132' ? faenas.filter(f => ds132ids.has(f.id)) : faenas} inicial={form.registro} soloLectura={form.registro?.revision_estado === 'aprobado'}
                 onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
             </div>
           </>

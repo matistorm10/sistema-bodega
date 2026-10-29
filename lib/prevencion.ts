@@ -13,7 +13,7 @@ export const ITEMS_SSO: { n: string, titulo: string, detalle: string, listo: boo
   { n: '3', titulo: 'Informes diarios', detalle: 'Informe diario SSO completado día a día por el prevencionista de terreno.', listo: true },
   { n: '4', titulo: 'Informes semanales', detalle: 'Carga del informe semanal (formato del mandante) con semáforo y recordatorio.', listo: true },
   { n: '5', titulo: 'Capacitaciones', detalle: 'Cumplimiento del programa anual de capacitaciones.', listo: true },
-  { n: '6', titulo: 'Stock y solicitud de EPP', detalle: 'Inventario de EPP controlado por el prevencionista de terreno.', listo: true },
+  { n: '6', titulo: 'Charlas y capacitaciones', detalle: 'Registro de charlas y capacitaciones con lista de asistentes.', listo: true },
 ]
 export const DOC_DESCRIPTOR = 'descriptor_apr'
 

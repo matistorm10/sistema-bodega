@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import { descargarDescriptorFirmado } from '@/lib/descriptorFirmado'
 import { DOC_DESCRIPTOR } from '@/lib/prevencion'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }
@@ -155,6 +156,7 @@ export default function JefaturaSso() {
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                        {d.firma && <button onClick={() => descargarDescriptorFirmado({ desc: d, nombre: nombreUsuario(d.usuario_id), faena: nombreFaena(d.ubicacion_id), doc, verificador: d.verificado_por ? (d.verificado_por === usuario?.id ? usuario.nombre : 'Jefatura') : undefined })} style={btn(false)}>📄 Descargar firmado (PDF)</button>}
                         {d.estado === 'firmado' && <button onClick={() => cambiarEstado(d, 'verificado')} style={btn()}>✓ Verificar firma</button>}
                         {d.estado !== 'pendiente' && <button onClick={() => cambiarEstado(d, 'pendiente')} style={btn(false)}>Devolver para nueva firma</button>}
                         <button onClick={() => quitar(d)} style={btn(false, true)}>Quitar asignación</button>

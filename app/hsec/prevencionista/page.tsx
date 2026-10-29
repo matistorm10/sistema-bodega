@@ -11,9 +11,8 @@ export default function EspacioPrevencionista() {
   const puede = esAdmin || !!usuario?.esJefeHsec || !!usuario?.esPrevencionista
 
   const secciones = [
-    { href: '/hsec/prevencionista/sso', icon: '📋', label: 'SSO Faena', desc: 'Descriptor de cargo, programa de liderazgo, informes diarios y semanales, stock de EPP' },
+    { href: '/hsec/prevencionista/sso', icon: '📋', label: 'SSO Faena', desc: 'Descriptor de cargo, programa de liderazgo, informes diarios y semanales, capacitaciones y charlas' },
     { href: '/hsec/prevencionista/epp', icon: '🦺', label: 'Stock de EPP', desc: 'Ingresos y entregas de EPP de tu faena (independiente de Bodega)' },
-    { href: '/hsec/prevencionista/charlas', icon: '🗣️', label: 'Charlas y capacitaciones', desc: 'Registro de charlas con lista de asistentes' },
   ]
 
   if (cargando) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>

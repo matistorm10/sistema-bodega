@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FirmaCanvas from '@/components/programa/FirmaCanvas'
+import { descargarDescriptorFirmado } from '@/lib/descriptorFirmado'
 import { ITEMS_SSO, DOC_DESCRIPTOR } from '@/lib/prevencion'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }
@@ -29,6 +30,7 @@ export default function SsoFaena() {
   const [guardando, setGuardando] = useState(false)
   const [msg, setMsg] = useState('')
   const [canvasKey, setCanvasKey] = useState(0)
+  const [verificador, setVerificador] = useState('')
 
   const cargar = useCallback(async () => {
     if (!usuario) return
@@ -37,6 +39,7 @@ export default function SsoFaena() {
       supabase.from('pr_documentos').select('*').eq('clave', DOC_DESCRIPTOR).maybeSingle(),
       supabase.from('firmas_usuario').select('imagen').eq('usuario_id', usuario.id).maybeSingle(),
     ])
+    if (d.data?.verificado_por) { const v = await supabase.from('usuarios').select('nombre').eq('id', d.data.verificado_por).maybeSingle(); setVerificador(v.data?.nombre || '') }
     setDesc(d.data || null); setDoc(dc.data || null); setFirmaGuardada(fg.data?.imagen || null)
     if (d.data?.ubicacion_id) {
       const f = await supabase.from('ubicaciones').select('nombre').eq('id', d.data.ubicacion_id).maybeSingle()
@@ -129,6 +132,7 @@ export default function SsoFaena() {
                   {desc.estado !== 'pendiente' && (
                     <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
                       {desc.firma && <img src={desc.firma} alt="Tu firma" style={{ maxHeight: '80px', border: '1px solid #e2e6ed', borderRadius: '6px', background: '#fff' }} />}
+                      <button onClick={() => descargarDescriptorFirmado({ desc, nombre: usuario!.nombre, faena, doc, verificador })} style={{ ...btn(false), marginTop: '8px', fontSize: '12.5px', padding: '7px 12px' }}>📄 Descargar descriptor firmado (PDF)</button>
                       <p style={{ fontSize: '12px', color: '#667085', margin: '6px 0 0' }}>
                         Firmado el {fechaHoraCL(desc.firmado_at)}
                         {verificado ? ` · verificado por la jefatura el ${fechaHoraCL(desc.verificado_at)}` : ' · la jefatura debe verificar tu firma'}
@@ -151,7 +155,7 @@ export default function SsoFaena() {
                     <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{i.detalle}</p>
                   </div>
                   {(i.n === '2' || i.n === '3' || i.n === '4' || i.n === '5' || i.n === '6') && verificado
-                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : i.n === '5' ? '/hsec/prevencionista/capacitaciones' : '/hsec/prevencionista/epp'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
+                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : i.n === '5' ? '/hsec/prevencionista/capacitaciones' : '/hsec/prevencionista/charlas'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
                     : <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', whiteSpace: 'nowrap' }}>{verificado ? 'Próximamente' : 'Bloqueado'}</span>}
                 </div>
               ))}

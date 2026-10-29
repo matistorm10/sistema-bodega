@@ -20,7 +20,7 @@ export default function ContratosPrevencionista() {
     if (!usuario || !puede) return
     Promise.all([
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
-      supabase.from('pr_contrato_documentos').select('*').order('nombre'),
+      supabase.from('pr_contrato_documentos').select('*').eq('estado', 'Aprobado').order('nombre'),
     ]).then(([c, d]) => { setContratos(c.data || []); setDocs(d.data || []); setSel((c.data || [])[0]?.id || ''); setCargando(false) })
   }, [usuario, puede])
 
@@ -50,7 +50,7 @@ export default function ContratosPrevencionista() {
               return (
                 <div key={k} style={{ ...card, marginBottom: '10px' }}>
                   <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{t} <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· {l.length}</span></p>
-                  {l.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin documentos.</p>}
+                  {l.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin documentos aprobados.</p>}
                   {l.map(d => (
                     <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '7px 0', borderTop: '1px solid #f3f5f9', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '13px', flex: '1 1 220px' }}>{d.nombre} <span style={{ color: '#98a2b3', fontSize: '11px' }}>Rev. {d.rev}</span></span>

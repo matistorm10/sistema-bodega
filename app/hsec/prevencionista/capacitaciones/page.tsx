@@ -51,7 +51,7 @@ export default function CapPrevencionista() {
   const cab = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', background: '#fff', borderRadius: '16px', padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
       <Link href="/hsec/prevencionista/sso" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← SSO Faena</Link>
-      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Capacitaciones {anio}</h1>
+      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Capacitaciones y charlas {anio}</h1>
     </div>
   )
   if (cargandoUsuario) return <main style={fondoPagina}><div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif' }}><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></div></main>
@@ -67,6 +67,11 @@ export default function CapPrevencionista() {
         <span style={{ fontSize: '13px', color: '#667085' }}>Cumplimiento a la fecha: <strong style={{ color: cumpl >= 100 ? '#1e8e4e' : '#16213E' }}>{cumpl}%</strong></span>
       </div>
       {!lugar && <p style={{ fontSize: '12px', color: '#986a00', margin: '0 0 10px' }}>La jefatura aún no clasifica esta faena (ENGIE / SQM / SACYR / oficina); por ahora ves todo el programa.</p>}
+
+      <Link href="/hsec/prevencionista/charlas" style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit', marginBottom: '12px' }}>
+        <span><strong style={{ fontSize: '13.5px', color: '#16213E' }}>🗣️ Charlas y lista de asistentes</strong><br /><span style={{ fontSize: '12px', color: '#667085' }}>Ver las charlas realizadas o registrar una charla libre (fuera del programa)</span></span>
+        <span style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</span>
+      </Link>
 
       <div style={{ ...card, marginBottom: '12px', background: pendientes.length ? '#fff8e5' : '#e7f6ec', borderColor: pendientes.length ? '#f0d98a' : '#b9e2c8' }}>
         <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13px', color: pendientes.length ? '#7a5600' : '#14532d' }}>{pendientes.length ? `🗓️ Por realizar o atrasadas (${pendientes.length})` : '✅ Estás al día con el programa'}</p>

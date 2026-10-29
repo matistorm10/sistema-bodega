@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { TIPOS_CHARLA, fechaCL } from '@/lib/prevencion'
 import { periodos, estadoSemanal } from '@/lib/semanal'
+import { ESTADOS_DOC, COLOR_DOC, diasDesde } from '@/lib/contratos'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }
 const input: React.CSSProperties = { padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', background: '#fff' }
@@ -44,6 +45,8 @@ export default function Jefatura() {
   const [clientes, setClientes] = useState<any[]>([])
   const [asigs, setAsigs] = useState<any[]>([])
   const [semanales, setSemanales] = useState<any[]>([])
+  const [contratos, setContratos] = useState<any[]>([])
+  const [cdocs, setCdocs] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [periodo, setPeriodo] = useState('mes')
   const [fFaena, setFFaena] = useState('')
@@ -52,7 +55,7 @@ export default function Jefatura() {
   useEffect(() => {
     if (!usuario || !puede) return
     ;(async () => {
-      const [c, a, f, u, inf, cl, asg, sem] = await Promise.all([
+      const [c, a, f, u, inf, cl, asg, sem, ct, cd] = await Promise.all([
         supabase.from('pr_charlas').select('*').order('fecha', { ascending: false }),
         supabase.from('pr_charla_asistentes').select('id,charla_id,nombre,rut'),
         supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
@@ -61,7 +64,10 @@ export default function Jefatura() {
         supabase.from('pr_clientes_informe').select('*').eq('activo', true),
         supabase.from('pr_semanal_asignaciones').select('*'),
         supabase.from('pr_informes_semanales').select('cliente_id,usuario_id,periodo_fin'),
+        supabase.from('pr_contratos').select('id,nombre,cliente_id,activo').eq('activo', true).order('nombre'),
+        supabase.from('pr_contrato_documentos').select('id,contrato_id,categoria,nombre,estado,fecha_envio'),
       ])
+      setContratos(ct.data || []); setCdocs(cd.data || [])
       setInformes(inf.data || []); setClientes(cl.data || []); setAsigs(asg.data || []); setSemanales(sem.data || [])
       setCharlas(c.data || []); setAsistentes(a.data || [])
       setFaenas((f.data || []).filter((x: any) => x.activa !== false)); setUsuarios(u.data || [])
@@ -196,7 +202,7 @@ export default function Jefatura() {
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>📁</div>
               <div style={{ flex: 1 }}>
                 <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Contratos y documentos</p>
-                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Crea contratos, asócialos a un cliente y carga PTS, matrices y documentos con su estatus</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Crea contratos por cliente y gestiona PTS, matrices y planes de emergencia con su estatus de aprobación</p>
               </div>
             </Link>
 
@@ -215,6 +221,38 @@ export default function Jefatura() {
                 {semAtrasados.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#9b1c1c' }}>{x.texto}</p>)}
               </div>
             )}
+
+            <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>📁 Documentación de contratos</p>
+            <Link href="/hsec/jefatura/contratos" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'block', marginBottom: '16px' }}>
+              {contratos.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Aún no hay contratos. Crea el primero en «Contratos y documentos».</p> : (
+                <>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {ESTADOS_DOC.map(e => <span key={e} style={{ fontSize: '11.5px', padding: '3px 10px', borderRadius: '20px', fontWeight: 600, background: COLOR_DOC[e][0], color: COLOR_DOC[e][1] }}>{e}: {cdocs.filter(d => d.estado === e).length}</span>)}
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+                      <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '5px 8px' }}>Contrato</th><th style={{ padding: '5px 8px' }}>PTS aprobados</th><th style={{ padding: '5px 8px' }}>Matrices aprob.</th><th style={{ padding: '5px 8px' }}>Planes emerg. aprob.</th><th style={{ padding: '5px 8px' }}>Esperando al cliente</th><th style={{ padding: '5px 8px' }}>Observados</th></tr></thead>
+                      <tbody>
+                        {contratos.map(c => {
+                          const m = cdocs.filter(d => d.contrato_id === c.id)
+                          const f = (cat: string) => { const l = m.filter(d => d.categoria === cat); return `${l.filter(d => d.estado === 'Aprobado').length} / ${l.length}` }
+                          const env = m.filter(d => d.estado === 'Enviado a aprobación')
+                          const viejos = env.filter(d => diasDesde(d.fecha_envio) > 7).length
+                          const obs = m.filter(d => d.estado === 'Observado').length
+                          return (
+                            <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
+                              <td style={{ padding: '6px 8px' }}>{f('PTS')}</td><td style={{ padding: '6px 8px' }}>{f('Matriz')}</td><td style={{ padding: '6px 8px' }}>{f('Plan de emergencia')}</td>
+                              <td style={{ padding: '6px 8px', color: viejos ? '#9b1c1c' : undefined }}>{env.length}{viejos ? ` (${viejos} con más de 7 días ⚠️)` : ''}</td>
+                              <td style={{ padding: '6px 8px', color: obs ? '#9b1c1c' : undefined, fontWeight: obs ? 700 : 400 }}>{obs}</td>
+                            </tr>)
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Link>
 
             <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>📝 Informes diarios SSO</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '10px', marginBottom: '16px' }}>

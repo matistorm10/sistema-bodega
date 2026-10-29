@@ -46,17 +46,20 @@ export default function InformeDiario() {
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [contratos, setContratos] = useState<any[]>([])
   const [faenaCli, setFaenaCli] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>([])
   const [ptsDocs, setPtsDocs] = useState<any[]>([])
   const verTodos = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
 
   const cargar = useCallback(async () => {
-    const [f, l, us, ct, fc] = await Promise.all([
+    const [f, l, us, ct, fc, cl] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('pr_informes_diarios').select('*').order('fecha', { ascending: false }).limit(60),
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
       supabase.from('pr_faena_cliente').select('*'),
+      supabase.from('pr_clientes_informe').select('id,nombre'),
     ])
+    setClientes(cl.data || [])
     setUsuarios(us.data || []); setContratos(ct.data || []); setFaenaCli(fc.data || [])
     const propias = verTodos || !usuario ? null : await misUbicacionesIds(usuario.id)
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setLista(l.data || []); setCargando(false)
@@ -66,7 +69,7 @@ export default function InformeDiario() {
   const contratoId = edit?.d.contratoId
   useEffect(() => {
     if (!contratoId) { setPtsDocs([]); return }
-    supabase.from('pr_contrato_docs').select('id,nombre,estado,path').eq('contrato_id', contratoId).eq('categoria', 'PTS').order('nombre').then(({ data }) => setPtsDocs(data || []))
+    supabase.from('pr_contrato_documentos').select('id,nombre,estado,path,rev').eq('contrato_id', contratoId).eq('categoria', 'PTS').eq('estado', 'Aprobado').order('nombre').then(({ data }) => setPtsDocs(data || []))
   }, [contratoId])
   const nuevo = () => setEdit({ fecha: hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(CARGO_APR) })
   const abrir = async (r: any) => setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } })
@@ -146,12 +149,12 @@ export default function InformeDiario() {
           </Fila>
           <Fila>
             <Campo titulo="Contrato *">
-              <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c?.nombre || '', mandante: c?.empresa || '', ptsSel: [] }) }} style={input}>
+              <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c?.nombre || '', mandante: clientes.find(x => x.id === c?.cliente_id)?.nombre || '', ptsSel: [] }) }} style={input}>
                 <option value="">— elegir contrato —</option>{contratosFaena.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
               {contratosFaena.length === 0 && <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#986a00' }}>La jefatura aún no ha creado contratos{edit.ubicacion_id ? ' para el cliente de esta faena' : ''}.</p>}
             </Campo>
-            <Campo titulo="Empresa mandante (automática)"><input value={d.mandante} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
+            <Campo titulo="Cliente / mandante (automático)"><input value={d.mandante} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
             <Campo titulo="Cargo"><input value={CARGO_APR} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
           </Fila>
           <Fila>
@@ -173,13 +176,13 @@ export default function InformeDiario() {
             {!ro && <button type="button" onClick={() => set({ criticosL: [...(d.criticosL.length ? d.criticosL : ['']), ''] })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>+ Agregar trabajo crítico</button>}
           </Campo>
           <div style={{ marginTop: '10px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>PTS / permisos del contrato</label>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>PTS aprobados del contrato</label>
             {!d.contratoId ? <p style={{ margin: 0, fontSize: '12px', color: '#98a2b3' }}>Elige primero el contrato.</p>
-              : ptsDocs.length === 0 ? <p style={{ margin: 0, fontSize: '12px', color: '#986a00' }}>Este contrato aún no tiene PTS cargados por la jefatura.</p>
+              : ptsDocs.length === 0 ? <p style={{ margin: 0, fontSize: '12px', color: '#986a00' }}>Este contrato aún no tiene PTS aprobados.</p>
               : <div style={{ display: 'grid', gap: '4px' }}>{ptsDocs.map(p => (
                   <label key={p.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={ro} checked={d.ptsSel.includes(p.nombre)} onChange={e => set({ ptsSel: e.target.checked ? [...d.ptsSel, p.nombre] : d.ptsSel.filter(x => x !== p.nombre) })} />
-                    <span>{p.nombre}</span>{p.estado !== 'Vigente' && <span style={{ fontSize: '11px', color: '#9b1c1c' }}>({p.estado})</span>}
+                    <span>{p.nombre} <span style={{ color: '#98a2b3', fontSize: '11px' }}>Rev. {p.rev}</span></span>
                   </label>))}</div>}
             <Link href="/hsec/prevencionista/contratos" style={{ fontSize: '12px', color: AZUL }}>Ver todos los documentos del contrato →</Link>
           </div>

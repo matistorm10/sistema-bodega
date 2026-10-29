@@ -6,8 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 
-const COL_EST: Record<string, [string, string]> = { 'Vigente': ['#e7f6ec', '#14532d'], 'En revisión': ['#fef7e0', '#986a00'], 'Vencido': ['#fde8e8', '#9b1c1c'] }
-const CATS = [['PTS', 'PTS / permisos de trabajo seguro'], ['Matriz', 'Matrices'], ['Otro', 'Otros documentos']]
+import { CATEGORIAS as CATS, COLOR_DOC as COL_EST } from '@/lib/contratos'
 
 export default function ContratosPrevencionista() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
@@ -21,7 +20,7 @@ export default function ContratosPrevencionista() {
     if (!usuario || !puede) return
     Promise.all([
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
-      supabase.from('pr_contrato_docs').select('*').order('nombre'),
+      supabase.from('pr_contrato_documentos').select('*').order('nombre'),
     ]).then(([c, d]) => { setContratos(c.data || []); setDocs(d.data || []); setSel((c.data || [])[0]?.id || ''); setCargando(false) })
   }, [usuario, puede])
 
@@ -44,20 +43,20 @@ export default function ContratosPrevencionista() {
           <>
             <div style={{ ...card, marginBottom: '12px' }}>
               <label style={label}>Contrato</label>
-              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{x.nombre} · {x.empresa}</option>)}</select>
+              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
             </div>
             {c && CATS.map(([k, t]) => {
               const l = mios.filter(d => d.categoria === k)
               return (
                 <div key={k} style={{ ...card, marginBottom: '10px' }}>
                   <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{t} <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· {l.length}</span></p>
-                  {l.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin documentos cargados.</p>}
+                  {l.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin documentos.</p>}
                   {l.map(d => (
                     <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '7px 0', borderTop: '1px solid #f3f5f9', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '13px', flex: '1 1 220px' }}>{d.nombre}</span>
+                      <span style={{ fontSize: '13px', flex: '1 1 220px' }}>{d.nombre} <span style={{ color: '#98a2b3', fontSize: '11px' }}>Rev. {d.rev}</span></span>
                       <span style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, background: COL_EST[d.estado][0], color: COL_EST[d.estado][1] }}>{d.estado}</span>
-                        <button onClick={() => abrir(d.path)} style={{ ...btn(false), padding: '5px 12px', fontSize: '12px' }}>Ver / descargar</button>
+                        {d.path ? <button onClick={() => abrir(d.path)} style={{ ...btn(false), padding: '5px 12px', fontSize: '12px' }}>Ver / descargar</button> : <span style={{ fontSize: '11.5px', color: '#98a2b3' }}>Sin archivo</span>}
                       </span>
                     </div>
                   ))}

@@ -26,6 +26,7 @@ export default function JefaturaSemanales() {
   const [nuevo, setNuevo] = useState({ nombre: '', dia: '7', plazo: '1', hora: '23:59' })
   const [asigSel, setAsigSel] = useState<Record<string, { u: string, f: string }>>({})
   const [subiendo, setSubiendo] = useState('')
+  const [edNombre, setEdNombre] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
     const [c, a, i, u, f] = await Promise.all([
@@ -109,7 +110,15 @@ export default function JefaturaSemanales() {
                 return (
                   <div key={c.id} style={{ ...card, opacity: c.activo ? 1 : 0.6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{c.nombre}</p>
+                      {edNombre && edNombre.id === c.id ? (
+                        <div style={{ display: 'flex', gap: '6px', flex: '1 1 240px' }}>
+                          <input value={edNombre.nombre} onChange={e => { const v = e.target.value; setEdNombre(r => r && { ...r, nombre: v }) }} style={input} autoFocus />
+                          <button onClick={async () => { const n = edNombre.nombre.trim(); if (!n) return; const { error } = await supabase.from('pr_clientes_informe').update({ nombre: n }).eq('id', c.id); if (error) { alert(error.code === '23505' ? 'Ya existe un cliente con ese nombre.' : error.message); return } setEdNombre(null); await cargar() }} style={{ ...btn(), padding: '6px 12px', fontSize: '12px' }}>Guardar</button>
+                          <button onClick={() => setEdNombre(null)} style={{ ...btn(false), padding: '6px 10px', fontSize: '12px' }}>✕</button>
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{c.nombre} <button onClick={() => setEdNombre({ id: c.id, nombre: c.nombre })} title="Editar nombre" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px' }}>✏️</button></p>
+                      )}
                       <button onClick={() => actualizar(c.id, { activo: !c.activo })} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>{c.activo ? 'Desactivar' : 'Reactivar'}</button>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', margin: '10px 0' }}>

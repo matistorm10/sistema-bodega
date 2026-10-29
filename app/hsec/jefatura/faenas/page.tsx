@@ -24,6 +24,7 @@ export default function FaenasAsignaciones() {
   const [sel, setSel] = useState<Record<string, string>>({})
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
+  const [renombrar, setRenombrar] = useState<{ id: string, nombre: string } | null>(null)
   const [nuevoCli, setNuevoCli] = useState<{ ub: string, nombre: string, dia: string, plazo: string, hora: string } | null>(null)
 
   const cargar = useCallback(async () => {
@@ -65,6 +66,14 @@ export default function FaenasAsignaciones() {
       if (err((await supabase.from('pr_semanal_asignaciones').delete().eq('ubicacion_id', ub)).error)) return
     }
     await cargar()
+  }
+  const guardarNombre = async () => {
+    if (!renombrar) return
+    const nombre = renombrar.nombre.trim()
+    if (!nombre) { alert('El nombre no puede quedar vacío.'); return }
+    const { error } = await supabase.from('pr_clientes_informe').update({ nombre }).eq('id', renombrar.id)
+    if (error) { alert(error.code === '23505' ? 'Ya existe un cliente con ese nombre.' : error.message); return }
+    setRenombrar(null); await cargar()
   }
   const crearCliente = async () => {
     if (!nuevoCli) return
@@ -128,7 +137,15 @@ export default function FaenasAsignaciones() {
                     <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{u.nombre}{u.tipo !== 'faena' && <span style={{ fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}> · {u.tipo}</span>}</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '10px', marginBottom: '12px' }}>
                       <div><label style={label}>Cliente (informes semanales)</label>
-                        <select value={cli} onChange={e => e.target.value === '__nuevo' ? setNuevoCli({ ub: u.id, nombre: '', dia: '7', plazo: '1', hora: '23:59' }) : setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}<option value="__nuevo">➕ Crear cliente nuevo…</option></select></div>
+                        <select value={cli} onChange={e => e.target.value === '__nuevo' ? setNuevoCli({ ub: u.id, nombre: '', dia: '7', plazo: '1', hora: '23:59' }) : setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}<option value="__nuevo">➕ Crear cliente nuevo…</option></select>
+                        {cli && (renombrar && renombrar.id === cli ? (
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                            <input value={renombrar.nombre} onChange={e => { const v = e.target.value; setRenombrar(r => r && { ...r, nombre: v }) }} onKeyDown={e => { if (e.key === 'Enter') guardarNombre() }} style={input} autoFocus />
+                            <button onClick={guardarNombre} style={{ ...btn(), padding: '6px 12px', fontSize: '12px' }}>Guardar</button>
+                            <button onClick={() => setRenombrar(null)} style={{ ...btn(false), padding: '6px 10px', fontSize: '12px' }}>✕</button>
+                          </div>
+                        ) : <button onClick={() => setRenombrar({ id: cli, nombre: clientes.find(c => c.id === cli)?.nombre || '' })} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', fontSize: '12px', padding: '4px 0 0' }}>✏️ Editar nombre del cliente</button>)}
+                      </div>
                       <div><label style={label}>Grupo del programa de capacitaciones</label>
                         <select value={lugares.find(l => l.ubicacion_id === u.id)?.lugar || ''} onChange={e => setLugar(u.id, e.target.value)} style={input}><option value="">Sin clasificar</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                     </div>

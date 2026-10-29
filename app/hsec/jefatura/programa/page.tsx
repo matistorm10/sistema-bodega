@@ -150,10 +150,10 @@ export default function JefaturaPrograma() {
                         <button onClick={() => descargarProgramaMensual({ persona: { id: u.id, nombre: u.nombre, cargo: u.cargo_programa }, mes, metas, acts, mensual: m || null, faenas })} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px', marginTop: '4px' }}>📄 Descargar PDF del mes</button>
                         {m && (m.estado === 'enviado' || m.estado === 'aprobado' || m.estado === 'devuelto') ? (
                           <div style={{ marginTop: '10px' }}>
-                            <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={2} placeholder="Comentario / feedback para la persona (obligatorio si lo devuelves)" style={{ ...input, resize: 'vertical' }} />
+                            <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={2} placeholder="Comentarios para el APR (obligatorios si rechazas)" style={{ ...input, resize: 'vertical' }} />
                             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                              {m.estado !== 'aprobado' && <button onClick={() => resolver(u, 'aprobado')} style={btn()}>✓ Aprobar programa del mes</button>}
-                              {m.estado !== 'devuelto' && <button onClick={() => resolver(u, 'devuelto')} style={btn(false, true)}>Devolver para corregir</button>}
+                              {m.estado !== 'aprobado' && <button onClick={() => resolver(u, 'aprobado')} style={btn()}>✓ Aprobar programa</button>}
+                              {m.estado !== 'devuelto' && <button onClick={() => resolver(u, 'devuelto')} style={btn(false, true)}>✗ Rechazar y devolver al APR</button>}
                             </div>
                           </div>
                         ) : <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#98a2b3' }}>La persona aún no envía su programa del mes.</p>}

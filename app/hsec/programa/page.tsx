@@ -107,36 +107,24 @@ export default function Programa() {
         : await supabase.from('firmas_usuario').update({ consentimiento_at: ahora }).eq('usuario_id', usuario.id)
       if (error) throw new Error('No se pudo guardar tu firma: ' + error.message)
     }
-    // 2) registro
-    let id: string = registro?.id
-    const nuevoRegistro = !registro
-    if (registro) {
-      const { error } = await supabase.from('pr_prog_actividades').update({ fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje }).eq('id', registro.id)
-      if (error) throw new Error('No se pudo guardar: ' + error.message)
-    } else {
-      const { data, error } = await supabase.from('pr_prog_actividades').insert({ ...r, actividad, usuario_id: usuario.id }).select('id').single()
-      if (error || !data) throw new Error(error?.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día.' : error?.message.includes('fecha') ? 'La fecha debe ser la de hoy.' : 'No se pudo guardar: ' + (error?.message || ''))
-      id = data.id
-    }
-    // 3) PDF firmado + 4) archivo + 5) vínculo
-    try {
-      const blob = await generarRegistroActividad({
-        actividad, fecha: r.fecha, faena: faenas.find(x => x.id === r.ubicacion_id)?.nombre || '', nombre: usuario.nombre,
-        cargo: usuario.cargoPrograma ? CARGOS_PROGRAMA[usuario.cargoPrograma] : '', datos: r.datos, porcentaje: r.porcentaje, firma, firmadoAt: ahora,
-      })
-      const path = `programa/${usuario.id}/registros/${id}.pdf`
-      const up = await supabase.storage.from('hsec-documentos').upload(path, blob, { contentType: 'application/pdf', upsert: true })
-      if (up.error) throw new Error(up.error.message)
-      const { error } = await supabase.from('pr_prog_actividades').update({ pdf_path: path, firmado_at: ahora }).eq('id', id)
-      if (error) throw new Error(error.message)
-    } catch (e: any) {
-      if (nuevoRegistro) await supabase.from('pr_prog_actividades').delete().eq('id', id)
-      throw new Error('No se pudo firmar y archivar el documento: ' + (e?.message || e))
-    }
+    // 2) PDF firmado → archivo (nueva versión; las anteriores quedan guardadas) → 3) registro con vínculo al PDF
+    const id: string = registro?.id || crypto.randomUUID()
+    const blob = await generarRegistroActividad({
+      actividad, fecha: r.fecha, faena: faenas.find(x => x.id === r.ubicacion_id)?.nombre || '', nombre: usuario.nombre,
+      cargo: usuario.cargoPrograma ? CARGOS_PROGRAMA[usuario.cargoPrograma] : '', datos: r.datos, porcentaje: r.porcentaje, firma, firmadoAt: ahora,
+    })
+    const path = `programa/${usuario.id}/registros/${id}_${Date.now()}.pdf`
+    const up = await supabase.storage.from('hsec-documentos').upload(path, blob, { contentType: 'application/pdf' })
+    if (up.error) throw new Error('No se pudo archivar el documento: ' + up.error.message)
+    const campos = { fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje, pdf_path: path, firmado_at: ahora }
+    const { error } = registro
+      ? await supabase.from('pr_prog_actividades').update(campos).eq('id', id)
+      : await supabase.from('pr_prog_actividades').insert({ ...campos, id, actividad, usuario_id: usuario.id })
+    if (error) throw new Error(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día.' : error.message.includes('fecha') ? 'La fecha debe ser la de hoy.' : 'No se pudo guardar: ' + error.message)
     setPendiente(null); setForm(null); setMsg(''); await cargar()
   }
   const eliminar = async (a: any) => {
-    if (!confirm('¿Eliminar este registro?')) return
+    if (!confirm(a.firmado_at ? '¿Eliminar este registro firmado? Quedará una copia en el historial de auditoría.' : '¿Eliminar este registro?')) return
     const { error } = await supabase.from('pr_prog_actividades').delete().eq('id', a.id)
     if (error) { alert(error.message); return }
     await cargar()
@@ -177,7 +165,7 @@ export default function Programa() {
             )}
             {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
             <div style={{ display: pendiente ? 'none' : 'block' }}>
-              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={cerrado || !!form.registro?.firmado_at}
+              <FormActividad actividad={form.actividad} usuario={usuario} faenas={faenas} inicial={form.registro} soloLectura={cerrado}
                 onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
             </div>
           </>
@@ -210,7 +198,9 @@ export default function Programa() {
                 color: plazo.tipo === 'atraso' ? '#9b1c1c' : plazo.tipo === 'ok' ? '#14532d' : '#7a5600' }}>
                 {plazo.tipo === 'atraso' ? '⚠️' : plazo.tipo === 'ok' ? '✅' : '🗓️'} {plazo.texto}
               </p>
-              {mensual?.comentario && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#344054', background: '#f6f8fb', borderRadius: '8px', padding: '8px 10px' }}><strong>Comentario de la jefatura:</strong> {mensual.comentario}</p>}
+              {estado === 'devuelto' && <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#9b1c1c', background: '#fde8e8', border: '1px solid #f5c2c2', borderRadius: '8px', padding: '10px 12px' }}><strong>❌ Tu jefatura rechazó el programa del mes.</strong> {mensual?.comentario ? <>Motivo: {mensual.comentario}</> : null}<br />Corrige los registros que correspondan (botón «Modificar» o «Eliminar»), vuelve a firmarlos y presiona «Enviar programa a aprobación».</p>}
+              {estado === 'aprobado' && <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#14532d', background: '#e7f6ec', borderRadius: '8px', padding: '8px 12px' }}>✅ Programa aprobado por la jefatura.{mensual?.comentario ? <> Comentario: {mensual.comentario}</> : null}</p>}
+              {estado !== 'devuelto' && estado !== 'aprobado' && mensual?.comentario && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#344054', background: '#f6f8fb', borderRadius: '8px', padding: '8px 10px' }}><strong>Comentario de la jefatura:</strong> {mensual.comentario}</p>}
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
             </div>
 
@@ -237,8 +227,8 @@ export default function Programa() {
                             <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}</span>
                             <span style={{ display: 'flex', gap: '6px' }}>
                               {a.pdf_path && <button onClick={() => verPdf(a.pdf_path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>📄 PDF</button>}
-                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{cerrado || a.firmado_at ? 'Ver' : 'Abrir'}</button>
-                              {!cerrado && !a.firmado_at && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
+                              <button onClick={() => setForm({ actividad: f.k, registro: a })} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>{cerrado ? 'Ver' : a.firmado_at ? 'Modificar' : 'Abrir'}</button>
+                              {!cerrado && <button onClick={() => eliminar(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>}
                             </span>
                           </div>
                         ))}

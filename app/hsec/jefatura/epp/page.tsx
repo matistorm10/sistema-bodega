@@ -24,6 +24,7 @@ export default function JefaturaEpp() {
   const [asigSel, setAsigSel] = useState({ u: '', ub: '' })
   const [fUbic, setFUbic] = useState('')
   const [msg, setMsg] = useState('')
+  const [edit, setEdit] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
     const [c, s, u, a, p, m, us] = await Promise.all([
@@ -57,6 +58,27 @@ export default function JefaturaEpp() {
     setNuevo({ nombre: '', talla: false, min: '0' }); setMsg(''); await cargar()
   }
   const act = async (id: string, campos: any) => { const { error } = await supabase.from('pr_epp_catalogo').update(campos).eq('id', id); if (error) alert(error.message); else await cargar() }
+  const stockTotal = (id: string) => stock.filter(x => x.item_id === id).reduce((a, x) => a + x.stock, 0)
+  const renombrar = async () => {
+    if (!edit) return
+    const nombre = edit.nombre.trim()
+    if (!nombre) { alert('El nombre no puede quedar vacío.'); return }
+    const { error } = await supabase.from('pr_epp_catalogo').update({ nombre }).eq('id', edit.id)
+    if (error) { alert(error.code === '23505' ? 'Ya existe un EPP con ese nombre.' : error.message); return }
+    setEdit(null); await cargar()
+  }
+  const eliminar = async (c: any) => {
+    if (stockTotal(c.id) !== 0) { alert(`No se puede eliminar: tiene ${stockTotal(c.id)} unidades en stock. Primero deja el stock en cero.`); return }
+    const { count } = await supabase.from('pr_epp_movimientos').select('id', { count: 'exact', head: true }).eq('item_id', c.id)
+    if ((count || 0) > 0) {
+      if (!confirm(`"${c.nombre}" tiene ${count} movimiento(s) en el historial. Para no perder esa información se ocultará del catálogo (no se borra). ¿Continuar?`)) return
+      await act(c.id, { activo: false }); return
+    }
+    if (!confirm(`¿Eliminar "${c.nombre}" del catálogo? No tiene stock ni movimientos.`)) return
+    const { error } = await supabase.from('pr_epp_catalogo').delete().eq('id', c.id)
+    if (error) { alert(error.message); return }
+    await cargar()
+  }
   const asignar = async () => {
     if (!asigSel.u || !asigSel.ub) { alert('Elige prevencionista y ubicación.'); return }
     const { error } = await supabase.from('pr_epp_ubicaciones').insert({ usuario_id: asigSel.u, ubicacion_id: asigSel.ub })
@@ -125,10 +147,17 @@ export default function JefaturaEpp() {
                 <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Catálogo de EPP</p>
                 {catalogo.map(c => (
                   <div key={c.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', borderTop: '1px solid #eef1f6', padding: '5px 0', fontSize: '12.5px', opacity: c.activo ? 1 : 0.5 }}>
-                    <span style={{ flex: 1 }}>{c.nombre}{c.usa_talla ? ' · talla' : ''}</span>
+                    {edit && edit.id === c.id ? (
+                      <span style={{ flex: 1, display: 'flex', gap: '4px' }}>
+                        <input value={edit.nombre} onChange={e => { const v = e.target.value; setEdit(r => r && { ...r, nombre: v }) }} onKeyDown={e => { if (e.key === 'Enter') renombrar() }} style={{ ...input, padding: '4px 6px' }} autoFocus />
+                        <button onClick={renombrar} style={{ ...btn(), padding: '3px 8px', fontSize: '11px' }}>OK</button>
+                        <button onClick={() => setEdit(null)} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>✕</button>
+                      </span>
+                    ) : <span style={{ flex: 1 }}>{c.nombre}{c.usa_talla ? ' · talla' : ''} <button onClick={() => setEdit({ id: c.id, nombre: c.nombre })} title="Editar nombre" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>}
                     <span style={{ color: '#667085' }}>mín.</span>
                     <input type="number" min="0" defaultValue={c.stock_minimo} onBlur={e => { const v = Number(e.target.value); if (v !== c.stock_minimo && v >= 0) act(c.id, { stock_minimo: v }) }} style={{ ...input, width: '60px', padding: '4px 6px' }} />
                     <button onClick={() => act(c.id, { activo: !c.activo })} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>{c.activo ? 'Ocultar' : 'Activar'}</button>
+                    <button onClick={() => eliminar(c)} title={stockTotal(c.id) !== 0 ? 'Solo se puede eliminar con stock en cero' : 'Eliminar'} style={{ ...btn(false, true), padding: '3px 8px', fontSize: '11px', opacity: stockTotal(c.id) !== 0 ? 0.4 : 1 }}>🗑</button>
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px', alignItems: 'flex-end' }}>

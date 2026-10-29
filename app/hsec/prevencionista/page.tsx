@@ -12,6 +12,7 @@ export default function EspacioPrevencionista() {
 
   const secciones = [
     { href: '/hsec/prevencionista/sso', icon: '📋', label: 'SSO Faena', desc: 'Descriptor de cargo, programa de liderazgo, informes diarios y semanales, stock de EPP' },
+    { href: '/hsec/prevencionista/epp', icon: '🦺', label: 'Stock de EPP', desc: 'Ingresos y entregas de EPP de tu faena (independiente de Bodega)' },
     { href: '/hsec/prevencionista/charlas', icon: '🗣️', label: 'Charlas y capacitaciones', desc: 'Registro de charlas con lista de asistentes' },
   ]
 

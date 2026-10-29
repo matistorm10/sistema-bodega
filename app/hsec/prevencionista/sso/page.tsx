@@ -150,7 +150,9 @@ export default function SsoFaena() {
                     <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>{i.n}. {i.titulo}</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{i.detalle}</p>
                   </div>
-                  <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', whiteSpace: 'nowrap' }}>{verificado ? 'Próximamente' : 'Bloqueado'}</span>
+                  {i.n === '2' && verificado
+                    ? <Link href="/hsec/programa" style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
+                    : <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', whiteSpace: 'nowrap' }}>{verificado ? 'Próximamente' : 'Bloqueado'}</span>}
                 </div>
               ))}
             </div>

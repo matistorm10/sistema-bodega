@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import { CARGOS_PROGRAMA } from '@/lib/programa'
 
 export default function Usuarios() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
@@ -28,6 +29,7 @@ export default function Usuarios() {
   const [esRevisor, setEsRevisor] = useState(false)
   const [esJefeHsec, setEsJefeHsec] = useState(false)
   const [esPrevencionista, setEsPrevencionista] = useState(false)
+  const [cargoPrograma, setCargoPrograma] = useState('')
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -48,6 +50,7 @@ export default function Usuarios() {
   const [editEsRevisor, setEditEsRevisor] = useState(false)
   const [editEsJefeHsec, setEditEsJefeHsec] = useState(false)
   const [editEsPrevencionista, setEditEsPrevencionista] = useState(false)
+  const [editCargoPrograma, setEditCargoPrograma] = useState('')
   const [editPermisos, setEditPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
@@ -99,14 +102,14 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, cargoPrograma: cargoPrograma || null, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`)
     setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
-    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setPermisos({})
+    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setCargoPrograma(''); setPermisos({})
     cargar()
   }
 
@@ -149,6 +152,7 @@ export default function Usuarios() {
     setEditEsRevisor(!!u.es_revisor_contabilidad)
     setEditEsJefeHsec(!!u.es_jefe_hsec)
     setEditEsPrevencionista(!!u.es_prevencionista)
+    setEditCargoPrograma(u.cargo_programa || '')
     const p: Record<string, {origen:boolean, destino:boolean}> = {}
     ;(u.usuario_ubicaciones || []).forEach((x: any) => { p[x.ubicacion_id] = { origen: x.puede_origen, destino: x.puede_destino } })
     setEditPermisos(p)
@@ -167,7 +171,7 @@ export default function Usuarios() {
       acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones,
       acceso_contabilidad: editAccesoContabilidad, acceso_hsec: editAccesoHsec,
       puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor,
-      es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista
+      es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista, cargo_programa: editCargoPrograma || null
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
@@ -333,6 +337,14 @@ export default function Usuarios() {
           </div>
         )}
 
+        <div style={{marginBottom:'10px'}}>
+          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido (Prevención de Riesgo)</label>
+          <select value={cargoPrograma} onChange={e=>setCargoPrograma(e.target.value)} style={inputStyle}>
+            <option value="">No participa</option>
+            {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+
         {(rol === 'admin' || accesoHsec) && (
           <div style={{marginBottom:'10px'}}>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
@@ -407,6 +419,13 @@ export default function Usuarios() {
                       </div>
                     </div>
                   )}
+                  <div style={{marginBottom:'10px'}}>
+                    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido (Prevención de Riesgo)</label>
+                    <select value={editCargoPrograma} onChange={e=>setEditCargoPrograma(e.target.value)} style={inputStyle}>
+                      <option value="">No participa</option>
+                      {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
                   {(editRol === 'admin' || editAccesoHsec) && (
                     <div style={{marginBottom:'10px'}}>
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
@@ -452,6 +471,11 @@ export default function Usuarios() {
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
                       {u.puede_aprobar_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>✅ Aprueba</span>}
                       {u.es_revisor_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #986a00',color:'#986a00'}}>🔎 Revisor contable</span>}
+                    </div>
+                  )}
+                  {u.cargo_programa && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
+                      <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #1B4F9C',color:'#1B4F9C'}}>📈 Programa: {CARGOS_PROGRAMA[u.cargo_programa] || u.cargo_programa}</span>
                     </div>
                   )}
                   {(u.es_jefe_hsec || u.es_prevencionista) && (

@@ -7,7 +7,7 @@ export type UsuarioActual = {
   id: string, nombre: string, cargo: string | null, telefono: string | null, email: string, rol: string,
   accesoBodega: boolean, accesoVehiculos: boolean, accesoLicitaciones: boolean,
   accesoContabilidad: boolean, accesoHsec: boolean, puedeAprobar: boolean, esRevisor: boolean,
-  esJefeHsec: boolean, esPrevencionista: boolean,
+  esJefeHsec: boolean, esPrevencionista: boolean, cargoPrograma: string | null,
   permisos: Permiso[]
 }
 
@@ -36,7 +36,7 @@ export function useUsuarioActual() {
       accesoBodega: perfil.acceso_bodega !== false, accesoVehiculos: !!perfil.acceso_vehiculos, accesoLicitaciones: !!perfil.acceso_licitaciones,
       accesoContabilidad: !!perfil.acceso_contabilidad, accesoHsec: !!perfil.acceso_hsec,
       puedeAprobar: !!perfil.puede_aprobar_contabilidad, esRevisor: !!perfil.es_revisor_contabilidad,
-      esJefeHsec: !!perfil.es_jefe_hsec, esPrevencionista: !!perfil.es_prevencionista,
+      esJefeHsec: !!perfil.es_jefe_hsec, esPrevencionista: !!perfil.es_prevencionista, cargoPrograma: perfil.cargo_programa || null,
       permisos: perfil.usuario_ubicaciones || []
     }
     setUsuario(prev => (prev && JSON.stringify(prev) === JSON.stringify(nuevo)) ? prev : nuevo)

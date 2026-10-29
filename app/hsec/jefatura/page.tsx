@@ -143,6 +143,14 @@ export default function Jefatura() {
               </div>
             </Link>
 
+            <Link href="/hsec/jefatura/programa" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>📈</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Programa de liderazgo · aprobación mensual</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Cumplimiento de cada persona, revisión de sus actividades y aprobación del mes</p>
+              </div>
+            </Link>
+
             <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>🗣️ Charlas y capacitaciones</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>
               {kpi(filtradas.length, 'Charlas realizadas')}

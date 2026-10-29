@@ -6,7 +6,9 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
-import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct } from '@/lib/programa'
+import MiFirma from '@/components/programa/MiFirma'
+import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
+import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior } from '@/lib/programa'
 
 const fechaCL = (f?: string | null) => f ? f.slice(0, 10).split('-').reverse().join('-') : ''
 const ESTADOS: Record<string, [string, string, string]> = {
@@ -30,6 +32,7 @@ export default function Programa() {
   const [form, setForm] = useState<{ actividad: string, registro?: any } | null>(null)
   const [abierta, setAbierta] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [inicial, setInicial] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!usuario || !cargo) { setCargando(false); return }
@@ -47,7 +50,19 @@ export default function Programa() {
   }, [usuario, cargo, mes])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
 
+  // Los primeros días del mes, si el mes anterior aún no se informa, se abre ese mes primero.
+  useEffect(() => {
+    if (!usuario || !cargo || inicial) return
+    setInicial(true)
+    if (new Date().getDate() > 5) return
+    const prev = mesAnterior(mesActual())
+    supabase.from('pr_prog_mensual').select('estado').eq('usuario_id', usuario.id).eq('mes', prev).maybeSingle().then(({ data }) => {
+      if (!data || data.estado === 'abierto' || data.estado === 'devuelto') setMes(prev)
+    })
+  }, [usuario, cargo, inicial])
+
   const estado = mensual?.estado || 'abierto'
+  const plazo = estadoPlazo(mes, estado, mensual?.enviado_at)
   const cerrado = estado === 'enviado' || estado === 'aprobado'
   const filas = useMemo(() => ORDEN_ACTIVIDADES.filter(k => metas.some(m => m.actividad === k)).map(k => {
     const meta = metas.find(m => m.actividad === k)!.meta as number
@@ -108,6 +123,7 @@ export default function Programa() {
             onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
         ) : (
           <>
+            <MiFirma usuarioId={usuario!.id} />
             <div style={{ ...card, marginBottom: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <div>
@@ -126,8 +142,14 @@ export default function Programa() {
               </div>
               <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: estBg, color: estCol, fontWeight: 600 }}>{estTxt}</span>
+                <button onClick={() => descargarProgramaMensual({ persona: { id: usuario!.id, nombre: usuario!.nombre, cargo: cargo! }, mes, metas, acts, mensual, faenas })} style={{ ...btn(false), padding: '7px 14px', fontSize: '12.5px' }}>📄 Descargar PDF del mes</button>
                 {!cerrado && <button onClick={enviar} style={{ ...btn(), padding: '7px 14px', fontSize: '12.5px' }}>Enviar programa a aprobación</button>}
               </div>
+              <p style={{ margin: '10px 0 0', fontSize: '12.5px', padding: '7px 10px', borderRadius: '8px',
+                background: plazo.tipo === 'atraso' ? '#fde8e8' : plazo.tipo === 'ok' ? '#e7f6ec' : '#fff8e5',
+                color: plazo.tipo === 'atraso' ? '#9b1c1c' : plazo.tipo === 'ok' ? '#14532d' : '#7a5600' }}>
+                {plazo.tipo === 'atraso' ? '⚠️' : plazo.tipo === 'ok' ? '✅' : '🗓️'} {plazo.texto}
+              </p>
               {mensual?.comentario && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#344054', background: '#f6f8fb', borderRadius: '8px', padding: '8px 10px' }}><strong>Comentario de la jefatura:</strong> {mensual.comentario}</p>}
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
             </div>

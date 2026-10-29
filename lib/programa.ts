@@ -17,7 +17,7 @@ export const ACTIVIDADES: Record<string, { nombre: string, corto: string, tipo: 
   cdp_rbs: { nombre: 'CdP RBS (reglas básicas de seguridad)', corto: 'CdP RBS', tipo: 'formulario' },
   inspeccion_epp: { nombre: 'Inspección grupal de EPP', corto: 'Inspección EPP', tipo: 'formulario' },
   inspeccion_bloqueo: { nombre: 'Inspección de elementos de bloqueo', corto: 'Elementos de bloqueo', tipo: 'formulario' },
-  verificacion_ds594: { nombre: 'Lista de verificación DS 594', corto: 'DS 594', tipo: 'pendiente' },
+  verificacion_ds594: { nombre: 'Lista de verificación DS 594', corto: 'DS 594', tipo: 'formulario' },
   verificacion_ds132: { nombre: 'Lista de verificación DS 132 (cuando aplique)', corto: 'DS 132', tipo: 'pendiente' },
 }
 
@@ -84,4 +84,21 @@ export const mesesRecientes = (n = 12) => {
   const h = new Date(); const out: string[] = []
   for (let i = 0; i < n; i++) { const d = new Date(h.getFullYear(), h.getMonth() - i, 1); out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`) }
   return out
+}
+
+// Plazo para informar el programa de un mes: hasta el día 5 (inclusive) del mes siguiente.
+export const DIA_LIMITE = 5
+export const mesSiguiente = (m: string) => { const [a, mm] = m.split('-').map(Number); const d = new Date(a, mm, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+export const mesAnterior = (m: string) => { const [a, mm] = m.split('-').map(Number); const d = new Date(a, mm - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+export const finPlazo = (m: string) => { const [a, mm] = mesSiguiente(m).split('-').map(Number); return new Date(a, mm - 1, DIA_LIMITE, 23, 59, 59) }
+export const textoPlazo = (m: string) => `${DIA_LIMITE} de ${nombreMes(mesSiguiente(m))}`
+
+// Semáforo del plazo: 'ok' (a tiempo), 'atraso' (venció sin enviar o enviado tarde), 'vigente' (aún en plazo o mes en curso)
+export function estadoPlazo(m: string, estado: string | undefined, enviadoAt?: string | null) {
+  const fin = finPlazo(m), ahora = new Date()
+  const enviado = estado === 'enviado' || estado === 'aprobado'
+  if (enviado) return enviadoAt && new Date(enviadoAt) > fin ? { tipo: 'atraso' as const, texto: 'Enviado con atraso' } : { tipo: 'ok' as const, texto: 'Enviado a tiempo' }
+  if (ahora > fin) return { tipo: 'atraso' as const, texto: `Atrasado · el plazo venció el ${textoPlazo(m)}` }
+  const dias = Math.ceil((fin.getTime() - ahora.getTime()) / 86400000)
+  return { tipo: 'vigente' as const, texto: m === mesActual() ? `Se informa a más tardar el ${textoPlazo(m)}` : `Plazo: ${textoPlazo(m)} · quedan ${dias} día${dias === 1 ? '' : 's'}` }
 }

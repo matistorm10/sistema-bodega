@@ -6,7 +6,9 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, input, Barra } from '@/components/programa/ui'
-import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct } from '@/lib/programa'
+import MiFirma from '@/components/programa/MiFirma'
+import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
+import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior, textoPlazo } from '@/lib/programa'
 
 const fechaCL = (f?: string | null) => f ? f.slice(0, 10).split('-').reverse().join('-') : ''
 const ESTADOS: Record<string, [string, string, string]> = {
@@ -30,6 +32,7 @@ export default function JefaturaPrograma() {
   const [abierto, setAbierto] = useState<string | null>(null)
   const [comentario, setComentario] = useState('')
   const [ver, setVer] = useState<any | null>(null)
+  const [prevPend, setPrevPend] = useState<any[]>([])
 
   const cargar = useCallback(async () => {
     const [p, m, a, mm, f] = await Promise.all([
@@ -39,6 +42,9 @@ export default function JefaturaPrograma() {
       supabase.from('pr_prog_mensual').select('*').eq('mes', mes),
       supabase.from('ubicaciones').select('id,nombre').eq('tipo', 'faena'),
     ])
+    const prev = mesAnterior(mesActual())
+    const { data: mp } = await supabase.from('pr_prog_mensual').select('usuario_id,estado').eq('mes', prev)
+    setPrevPend((p.data || []).filter((u: any) => { const x = (mp || []).find((y: any) => y.usuario_id === u.id); return !x || x.estado === 'abierto' || x.estado === 'devuelto' }))
     setPersonas(p.data || []); setMetas(m.data || []); setActs(a.data || []); setMensuales(mm.data || []); setFaenas(f.data || [])
     setCargando(false)
   }, [mes])
@@ -91,6 +97,14 @@ export default function JefaturaPrograma() {
         {cab}
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
+            {prevPend.length > 0 && (() => { const pl = estadoPlazo(mesAnterior(mesActual()), 'abierto'); return (
+              <div style={{ ...card, marginBottom: '12px', background: pl.tipo === 'atraso' ? '#fde8e8' : '#fff8e5', borderColor: pl.tipo === 'atraso' ? '#f3b4b4' : '#f0d98a' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#7a5600' }}>
+                  {pl.tipo === 'atraso' ? '⚠️' : '🗓️'} Programa de {nombreMes(mesAnterior(mesActual()))} sin enviar · plazo {textoPlazo(mesAnterior(mesActual()))}
+                </p>
+                <p style={{ margin: 0, fontSize: '12.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#7a5600' }}>{prevPend.map(u => u.nombre).join(' · ')}</p>
+              </div>) })()}
+            {usuario && <MiFirma usuarioId={usuario.id} />}
             <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '12px' }}>
               {Array.from(new Set([mes, ...mesesRecientes(12)])).sort().reverse().map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
             </select>
@@ -112,7 +126,10 @@ export default function JefaturaPrograma() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}><span style={{ color: '#667085' }}>Cumplimiento</span><strong>{r.cumplimiento}%</strong></div>
                         <Barra valor={r.cumplimiento} />
                       </div>
-                      <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: bg, color: col, fontWeight: 600 }}>{et}</span>
+                      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                        <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: bg, color: col, fontWeight: 600 }}>{et}</span>
+                        {(() => { const pl = estadoPlazo(mes, m?.estado, m?.enviado_at); return pl.tipo === 'vigente' ? null : <span style={{ fontSize: '10.5px', color: pl.tipo === 'atraso' ? '#9b1c1c' : '#14532d' }}>{pl.tipo === 'atraso' ? '⚠️' : '✓'} {pl.texto}</span> })()}
+                      </span>
                     </div>
                     {open && (
                       <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
@@ -127,6 +144,7 @@ export default function JefaturaPrograma() {
                             ))}
                           </div>
                         ))}
+                        <button onClick={() => descargarProgramaMensual({ persona: { id: u.id, nombre: u.nombre, cargo: u.cargo_programa }, mes, metas, acts, mensual: m || null, faenas })} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px', marginTop: '4px' }}>📄 Descargar PDF del mes</button>
                         {m && (m.estado === 'enviado' || m.estado === 'aprobado' || m.estado === 'devuelto') ? (
                           <div style={{ marginTop: '10px' }}>
                             <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={2} placeholder="Comentario / feedback para la persona (obligatorio si lo devuelves)" style={{ ...input, resize: 'vertical' }} />

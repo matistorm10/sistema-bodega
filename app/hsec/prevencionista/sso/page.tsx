@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
-import FirmaCanvas from '@/components/FirmaCanvas'
+import FirmaCanvas from '@/components/programa/FirmaCanvas'
 import { ITEMS_SSO, DOC_DESCRIPTOR } from '@/lib/prevencion'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }

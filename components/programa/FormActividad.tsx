@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { RBS } from '@/lib/rbs'
+import { DS594, TOTAL_DS594 } from '@/lib/ds594'
 import { ACTIVIDADES, ARCHIVO_INFO, ITEMS_ABC, ITEMS_CDR, COLS_EPP, COLS_BLOQUEO, CARGOS_PROGRAMA, pct, Resp, Cnc } from '@/lib/programa'
 import { card, input, btn, Opciones, OP_SI, OP_C, Campo, Fila } from './ui'
 
@@ -46,6 +47,9 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   const cols = actividad === 'inspeccion_epp' ? COLS_EPP : COLS_BLOQUEO
   const [filas, setFilas] = useState<{ nombre: string, vals: (Cnc | null)[], obs: string }[]>(d0.filas || [{ nombre: '', vals: vacios(cols.length), obs: '' }])
   const [hall, setHall] = useState<{ trabajador: string, hallazgo: string, accion: string, responsable: string }[]>(d0.hallazgos || [])
+  // DS 594
+  const [det, setDet] = useState<Record<string, { justif: string, accion: string, fecha: string, responsable: string, status: string }>>(d0.det || {})
+  const setDetalle = (n: string, campo: string, v: string) => setDet(p => { const base = p[n] || { justif: '', accion: '', fecha: '', responsable: '', status: 'Abierto' }; return { ...p, [n]: { ...base, [campo]: v } } })
   // respaldos
   const [respaldos, setRespaldos] = useState<string[]>(d0.respaldos || [])
   const [subiendo, setSubiendo] = useState(false)
@@ -53,7 +57,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
   const [msg, setMsg] = useState('')
 
   const rbsActual = RBS.find(r => r.n === rbsN)!
-  const nItems = actividad === 'confirmacion_rol' ? ITEMS_CDR.length : actividad === 'confirmacion_abc' ? ITEMS_ABC.reduce((s, g) => s + g.items.length, 0) : actividad === 'cdp_rbs' ? rbsActual.items.length : 0
+  const nItems = actividad === 'confirmacion_rol' ? ITEMS_CDR.length : actividad === 'confirmacion_abc' ? ITEMS_ABC.reduce((s, g) => s + g.items.length, 0) : actividad === 'cdp_rbs' ? rbsActual.items.length : actividad === 'verificacion_ds594' ? TOTAL_DS594 : 0
   const resp = (i: number) => (items[i] ?? null) as Resp | null
   const setItem = (i: number, v: Resp) => setItems(prev => { const c = [...prev]; while (c.length < nItems) c.push(null); c[i] = v; return c })
 
@@ -102,6 +106,19 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
       porcentaje = pct(si, si + no)
       datos = { ...datos, rbs: rbsN, hora: h, observador: usuario.nombre, colaborador, lugar, tarea, items, fortalezas_txt: textoA, oportunidades_txt: textoB }
+    } else if (actividad === 'verificacion_ds594') {
+      if (!lugar.trim()) { setMsg('Indica el sector auditado.'); return }
+      if (items.filter(Boolean).length < nItems) { setMsg(`Faltan ítems por responder (${items.filter(Boolean).length} de ${nItems}).`); return }
+      const planas = DS594.flatMap(s => s.items)
+      for (let i = 0; i < planas.length; i++) {
+        if (items[i] === 'no') {
+          const x = det[planas[i].n]
+          if (!x?.justif?.trim() || !x?.accion?.trim()) { setMsg(`El ítem ${planas[i].n} es «NO»: completa la justificación y el plan de acción.`); return }
+        }
+      }
+      const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
+      porcentaje = pct(si, si + no)
+      datos = { ...datos, lugar, items, det }
     } else if (actividad === 'cdp_tarea_critica') {
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
       const s = Number(nSeguros || 0), o = Number(nOport || 0)
@@ -188,6 +205,53 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
           <Fila><Campo titulo="Peligro (comportamiento, condición u omisión que pueda generar daño o lesión) · acción + característica">{area(peligro, setPeligro)}</Campo></Fila>
         </>
       )}
+
+      {actividad === 'verificacion_ds594' && (() => {
+        let off = 0
+        return (
+          <>
+            <Fila><Campo titulo="Sector auditado">{txt(lugar, setLugar, 'Ej: Oficina y casino faena Pozo 2')}</Campo></Fila>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>Check-list de autoevaluación de cumplimiento legal DS 594. Si respondes <strong>NO</strong>, indica la justificación y el plan de acción de mejora. Respondidos: <strong>{items.filter(Boolean).length} de {TOTAL_DS594}</strong>.</p>
+            {DS594.map(sec => {
+              const o = off; off += sec.items.length
+              const resp0 = sec.items.filter((_, i) => items[o + i]).length
+              let ultimaSub = ''
+              return (
+                <details key={sec.titulo} style={{ border: '1px solid #e2e6ed', borderRadius: '10px', marginBottom: '8px', padding: '2px 10px' }}>
+                  <summary style={{ cursor: 'pointer', padding: '9px 0', fontWeight: 700, fontSize: '13px', color: '#16213E' }}>{sec.titulo} <span style={{ fontWeight: 400, color: resp0 === sec.items.length ? '#1e8e4e' : '#667085' }}>· {resp0}/{sec.items.length}</span></summary>
+                  {sec.items.map((it, i) => {
+                    const mostrarSub = it.sub && it.sub !== ultimaSub; if (it.sub) ultimaSub = it.sub
+                    const r = resp(o + i)
+                    const x = det[it.n]
+                    return (
+                      <div key={it.n}>
+                        {mostrarSub && <p style={{ margin: '10px 0 0', fontWeight: 700, fontSize: '12.5px', color: '#1B4F9C' }}>{it.sub}</p>}
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #eef1f6' }}>
+                          <span style={{ fontSize: '13px', color: '#344054', flex: 1 }}><strong>{it.n}</strong> {it.t}{it.norma ? <span style={{ color: '#98a2b3', fontSize: '11.5px' }}> · {it.norma}</span> : null}</span>
+                          <Opciones valor={r} onChange={v => setItem(o + i, v as Resp)} opciones={OP_SI} disabled={lect} />
+                        </div>
+                        {r === 'no' && (
+                          <div style={{ background: '#fff5f5', borderRadius: '8px', padding: '8px', margin: '0 0 8px', display: 'grid', gap: '6px' }}>
+                            <input value={x?.justif || ''} onChange={e => setDetalle(it.n, 'justif', e.target.value)} disabled={lect} placeholder="Justificación" style={input} />
+                            <input value={x?.accion || ''} onChange={e => setDetalle(it.n, 'accion', e.target.value)} disabled={lect} placeholder="Plan de acción de mejora" style={input} />
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <input type="date" value={x?.fecha || ''} onChange={e => setDetalle(it.n, 'fecha', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
+                              <input value={x?.responsable || ''} onChange={e => setDetalle(it.n, 'responsable', e.target.value)} disabled={lect} placeholder="Responsable" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
+                              <select value={x?.status || 'Abierto'} onChange={e => setDetalle(it.n, 'status', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 110px', width: 'auto' }}>
+                                <option>Abierto</option><option>En curso</option><option>Cerrado</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </details>
+              )
+            })}
+          </>
+        )
+      })()}
 
       {actividad === 'cdp_rbs' && (
         <>

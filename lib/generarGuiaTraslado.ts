@@ -36,7 +36,7 @@ export function abrirVentanaGuia() {
   return abrirVentanaPDF()
 }
 
-async function cargarLogo(): Promise<{ data: string, ratio: number } | null> {
+export async function cargarLogo(): Promise<{ data: string, ratio: number } | null> {
   try {
     const res = await fetch('/logo-indeli.jpg')
     if (!res.ok) return null
@@ -61,7 +61,7 @@ async function cargarLogo(): Promise<{ data: string, ratio: number } | null> {
 }
 
 // Re-dibuja la imagen en un canvas y la devuelve como PNG de 32 bits: jsPDF no maneja bien los PNG con paleta y transparencia.
-async function normalizarImagen(data: string): Promise<{ data: string, w: number, h: number } | null> {
+export async function normalizarImagen(data: string): Promise<{ data: string, w: number, h: number } | null> {
   try {
     const img: HTMLImageElement = await new Promise((resolve, reject) => {
       const i = new Image()

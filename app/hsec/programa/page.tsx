@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import { misUbicacionesIds } from '@/lib/prevencion'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
 import MiFirma from '@/components/programa/MiFirma'
@@ -44,7 +45,8 @@ export default function Programa() {
       usuario.esPrevencionista ? supabase.from('pr_descriptores').select('estado').eq('usuario_id', usuario.id).maybeSingle() : Promise.resolve({ data: null } as any),
     ])
     setMetas(m.data || []); setActs(a.data || []); setMensual(mm.data || null)
-    setFaenas((f.data || []).filter((x: any) => x.activa !== false))
+    const propias = usuario.esPrevencionista && usuario.rol !== 'admin' && !usuario.esJefeHsec ? await misUbicacionesIds(usuario.id) : null
+    setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id))))
     setDescVerificado(usuario.esPrevencionista ? d.data?.estado === 'verificado' : true)
     setCargando(false)
   }, [usuario, cargo, mes])

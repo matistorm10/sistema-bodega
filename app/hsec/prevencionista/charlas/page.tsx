@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { formatearRut } from '@/lib/rut'
-import { TIPOS_CHARLA, fechaCL } from '@/lib/prevencion'
+import { misUbicacionesIds, TIPOS_CHARLA, fechaCL } from '@/lib/prevencion'
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e2e6ed', borderRadius: '14px', padding: '14px 16px' }
 const input: React.CSSProperties = { width: '100%', padding: '9px 10px', border: '1px solid #d0d5dd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', background: '#fff' }
@@ -55,9 +55,10 @@ export default function Prevencionista() {
       supabase.from('usuarios').select('id,nombre'),
     ])
     setCharlas(c.data || []); setAsistentes(a.data || [])
-    setFaenas((f.data || []).filter((x: any) => x.activa !== false)); setUsuarios(u.data || [])
+    const propias = veTodas || !usuario ? null : await misUbicacionesIds(usuario.id)
+    setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setUsuarios(u.data || [])
     setCargando(false)
-  }, [])
+  }, [usuario, veTodas])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
   const nombreFaena = (id?: string | null) => faenas.find(f => f.id === id)?.nombre || '—'

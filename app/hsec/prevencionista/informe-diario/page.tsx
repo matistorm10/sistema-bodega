@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, Campo, Fila, Opciones, OP_C } from '@/components/programa/ui'
-import { fechaCL } from '@/lib/prevencion'
+import { fechaCL, misUbicacionesIds } from '@/lib/prevencion'
 import { DatosInforme, Fila as FilaT, informeNuevo, vacias, COLS, SUGERENCIAS_ACTIVIDAD } from '@/lib/informeDiario'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { generarInformeDiario } from '@/lib/generarInformeDiario'
@@ -49,8 +49,9 @@ export default function InformeDiario() {
       supabase.from('usuarios').select('id,nombre'),
     ])
     setUsuarios(us.data || [])
-    setFaenas((f.data || []).filter((x: any) => x.activa !== false)); setLista(l.data || []); setCargando(false)
-  }, [])
+    const propias = verTodos || !usuario ? null : await misUbicacionesIds(usuario.id)
+    setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setLista(l.data || []); setCargando(false)
+  }, [usuario, verTodos])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
   const nuevo = () => setEdit({ fecha: hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(usuario?.esPrevencionista ? 'Prevencionista de terreno' : '') })

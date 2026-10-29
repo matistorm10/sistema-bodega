@@ -16,3 +16,14 @@ export const ITEMS_SSO: { n: string, titulo: string, detalle: string, listo: boo
   { n: '6', titulo: 'Stock y solicitud de EPP', detalle: 'Inventario de EPP controlado por el prevencionista de terreno.', listo: true },
 ]
 export const DOC_DESCRIPTOR = 'descriptor_apr'
+
+// Ubicaciones/faenas que le corresponden a un prevencionista (descriptor, EPP o cliente semanal).
+import { supabase } from '@/lib/supabase'
+export async function misUbicacionesIds(usuarioId: string): Promise<Set<string>> {
+  const [d, e, s] = await Promise.all([
+    supabase.from('pr_descriptores').select('ubicacion_id').eq('usuario_id', usuarioId),
+    supabase.from('pr_epp_ubicaciones').select('ubicacion_id').eq('usuario_id', usuarioId),
+    supabase.from('pr_semanal_asignaciones').select('ubicacion_id').eq('usuario_id', usuarioId),
+  ])
+  return new Set([...(d.data || []), ...(e.data || []), ...(s.data || [])].map((x: any) => x.ubicacion_id).filter(Boolean))
+}

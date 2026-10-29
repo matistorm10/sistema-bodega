@@ -41,9 +41,9 @@ export async function descargarDescriptorFirmado(d: { desc: any, nombre: string,
     if (d.desc.estado === 'verificado' && d.desc.verificado_por) {
       const [u, fr] = await Promise.all([
         supabase.from('usuarios').select('nombre').eq('id', d.desc.verificado_por).maybeSingle(),
-        supabase.from('firmas_usuario').select('imagen').eq('usuario_id', d.desc.verificado_por).maybeSingle(),
+        supabase.from('firmas_usuario').select('imagen,consentimiento_at').eq('usuario_id', d.desc.verificado_por).maybeSingle(),
       ])
-      nombreV = u.data?.nombre || d.verificador || 'Jefatura'; firmaV = fr.data?.imagen || null
+      nombreV = u.data?.nombre || d.verificador || 'Jefatura'; firmaV = fr.data?.consentimiento_at ? fr.data.imagen : null
     }
     const top = 572
     pag.drawText('Verificado por:', { x: 58.5, y: H - top - 10, size: 10.5, font: fb, color: negro })

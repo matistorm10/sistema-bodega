@@ -83,9 +83,9 @@ export default function InformeDiario() {
     try {
       const [{ data: u }, { data: fi }] = await Promise.all([
         supabase.from('usuarios').select('nombre').eq('id', r.creado_por).maybeSingle(),
-        supabase.from('firmas_usuario').select('imagen').eq('usuario_id', r.creado_por).maybeSingle(),
+        supabase.from('firmas_usuario').select('imagen,consentimiento_at').eq('usuario_id', r.creado_por).maybeSingle(),
       ])
-      await generarInformeDiario({ fecha: r.fecha, faena: faenas.find(x => x.id === r.ubicacion_id)?.nombre || '', elaboro: u?.nombre || usuario?.nombre || '', d: { ...informeNuevo(''), ...r.datos }, cerradoAt: r.cerrado_at, firma: r.cerrado_at ? fi?.imagen : null }, v)
+      await generarInformeDiario({ fecha: r.fecha, faena: faenas.find(x => x.id === r.ubicacion_id)?.nombre || '', elaboro: u?.nombre || usuario?.nombre || '', d: { ...informeNuevo(''), ...r.datos }, cerradoAt: r.cerrado_at, firma: r.cerrado_at && fi?.consentimiento_at ? fi.imagen : null }, v)
     } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
   }
 

@@ -152,10 +152,10 @@ export async function descargarProgramaMensual(o: {
 
     const ids = [persona.id, mensual?.revisado_por].filter(Boolean) as string[]
     const [{ data: firmas }, { data: rev }] = await Promise.all([
-      supabase.from('firmas_usuario').select('usuario_id,imagen').in('usuario_id', ids),
+      supabase.from('firmas_usuario').select('usuario_id,imagen,consentimiento_at').in('usuario_id', ids),
       mensual?.revisado_por ? supabase.from('usuarios').select('nombre').eq('id', mensual.revisado_por).maybeSingle() : Promise.resolve({ data: null } as any),
     ])
-    const firmaDe = (id?: string) => (firmas || []).find((f: any) => f.usuario_id === id)?.imagen || null
+    const firmaDe = (id?: string) => (firmas || []).find((f: any) => f.usuario_id === id && f.consentimiento_at)?.imagen || null
     const enviado = !!mensual && (mensual.estado === 'enviado' || mensual.estado === 'aprobado')
     const aprobado = mensual?.estado === 'aprobado'
 

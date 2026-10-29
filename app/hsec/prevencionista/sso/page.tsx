@@ -34,6 +34,7 @@ export default function SsoFaena() {
   const [verificador, setVerificador] = useState('')
   const [datos, setDatos] = useState({ nombre: '', rut: '', faena: '' })
   const [datosOk, setDatosOk] = useState(false)
+  const [consiente, setConsiente] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!usuario) return
@@ -63,9 +64,13 @@ export default function SsoFaena() {
     if (!desc || !firma) return
     setGuardando(true); setMsg('')
     const { error } = await supabase.from('pr_descriptores').update({ firma, estado: 'firmado', nombre_firma: datos.nombre.trim(), rut_firma: datos.rut.trim(), faena_contrato: faena }).eq('id', desc.id)
+    if (!error && consiente) {
+      // La firma del descriptor queda como firma del usuario para sus demás documentos (con su consentimiento)
+      await supabase.from('firmas_usuario').upsert({ usuario_id: usuario!.id, imagen: firma, consentimiento_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    }
     setGuardando(false)
     if (error) { setMsg('No se pudo guardar la firma: ' + error.message); return }
-    setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
+    setConsiente(false); setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
   }
 
   const verificado = desc?.estado === 'verificado'
@@ -138,6 +143,10 @@ export default function SsoFaena() {
                             </div>
                           )}
                           {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
+                          <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12.5px', margin: '12px 0 0', cursor: 'pointer', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '9px 10px' }}>
+                            <input type="checkbox" checked={consiente} onChange={e => setConsiente(e.target.checked)} style={{ marginTop: '2px' }} />
+                            <span>Autorizo al Sistema INDELI a usar esta firma como mi firma en los documentos que yo genere o revise (informes, programas y otros). Puedo retirar esta autorización cuando quiera en «Mi firma».</span>
+                          </label>
                           <div style={{ marginTop: '12px' }}>
                             <button onClick={firmar} disabled={!firma || guardando} style={{ ...btn(), opacity: !firma || guardando ? 0.5 : 1 }}>{guardando ? 'Guardando...' : 'Firmar descriptor'}</button>
                           </div>

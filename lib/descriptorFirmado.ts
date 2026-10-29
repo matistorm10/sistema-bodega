@@ -27,12 +27,37 @@ export async function descargarDescriptorFirmado(d: { desc: any, nombre: string,
     escribir(d.desc.nombre_firma || d.nombre, 427.7)
     escribir(d.desc.rut_firma || '', 446.8)
     escribir(d.desc.faena_contrato || d.faena, 465.9)
-    escribir(fechaCL(d.desc.firmado_at), 485)
+    escribir(fechaCL(d.desc.firmado_at || new Date().toISOString()), 485)
     if (d.desc.firma) {
       const img = await pdf.embedPng(d.desc.firma)
       const esc = Math.min(maxW / img.width, 44 / img.height)
       const w = img.width * esc, h = img.height * esc
       pag.drawImage(img, { x: X, y: H - 496 - 46 + (46 - h) / 2, width: w, height: h })
+    }
+
+    // Verificación de la jefatura (al final del documento, bajo la tabla del punto IX)
+    const fb = await pdf.embedFont(StandardFonts.HelveticaBold)
+    let nombreV = '', firmaV: string | null = null
+    if (d.desc.estado === 'verificado' && d.desc.verificado_por) {
+      const [u, fr] = await Promise.all([
+        supabase.from('usuarios').select('nombre').eq('id', d.desc.verificado_por).maybeSingle(),
+        supabase.from('firmas_usuario').select('imagen').eq('usuario_id', d.desc.verificado_por).maybeSingle(),
+      ])
+      nombreV = u.data?.nombre || d.verificador || 'Jefatura'; firmaV = fr.data?.imagen || null
+    }
+    const top = 572
+    pag.drawText('Verificado por:', { x: 58.5, y: H - top - 10, size: 10.5, font: fb, color: negro })
+    if (d.desc.estado === 'verificado') {
+      pag.drawText(`${nombreV} · Jefe Dpto. Prevención de Riesgos`, { x: 140, y: H - top - 10, size: 10.5, font: f, color: negro })
+      pag.drawText('Fecha de verificación:', { x: 58.5, y: H - top - 28, size: 10.5, font: fb, color: negro })
+      pag.drawText(fechaCL(d.desc.verificado_at), { x: 175, y: H - top - 28, size: 10.5, font: f, color: negro })
+      if (firmaV) {
+        const im = await pdf.embedPng(firmaV)
+        const e2 = Math.min(150 / im.width, 40 / im.height)
+        pag.drawImage(im, { x: 58.5, y: H - top - 36 - im.height * e2 - 4, width: im.width * e2, height: im.height * e2 })
+      }
+    } else {
+      pag.drawText('Pendiente de verificación por la jefatura', { x: 140, y: H - top - 10, size: 10.5, font: f, color: rgb(0.6, 0.4, 0) })
     }
 
     const bytes = await pdf.save()

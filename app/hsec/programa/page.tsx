@@ -81,7 +81,7 @@ export default function Programa() {
     const { error } = form.registro
       ? await supabase.from('pr_prog_actividades').update({ fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje }).eq('id', form.registro.id)
       : await supabase.from('pr_prog_actividades').insert(cuerpo)
-    if (error) { setMsg('No se pudo guardar: ' + error.message); return }
+    if (error) { setMsg(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día; puedes editar el de hoy.' : error.message.includes('fecha') ? 'La fecha debe ser la de hoy y no se puede cambiar.' : 'No se pudo guardar: ' + error.message); return }
     // si la fecha cae en otro mes, cambia a ese mes para que la persona vea el registro
     if (r.fecha.slice(0, 7) !== mes) setMes(r.fecha.slice(0, 7))
     setForm(null); setMsg(''); await cargar()

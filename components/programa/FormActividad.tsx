@@ -157,7 +157,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
     <div style={{ ...card, marginBottom: '14px' }}>
       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{meta.nombre}</p>
       <Fila>
-        <Campo titulo="Fecha" ancho="140px">{txt(fecha, setFecha, '', 'date')}</Campo>
+        <Campo titulo="Fecha (hoy, automática)" ancho="140px"><input type="date" value={fecha} readOnly disabled style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
         <Campo titulo="Faena / centro de costo">
           <select value={faena} onChange={e => setFaena(e.target.value)} disabled={lect} style={input}><option value="">Seleccionar…</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select>
         </Campo>

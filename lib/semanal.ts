@@ -19,12 +19,14 @@ export const inicioPeriodo = (fin: string) => { const d = aFecha(fin); d.setDate
 export const limiteEntrega = (fin: string, diasPlazo: number) => { const d = aFecha(fin); d.setDate(d.getDate() + diasPlazo); return iso(d) }
 
 export type EstadoSem = { tipo: 'entregado' | 'vigente' | 'atraso', texto: string }
-export function estadoSemanal(fin: string, diasPlazo: number, entregado: boolean, hoy = new Date()): EstadoSem {
+export const hhmm = (h?: string | null) => (h || '23:59').slice(0, 5)
+export function estadoSemanal(fin: string, diasPlazo: number, entregado: boolean, hora?: string | null, ahora = new Date()): EstadoSem {
   if (entregado) return { tipo: 'entregado', texto: 'Entregado' }
-  const lim = limiteEntrega(fin, diasPlazo)
-  const h = iso(hoy)
-  const dif = Math.round((aFecha(lim).getTime() - aFecha(h).getTime()) / 86400000)
-  if (dif >= 0) return { tipo: 'vigente', texto: dif === 0 ? 'Vence hoy' : dif === 1 ? 'Vence mañana' : `Vence en ${dif} días (${fechaLarga(lim)})` }
-  return { tipo: 'atraso', texto: `Atrasado ${-dif} día${-dif === 1 ? '' : 's'} (venció el ${fechaLarga(lim)})` }
+  const lim = limiteEntrega(fin, diasPlazo), hh = hhmm(hora)
+  const [H, M] = hh.split(':').map(Number)
+  const l = aFecha(lim); l.setHours(H, M, 0, 0)
+  const dif = Math.round((aFecha(lim).getTime() - aFecha(iso(ahora)).getTime()) / 86400000)
+  if (ahora.getTime() <= l.getTime()) return { tipo: 'vigente', texto: dif === 0 ? `Vence hoy a las ${hh}` : dif === 1 ? `Vence mañana a las ${hh}` : `Vence en ${dif} días (${fechaLarga(lim)} ${hh})` }
+  return { tipo: 'atraso', texto: `Atrasado · venció el ${fechaLarga(lim)} a las ${hh}` }
 }
 export const COLOR_SEM = { entregado: ['#d7efe0', '#14532d', '🟢'], vigente: ['#fef7e0', '#986a00', '🟡'], atraso: ['#fde8e8', '#9b1c1c', '🔴'] } as const

@@ -104,7 +104,7 @@ export default function Jefatura() {
   const infPorPrev = (() => { const m: Record<string, number> = {}; infFiltrados.forEach(i => { const k = nombreUsuario(i.creado_por); m[k] = (m[k] || 0) + 1 }); return Object.entries(m).map(([nombre, valor]) => ({ nombre, valor })).sort((a, b) => b.valor - a.valor) })()
   const semAtrasados = asigs.flatMap(a => {
     const c = clientes.find(x => x.id === a.cliente_id); if (!c) return []
-    return periodos(c.dia_cierre, 4).filter(fin => estadoSemanal(fin, c.dias_plazo, semanales.some(s => s.cliente_id === c.id && s.usuario_id === a.usuario_id && s.periodo_fin === fin)).tipo === 'atraso')
+    return periodos(c.dia_cierre, 4).filter(fin => estadoSemanal(fin, c.dias_plazo, semanales.some(s => s.cliente_id === c.id && s.usuario_id === a.usuario_id && s.periodo_fin === fin), c.hora_limite).tipo === 'atraso')
       .map(fin => ({ k: a.id + fin, texto: `${nombreUsuario(a.usuario_id)} · ${c.nombre} · semana al ${fin.split('-').reverse().join('-').slice(0, 5)}` }))
   })
   const faenasSinActividad = faenas.filter(f => (!fFaena || f.id === fFaena) && !filtradas.some(c => c.ubicacion_id === f.id))

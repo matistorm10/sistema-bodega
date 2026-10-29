@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
-import { DIAS, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
+import { DIAS, hhmm, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
 
 const abrir = async (path: string) => {
   const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600)
@@ -23,7 +23,7 @@ export default function JefaturaSemanales() {
   const [faenas, setFaenas] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
-  const [nuevo, setNuevo] = useState({ nombre: '', dia: '7', plazo: '1' })
+  const [nuevo, setNuevo] = useState({ nombre: '', dia: '7', plazo: '1', hora: '23:59' })
   const [asigSel, setAsigSel] = useState<Record<string, { u: string, f: string }>>({})
   const [subiendo, setSubiendo] = useState('')
 
@@ -43,9 +43,9 @@ export default function JefaturaSemanales() {
   const nombreU = (id: string) => prevs.find(p => p.id === id)?.nombre || '—'
   const crear = async () => {
     if (!nuevo.nombre.trim()) { setMsg('Escribe el nombre del cliente.'); return }
-    const { error } = await supabase.from('pr_clientes_informe').insert({ nombre: nuevo.nombre.trim(), dia_cierre: Number(nuevo.dia), dias_plazo: Number(nuevo.plazo) })
+    const { error } = await supabase.from('pr_clientes_informe').insert({ nombre: nuevo.nombre.trim(), dia_cierre: Number(nuevo.dia), dias_plazo: Number(nuevo.plazo), hora_limite: nuevo.hora || '23:59' })
     if (error) { setMsg(error.code === '23505' ? 'Ese cliente ya existe.' : error.message); return }
-    setNuevo({ nombre: '', dia: '7', plazo: '1' }); setMsg(''); await cargar()
+    setNuevo({ nombre: '', dia: '7', plazo: '1', hora: '23:59' }); setMsg(''); await cargar()
   }
   const actualizar = async (id: string, campos: any) => {
     const { error } = await supabase.from('pr_clientes_informe').update(campos).eq('id', id)
@@ -94,6 +94,7 @@ export default function JefaturaSemanales() {
                 <div style={{ flex: '1 1 180px' }}><label style={label}>Cliente (ej. SQM, ENGIE)</label><input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 150px' }}><label style={label}>La semana cierra el</label><select value={nuevo.dia} onChange={e => setNuevo({ ...nuevo, dia: e.target.value })} style={input}>{DIAS.slice(1).map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></div>
                 <div style={{ flex: '0 1 130px' }}><label style={label}>Plazo (días después)</label><input type="number" min="0" max="30" value={nuevo.plazo} onChange={e => setNuevo({ ...nuevo, plazo: e.target.value })} style={input} /></div>
+                <div style={{ flex: '0 1 110px' }}><label style={label}>Hora límite</label><input type="time" value={nuevo.hora} onChange={e => setNuevo({ ...nuevo, hora: e.target.value })} style={input} /></div>
                 <button onClick={crear} style={btn()}>Agregar</button>
               </div>
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
@@ -114,6 +115,7 @@ export default function JefaturaSemanales() {
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', margin: '10px 0' }}>
                       <div><label style={label}>La semana cierra el</label><select value={c.dia_cierre} onChange={e => actualizar(c.id, { dia_cierre: Number(e.target.value) })} style={{ ...input, width: '150px' }}>{DIAS.slice(1).map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></div>
                       <div><label style={label}>Plazo (días después)</label><input type="number" min="0" max="30" defaultValue={c.dias_plazo} onBlur={e => { const v = Number(e.target.value); if (v !== c.dias_plazo && v >= 0 && v <= 30) actualizar(c.id, { dias_plazo: v }) }} style={{ ...input, width: '110px' }} /></div>
+                      <div><label style={label}>Hora límite</label><input type="time" defaultValue={hhmm(c.hora_limite)} onBlur={e => { if (e.target.value && e.target.value !== hhmm(c.hora_limite)) actualizar(c.id, { hora_limite: e.target.value }) }} style={{ ...input, width: '110px' }} /></div>
                       <div style={{ flex: '1 1 220px' }}>
                         <label style={label}>Formato del cliente</label>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -137,12 +139,12 @@ export default function JefaturaSemanales() {
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
                           {ps.map(fin => {
                             const inf = informes.find(i => i.cliente_id === c.id && i.usuario_id === a.usuario_id && i.periodo_fin === fin)
-                            const e = estadoSemanal(fin, c.dias_plazo, !!inf)
+                            const e = estadoSemanal(fin, c.dias_plazo, !!inf, c.hora_limite)
                             const [bg, col, ic] = COLOR_SEM[e.tipo]
                             return (
                               <span key={fin} title={`${fechaLarga(inicioPeriodo(fin))} al ${fechaLarga(fin)} · ${e.texto}`} onClick={() => inf && abrir(inf.path)}
                                 style={{ fontSize: '11.5px', padding: '4px 9px', borderRadius: '8px', background: bg, color: col, cursor: inf ? 'pointer' : 'default' }}>
-                                {ic} sem. al {fechaLarga(fin).slice(0, 5)} · {e.tipo === 'entregado' ? 'entregado' : e.tipo === 'vigente' ? `vence ${fechaLarga(limiteEntrega(fin, c.dias_plazo)).slice(0, 5)}` : 'atrasado'}
+                                {ic} sem. al {fechaLarga(fin).slice(0, 5)} · {e.tipo === 'entregado' ? 'entregado' : e.tipo === 'vigente' ? `vence ${fechaLarga(limiteEntrega(fin, c.dias_plazo)).slice(0, 5)} ${hhmm(c.hora_limite)}` : 'atrasado'}
                               </span>
                             )
                           })}

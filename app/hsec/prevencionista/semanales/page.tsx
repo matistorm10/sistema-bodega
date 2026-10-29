@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn } from '@/components/programa/ui'
-import { DIAS, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
+import { DIAS, hhmm, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
 
 const abrir = async (path: string) => {
   const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600)
@@ -72,7 +72,7 @@ export default function Semanales() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <div>
                     <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{c.nombre}</p>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>La semana cierra el {DIAS[c.dia_cierre].toLowerCase()} · se entrega {c.dias_plazo === 0 ? 'ese mismo día' : `${c.dias_plazo} día${c.dias_plazo === 1 ? '' : 's'} después`}</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>La semana cierra el {DIAS[c.dia_cierre].toLowerCase()} · se entrega {c.dias_plazo === 0 ? 'ese mismo día' : `${c.dias_plazo} día${c.dias_plazo === 1 ? '' : 's'} después`} hasta las {hhmm(c.hora_limite)}</p>
                   </div>
                   {c.formato_path
                     ? <button onClick={() => abrir(c.formato_path)} style={{ ...btn(false), padding: '7px 12px', fontSize: '12.5px' }}>📄 Descargar formato</button>
@@ -81,7 +81,7 @@ export default function Semanales() {
                 <div style={{ marginTop: '10px' }}>
                   {periodos(c.dia_cierre, 5).map(fin => {
                     const inf = informes.find(i => i.cliente_id === c.id && i.periodo_fin === fin)
-                    const e = estadoSemanal(fin, c.dias_plazo, !!inf)
+                    const e = estadoSemanal(fin, c.dias_plazo, !!inf, c.hora_limite)
                     const [bg, col, ic] = COLOR_SEM[e.tipo]
                     return (
                       <div key={fin} style={{ borderTop: '1px solid #eef1f6', padding: '9px 0', display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>

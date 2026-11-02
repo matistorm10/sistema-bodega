@@ -154,7 +154,7 @@ export default function InformeDiario() {
               <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c ? etiqueta(c) : '', mandante: clientes.find(x => x.id === c?.cliente_id)?.nombre || '', ptsSel: [] }) }} style={input}>
                 <option value="">— elegir contrato —</option>{contratosFaena.map(c => <option key={c.id} value={c.id}>{etiqueta(c)}</option>)}
               </select>
-              {contratosFaena.length === 0 && <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#986a00' }}>La jefatura aún no ha creado contratos{edit.ubicacion_id ? ' para el cliente de esta faena' : ''}.</p>}
+              {contratosFaena.length === 0 && <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#986a00' }}>No tienes contratos asignados{edit.ubicacion_id ? ' para el cliente de esta faena' : ''}. Pídele a la jefatura que te asigne al contrato.</p>}
             </Campo>
             <Campo titulo="Cliente / mandante (automático)"><input value={d.mandante} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
             <Campo titulo="Cargo"><input value={CARGO_APR} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>

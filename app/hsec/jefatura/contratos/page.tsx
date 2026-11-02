@@ -21,6 +21,9 @@ export default function JefaturaContratos() {
   const [contratos, setContratos] = useState<any[]>([])
   const [docs, setDocs] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
+  const [asig, setAsig] = useState<any[]>([])
+  const [personal, setPersonal] = useState<any[]>([])
+  const [aAsignar, setAAsignar] = useState<Record<string, string>>({})
   const [hist, setHist] = useState<Record<string, any[]>>({})
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
@@ -34,11 +37,14 @@ export default function JefaturaContratos() {
   const [ocupado, setOcupado] = useState('')
 
   const cargar = useCallback(async () => {
-    const [c, d, cl] = await Promise.all([
+    const [c, d, cl, ap, us] = await Promise.all([
       supabase.from('pr_contratos').select('*').order('nombre'),
       supabase.from('pr_contrato_documentos').select('*').order('nombre'),
       supabase.from('pr_clientes_informe').select('id,nombre').eq('activo', true).order('nombre'),
+      supabase.from('pr_contrato_apr').select('*'),
+      supabase.from('usuarios').select('id,nombre,es_prevencionista,ve_documentos_contratos').order('nombre'),
     ])
+    setAsig(ap.data || []); setPersonal((us.data || []).filter((u: any) => u.es_prevencionista || u.ve_documentos_contratos))
     setContratos(c.data || []); setDocs(d.data || []); setClientes(cl.data || []); setCargando(false)
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
@@ -94,6 +100,15 @@ export default function JefaturaContratos() {
   const aprobar = (d: any) => {
     if (!d.path || (d.pdf_rev || 0) < d.rev) { alert('Para marcarlo aprobado carga primero el PDF oficial firmado (escaneado) de esta revisión.'); return }
     cambiar([d.id], 'Aprobado')
+  }
+  const asignar = async (c: any) => {
+    const u = aAsignar[c.id]; if (!u) return
+    if (err((await supabase.from('pr_contrato_apr').insert({ contrato_id: c.id, usuario_id: u, asignado_por: usuario?.id })).error)) return
+    setAAsignar({ ...aAsignar, [c.id]: '' }); await cargar()
+  }
+  const quitarAsig = async (c: any, uid: string) => {
+    if (!confirm('¿Quitar a esta persona del contrato? Dejará de ver sus documentos.')) return
+    if (!err((await supabase.from('pr_contrato_apr').delete().eq('contrato_id', c.id).eq('usuario_id', uid)).error)) await cargar()
   }
   const cambiar = async (ids: string[], estado: string, comentario?: string | null) => {
     if (ids.length === 0) return
@@ -169,6 +184,23 @@ export default function JefaturaContratos() {
                         </div>
                       </div>
                     )}
+                    {open && (() => {
+                      const mios2 = asig.filter(a => a.contrato_id === c.id)
+                      const libres = personal.filter(u => !mios2.some(a => a.usuario_id === u.id))
+                      return (
+                        <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
+                          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>👥 Personal asignado <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· solo ellos ven los documentos y pueden elegir este contrato en sus informes</span></p>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                            {mios2.length === 0 && <span style={{ fontSize: '12.5px', color: '#9b1c1c' }}>Nadie asignado todavía.</span>}
+                            {mios2.map(a => <span key={a.usuario_id} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 600 }}>{personal.find(u => u.id === a.usuario_id)?.nombre || '—'} <button onClick={() => quitarAsig(c, a.usuario_id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9b1c1c', fontWeight: 700 }}>×</button></span>)}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <select value={aAsignar[c.id] || ''} onChange={e => setAAsignar({ ...aAsignar, [c.id]: e.target.value })} style={{ ...input, flex: '1 1 200px', width: 'auto' }}><option value="">Agregar APR o persona con acceso de lectura…</option>{libres.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.es_prevencionista ? ' (APR)' : ' (solo lectura)'}</option>)}</select>
+                            <button onClick={() => asignar(c)} style={btn()}>Asignar</button>
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {open && CATEGORIAS.map(([cat, titulo]) => {
                       const l = mios.filter(d => d.categoria === cat)
                       const marcados = l.filter(d => sel.has(d.id))

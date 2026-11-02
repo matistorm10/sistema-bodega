@@ -43,7 +43,7 @@ export default function ContratosPrevencionista() {
           <a href="/hsec/prevencionista" onClick={e => { e.preventDefault(); if (window.opener) window.close(); else if (window.history.length > 1) router.back(); else router.push(usuario?.esPrevencionista || usuario?.esJefeHsec || usuario?.rol === 'admin' ? '/hsec/prevencionista' : '/hsec') }} style={{ fontSize: '13px', color: AZUL, textDecoration: 'none', cursor: 'pointer' }}>← Volver</a>
           <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Documentos de contratos</h1>
         </div>
-        {cargandoUsuario || cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : !puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : contratos.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>La jefatura aún no ha creado contratos.</p> : (
+        {cargandoUsuario || cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : !puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : contratos.length === 0 ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes contratos asignados. La jefatura debe asignarte a los contratos que corresponden.</p> : (
           <>
             <div style={{ ...card, marginBottom: '12px' }}>
               <label style={label}>Contrato</label>

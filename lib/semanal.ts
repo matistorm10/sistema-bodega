@@ -30,3 +30,4 @@ export function estadoSemanal(fin: string, diasPlazo: number, entregado: boolean
   return { tipo: 'atraso', texto: `Atrasado · venció el ${fechaLarga(lim)} a las ${hh}` }
 }
 export const COLOR_SEM = { entregado: ['#d7efe0', '#14532d', '🟢'], vigente: ['#fef7e0', '#986a00', '🟡'], atraso: ['#fde8e8', '#9b1c1c', '🔴'] } as const
+export { iso as isoFecha, aFecha as aFechaLocal }

@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn } from '@/components/programa/ui'
+import CalendarioSemanal from '@/components/programa/CalendarioSemanal'
+import { itemsSemanales } from '@/lib/semanalItems'
 import { DIAS, hhmm, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
 
 const abrir = async (path: string) => {
@@ -66,6 +68,9 @@ export default function Semanales() {
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : clientes.length === 0 ? (
           <p style={{ fontSize: '13px', color: '#667085' }}>Todavía no tienes un cliente asignado. La jefatura te asignará uno (por ejemplo SQM o ENGIE) y aquí verás su formato y su calendario.</p>
         ) : (
+          <>
+          <CalendarioSemanal items={itemsSemanales(usuario!.id, clientes, asigs, informes)} puedeSubir={!!usuario?.esPrevencionista} subiendo={subiendo} onSubir={subir} onVer={abrir} />
+          <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>Detalle por cliente</p>
           <div style={{ display: 'grid', gap: '12px' }}>
             {clientes.map(c => (
               <div key={c.id} style={card}>
@@ -104,6 +109,7 @@ export default function Semanales() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
     </main>

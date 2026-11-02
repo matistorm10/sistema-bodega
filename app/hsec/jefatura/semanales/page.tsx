@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
+import CalendarioSemanal from '@/components/programa/CalendarioSemanal'
+import { itemsSemanales } from '@/lib/semanalItems'
 import { DIAS, hhmm, periodos, inicioPeriodo, limiteEntrega, estadoSemanal, fechaLarga, COLOR_SEM } from '@/lib/semanal'
 
 const abrir = async (path: string) => {
@@ -26,6 +28,7 @@ export default function JefaturaSemanales() {
   const [nuevo, setNuevo] = useState({ nombre: '', dia: '7', plazo: '1', hora: '23:59' })
   const [asigSel, setAsigSel] = useState<Record<string, { u: string, f: string }>>({})
   const [subiendo, setSubiendo] = useState('')
+  const [verU, setVerU] = useState('')
   const [edNombre, setEdNombre] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
@@ -88,6 +91,20 @@ export default function JefaturaSemanales() {
         {cab}
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
+            {(() => {
+              const uids = Array.from(new Set(asigs.map(a => a.usuario_id)))
+              const sel = verU || uids[0] || ''
+              if (!uids.length) return null
+              return (
+                <div style={{ marginBottom: '14px' }}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>📅 Seguimiento de entregas</p>
+                  <select value={sel} onChange={e => setVerU(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '10px' }}>
+                    {uids.map(u => { const n = itemsSemanales(u, clientes, asigs, informes).filter(i => i.tipo === 'atraso').length; return <option key={u} value={u}>{nombreU(u)}{n ? ` · ${n} atrasado(s)` : ''}</option> })}
+                  </select>
+                  <CalendarioSemanal items={itemsSemanales(sel, clientes, asigs, informes)} puedeSubir={false} onVer={abrir} />
+                </div>
+              )
+            })()}
             <div style={{ ...card, marginBottom: '12px' }}>
               <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Nuevo cliente / calendario</p>
               <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Cada cliente tiene su formato y su calendario: el día en que cierra su semana y cuántos días después se debe entregar el informe.</p>

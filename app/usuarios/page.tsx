@@ -358,8 +358,8 @@ export default function Usuarios() {
           <div style={{marginBottom:'10px'}}>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
             <div style={{display:'grid',gap:'8px'}}>
-              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>setEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
-              <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>setEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>{setEsJefeHsec(e.target.checked); if(e.target.checked) setEsPrevencionista(false)}}/>📊 Jefatura del departamento (panel de control con los números)</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>{setEsPrevencionista(e.target.checked); if(e.target.checked) setEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
               <label style={checkboxLabel}><input type="checkbox" checked={veDocs} onChange={e=>setVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
             </div>
           </div>
@@ -441,8 +441,8 @@ export default function Usuarios() {
                     <div style={{marginBottom:'10px'}}>
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
                       <div style={{display:'grid',gap:'8px'}}>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>setEditEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>setEditEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>{setEditEsJefeHsec(e.target.checked); if(e.target.checked) setEditEsPrevencionista(false)}}/>📊 Jefatura del departamento (panel de control con los números)</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>{setEditEsPrevencionista(e.target.checked); if(e.target.checked) setEditEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editVeDocs} onChange={e=>setEditVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
                       </div>
                     </div>

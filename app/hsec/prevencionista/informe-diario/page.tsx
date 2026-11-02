@@ -9,6 +9,7 @@ import { fechaCL, misUbicacionesIds } from '@/lib/prevencion'
 import { DatosInforme, Fila as FilaT, informeNuevo, vacias, COLS, SUGERENCIAS_ACTIVIDAD, CARGO_APR } from '@/lib/informeDiario'
 import { estadoPlan, COLOR_PLAN } from '@/lib/estadoPlan'
 import { etiquetaContrato } from '@/lib/contratos'
+import ListadoActividades from '@/components/programa/ListadoActividades'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { generarInformeDiario } from '@/lib/generarInformeDiario'
 
@@ -85,6 +86,7 @@ export default function InformeDiario() {
   const [cargando, setCargando] = useState(true)
   const [edit, setEdit] = useState<{ id?: string, fecha: string, ubicacion_id: string, estado: string, d: DatosInforme } | null>(null)
   const [msg, setMsg] = useState('')
+  const [verConfig, setVerConfig] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [contratos, setContratos] = useState<any[]>([])
@@ -116,6 +118,7 @@ export default function InformeDiario() {
     if (!contratoId) { setPtsDocs([]); return }
     supabase.from('pr_contrato_documentos').select('id,nombre,estado,path,rev').eq('contrato_id', contratoId).eq('categoria', 'PTS').eq('estado', 'Aprobado').order('nombre').then(({ data }) => setPtsDocs(data || []))
   }, [contratoId])
+  const recargarCat = useCallback(async () => { const { data } = await supabase.from('pr_actividad_catalogo').select('nombre').order('orden').order('nombre'); setCatActs((data || []).map((x: any) => x.nombre)) }, [])
   const nuevo = () => setEdit({ fecha: hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(CARGO_APR) })
   const abrir = async (r: any) => setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } })
 
@@ -318,8 +321,12 @@ export default function InformeDiario() {
     <>
       <div style={{ ...card, marginBottom: '12px' }}>
         <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#667085' }}>Un informe por faena y por día. Puedes guardarlo como borrador durante la jornada y cerrarlo al terminar (se firma con tu firma guardada).</p>
-        <button onClick={nuevo} style={btn()}>+ Nuevo informe del día</button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button onClick={nuevo} style={btn()}>+ Nuevo informe del día</button>
+          {verTodos && <button onClick={() => setVerConfig(v => !v)} style={btn(false)}>⚙️ Configurar lista de actividades {verConfig ? '▲' : '▼'}</button>}
+        </div>
       </div>
+      {verTodos && verConfig && <div style={{ marginBottom: '12px' }}><ListadoActividades onCambio={recargarCat} /></div>}
       {lista.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay informes.</p>}
       <div style={{ display: 'grid', gap: '8px' }}>
         {lista.map(r => (

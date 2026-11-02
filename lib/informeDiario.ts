@@ -18,7 +18,7 @@ export const vacias = (n: number, claves: string[]): Fila[] => Array.from({ leng
 export const COLS = {
   actividades: ['actividad', 'cantidad', 'area', 'resultado'],
   condiciones: ['item', 'estado', 'obs', 'accion', 'responsable', 'fecha', 'status'],
-  mejoras: ['oportunidad', 'accion', 'compromiso', 'responsable', 'plazo'],
+  mejoras: ['oportunidad', 'accion', 'compromiso', 'responsable', 'plazo', 'estado'],
   coordinaciones: ['hora', 'duracion', 'con', 'tema'],
   pendientes: ['pendiente', 'responsable', 'fecha'],
 }

@@ -19,17 +19,59 @@ const OP_SN = [{ v: 'si', t: 'SÍ', col: '#1e8e4e' }, { v: 'no', t: 'NO', col: '
 const OP_SN_ALERTA = [{ v: 'si', t: 'SÍ', col: '#c0392b' }, { v: 'no', t: 'NO', col: '#1e8e4e' }]
 const Titulo = ({ t }: { t: string }) => <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>{t}</p>
 
-// Tabla editable por tarjetas (cómoda en celular)
-function Lista({ filas, cols, onChange, vacia, addTxt }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, lista?: string, tipo?: 'time' | 'date' | 'num' }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string }) {
+// Reloj desplegable: hora (00–23) y minutos (00–59) en listas, sin escribir
+function Reloj({ valor, onChange, disabled }: { valor: string, onChange: (v: string) => void, disabled?: boolean }) {
+  const [h, m] = (valor || '').split(':')
+  const num = (n: number) => String(n).padStart(2, '0')
+  const cambiar = (hh: string, mm: string) => onChange(hh || mm ? `${hh || '00'}:${mm || '00'}` : '')
+  return (
+    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+      <select value={h || ''} disabled={disabled} onChange={e => cambiar(e.target.value, m || '')} style={{ ...input, padding: '9px 6px' }}><option value="">hh</option>{Array.from({ length: 24 }, (_, i) => <option key={i} value={num(i)}>{num(i)}</option>)}</select>
+      <span style={{ fontWeight: 700 }}>:</span>
+      <select value={m || ''} disabled={disabled} onChange={e => cambiar(h || '', e.target.value)} style={{ ...input, padding: '9px 6px' }}><option value="">mm</option>{Array.from({ length: 60 }, (_, i) => <option key={i} value={num(i)}>{num(i)}</option>)}</select>
+    </div>
+  )
+}
+
+// Actividad: lista desplegable configurable por la jefatura (o «Otra» para escribir)
+function ActividadSelect({ valor, opciones, onChange }: { valor: string, opciones: string[], onChange: (v: string) => void }) {
+  const [otra, setOtra] = useState(!!valor && !opciones.includes(valor))
   return (
     <>
-      {filas.map((f, i) => (
-        <div key={i} style={{ border: '1px solid #eef1f6', borderRadius: '10px', padding: '10px', marginBottom: '8px', background: '#fafbfd' }}>
-          <Fila>{cols.map(c => <Campo key={c.k} titulo={c.t} ancho="140px"><input list={c.lista} type={c.tipo === 'time' ? 'time' : c.tipo === 'date' ? 'date' : 'text'} min={c.tipo === 'date' ? hoy() : undefined} inputMode={c.tipo === 'num' ? 'numeric' : undefined} value={f[c.k] || ''} placeholder={c.ph}
-            onChange={e => { let v = e.target.value; if (c.tipo === 'num') v = v.replace(/[^0-9]/g, ''); if (c.tipo === 'date' && v && v < hoy()) v = hoy(); onChange(filas.map((x, j) => j === i ? { ...x, [c.k]: v } : x)) }} style={input} /></Campo>)}</Fila>
-          <button type="button" onClick={() => onChange(filas.filter((_, j) => j !== i))} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Quitar fila</button>
-        </div>
-      ))}
+      <select value={otra ? '__otra' : valor} onChange={e => { if (e.target.value === '__otra') { setOtra(true); onChange('') } else { setOtra(false); onChange(e.target.value) } }} style={input}>
+        <option value="">— elegir actividad —</option>
+        {opciones.map(o => <option key={o} value={o}>{o}</option>)}
+        <option value="__otra">Otra (escribir)…</option>
+      </select>
+      {otra && <input value={valor} placeholder="Escribe la actividad" onChange={e => onChange(e.target.value)} style={{ ...input, marginTop: '4px' }} />}
+    </>
+  )
+}
+
+// Tabla editable por tarjetas (cómoda en celular)
+function Lista({ filas, cols, onChange, vacia, addTxt, actividades }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, tipo?: 'time' | 'date' | 'num' | 'actividad' | 'estado' }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string, actividades?: string[] }) {
+  return (
+    <>
+      {filas.map((f, i) => {
+        const set = (k: string, v: string) => onChange(filas.map((x, j) => j === i ? { ...x, [k]: v } : x))
+        return (
+          <div key={i} style={{ border: '1px solid #eef1f6', borderRadius: '10px', padding: '10px', marginBottom: '8px', background: '#fafbfd' }}>
+            <Fila>{cols.filter(c => !(c.k === 'plazo' && f.estado === 'Ejecutado')).map(c => (
+              <Campo key={c.k} titulo={c.t} ancho={c.tipo === 'actividad' ? '260px' : '150px'}>
+                {c.tipo === 'actividad' ? <ActividadSelect valor={f[c.k] || ''} opciones={actividades || []} onChange={v => set(c.k, v)} />
+                  : c.tipo === 'time' ? <Reloj valor={f[c.k] || ''} onChange={v => set(c.k, v)} />
+                  : c.tipo === 'estado' ? (
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select value={f[c.k] === 'Ejecutado' ? 'Ejecutado' : 'En ejecución'} onChange={e => set(c.k, e.target.value)} style={{ ...input, width: 'auto' }}><option>En ejecución</option><option>Ejecutado</option></select>
+                      {(() => { const e = estadoPlan(f[c.k], f.plazo); return <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: COLOR_PLAN[e][0], color: COLOR_PLAN[e][1] }}>{e}</span> })()}
+                    </div>)
+                  : <input type={c.tipo === 'date' ? 'date' : 'text'} min={c.tipo === 'date' ? hoy() : undefined} inputMode={c.tipo === 'num' ? 'numeric' : undefined} value={f[c.k] || ''} placeholder={c.ph} onChange={e => { let v = e.target.value; if (c.tipo === 'num') v = v.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''); if (c.tipo === 'date' && v && v < hoy()) v = hoy(); set(c.k, v) }} style={input} />}
+              </Campo>))}
+            </Fila>
+            <button type="button" onClick={() => onChange(filas.filter((_, j) => j !== i))} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Quitar fila</button>
+          </div>
+        )
+      })}
       <button type="button" onClick={() => onChange([...filas, { ...vacia }])} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>+ {addTxt}</button>
     </>
   )
@@ -48,19 +90,21 @@ export default function InformeDiario() {
   const [contratos, setContratos] = useState<any[]>([])
   const [faenaCli, setFaenaCli] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
+  const [catActs, setCatActs] = useState<string[]>([])
   const [ptsDocs, setPtsDocs] = useState<any[]>([])
   const verTodos = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
 
   const cargar = useCallback(async () => {
-    const [f, l, us, ct, fc, cl] = await Promise.all([
+    const [f, l, us, ct, fc, cl, ca] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
       supabase.from('pr_informes_diarios').select('*').order('fecha', { ascending: false }).limit(60),
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
       supabase.from('pr_faena_cliente').select('*'),
       supabase.from('pr_clientes_informe').select('id,nombre'),
+      supabase.from('pr_actividad_catalogo').select('nombre').order('orden').order('nombre'),
     ])
-    setClientes(cl.data || [])
+    setClientes(cl.data || []); setCatActs((ca.data || []).map((x: any) => x.nombre))
     setUsuarios(us.data || []); setContratos(ct.data || []); setFaenaCli(fc.data || [])
     const propias = verTodos || !usuario ? null : await misUbicacionesIds(usuario.id)
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))); setLista(l.data || []); setCargando(false)
@@ -138,14 +182,13 @@ export default function InformeDiario() {
     const setCond = (i: number, p: Record<string, string>) => set({ condiciones: d.condiciones.map((x, j) => j === i ? { ...x, ...p } : x) })
     return wrap(
       <fieldset disabled={ro} style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gap: '12px' }}>
-        <datalist id="sug-act">{SUGERENCIAS_ACTIVIDAD.map(s => <option key={s} value={s} />)}</datalist>
         <div style={card}>
           <Fila>
             <Campo titulo="Faena / proyecto *"><select value={edit.ubicacion_id} onChange={e => setEdit({ ...edit, ubicacion_id: e.target.value })} disabled={!!edit.id} style={input}><option value="">— elegir —</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></Campo>
             <Campo titulo="Fecha * (hoy o hasta 3 días antes)"><input type="date" min={hace3()} max={hoy()} value={edit.fecha} onChange={e => { const v = e.target.value; setEdit({ ...edit, fecha: v > hoy() ? hoy() : v && v < hace3() ? hace3() : v }) }} disabled={!!edit.id} style={input} /></Campo>
-            <Campo titulo="Horario *" ancho="220px">
+            <Campo titulo="Horario *" ancho="300px">
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <input type="time" value={d.horaIni} onChange={e => set({ horaIni: e.target.value })} disabled={ro} style={input} /><span style={{ fontSize: '12px', color: '#667085' }}>a</span><input type="time" value={d.horaFin} onChange={e => set({ horaFin: e.target.value })} disabled={ro} style={input} />
+                <Reloj valor={d.horaIni} onChange={v => set({ horaIni: v })} disabled={ro} /><span style={{ fontSize: '12px', color: '#667085' }}>a</span><Reloj valor={d.horaFin} onChange={v => set({ horaFin: v })} disabled={ro} />
               </div>
             </Campo>
           </Fila>
@@ -191,8 +234,8 @@ export default function InformeDiario() {
         </div>
 
         <div style={card}><Titulo t="2 · Actividades preventivas realizadas" />
-          <Lista filas={d.actividades} onChange={f => set({ actividades: f })} vacia={vacias(1, COLS.actividades)[0]} addTxt="Agregar actividad"
-            cols={[{ k: 'actividad', t: 'Actividad', lista: 'sug-act' }, { k: 'cantidad', t: 'Cantidad' }, { k: 'area', t: 'Área / participantes' }, { k: 'resultado', t: 'Resultado u observación' }]} />
+          <Lista filas={d.actividades} onChange={f => set({ actividades: f })} vacia={vacias(1, COLS.actividades)[0]} addTxt="Agregar actividad" actividades={catActs}
+            cols={[{ k: 'actividad', t: 'Actividad', tipo: 'actividad' }, { k: 'cantidad', t: 'Cantidad' }, { k: 'area', t: 'Área / participantes' }, { k: 'resultado', t: 'Resultado u observación' }]} />
         </div>
 
         <div style={card}><Titulo t="3 · Condiciones de seguridad y salud ocupacional" />
@@ -238,12 +281,12 @@ export default function InformeDiario() {
 
         <div style={card}><Titulo t="5 · Oportunidades de mejora" />
           <Lista filas={d.mejoras} onChange={f => set({ mejoras: f })} vacia={vacias(1, COLS.mejoras)[0]} addTxt="Agregar oportunidad"
-            cols={[{ k: 'oportunidad', t: 'Oportunidad de mejora' }, { k: 'accion', t: 'Acción inmediata' }, { k: 'compromiso', t: 'Compromiso' }, { k: 'responsable', t: 'Responsable' }, { k: 'plazo', t: 'Plazo / estado' }]} />
+            cols={[{ k: 'oportunidad', t: 'Oportunidad de mejora' }, { k: 'accion', t: 'Acción inmediata' }, { k: 'compromiso', t: 'Compromiso' }, { k: 'responsable', t: 'Responsable' }, { k: 'plazo', t: 'Plazo (desde hoy)', tipo: 'date' }, { k: 'estado', t: 'Estado', tipo: 'estado' }]} />
         </div>
 
         <div style={card}><Titulo t="6 · Coordinaciones y comunicaciones relevantes" />
           <Lista filas={d.coordinaciones} onChange={f => set({ coordinaciones: f })} vacia={vacias(1, COLS.coordinaciones)[0]} addTxt="Agregar coordinación"
-            cols={[{ k: 'hora', t: 'Hora', tipo: 'time' }, { k: 'duracion', t: 'Duración (horas:minutos)', tipo: 'time' }, { k: 'con', t: 'Con quién / área' }, { k: 'tema', t: 'Tema e instrucción o acuerdo' }]} />
+            cols={[{ k: 'hora', t: 'Hora', tipo: 'time' }, { k: 'duracion', t: 'Duración (minutos)', tipo: 'num' }, { k: 'con', t: 'Con quién / área' }, { k: 'tema', t: 'Tema e instrucción o acuerdo' }]} />
         </div>
 
         <div style={card}><Titulo t="7 · Pendientes para el siguiente turno" />
@@ -256,7 +299,7 @@ export default function InformeDiario() {
             <div><label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>Sin novedades</label><Opciones valor={d.sinNovedades} opciones={OP_SN} onChange={v => set({ sinNovedades: v })} disabled={ro} /></div>
             <div><label style={{ fontSize: '11px', fontWeight: 600, color: '#667085', display: 'block', marginBottom: '3px' }}>Reporte al cliente</label><Opciones valor={d.reporteCliente} opciones={OP_SN} onChange={v => set({ reporteCliente: v })} disabled={ro} /></div>
           </div>
-          <Fila><Campo titulo="Hora de cierre"><input type="time" value={d.horaCierre} onChange={e => set({ horaCierre: e.target.value })} style={input} /></Campo><Campo titulo="Próximo turno">{T('proximoTurno')}</Campo><Campo titulo="Revisó"><input value={usuario?.nombre ? `${usuario.nombre} (APR de terreno)` : 'APR de terreno'} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo></Fila>
+          <Fila><Campo titulo="Hora de cierre"><Reloj valor={d.horaCierre} onChange={v => set({ horaCierre: v })} disabled={ro} /></Campo><Campo titulo="Próximo turno">{T('proximoTurno')}</Campo><Campo titulo="Revisó"><input value={usuario?.nombre ? `${usuario.nombre} (APR de terreno)` : 'APR de terreno'} readOnly style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo></Fila>
           <Campo titulo="Observaciones generales"><textarea value={d.observaciones} onChange={e => set({ observaciones: e.target.value })} rows={3} style={{ ...input, resize: 'vertical' }} /></Campo>
         </div>
 

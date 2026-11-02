@@ -56,9 +56,9 @@ export async function generarInformeDiario(o: { fecha: string, faena: string, el
     [{ content: 'Incidentes', styles: k }, sn(d.incidentes), { content: 'Atenciones', styles: k }, sn(d.atenciones)],
     [{ content: 'Descripción / folio', styles: k }, { content: d.descIncidente || '', colSpan: 3 }],
   ] })
-  tabla('5 Oportunidades de mejora', ['N°', 'Oportunidad de mejora', 'Acción inmediata', 'Compromiso', 'Responsable', 'Plazo / estado'],
-    d.mejoras.filter(r => Object.values(r).some(v => v.trim())).map((r, i) => [String(i + 1), r.oportunidad, r.accion, r.compromiso, r.responsable, r.plazo]))
-  tabla('6 Coordinaciones y comunicaciones relevantes', ['Hora', 'Duración', 'Con quién / área', 'Tema e instrucción o acuerdo'], llenas(d.coordinaciones, ['hora', 'duracion', 'con', 'tema']))
+  tabla('5 Oportunidades de mejora', ['N°', 'Oportunidad de mejora', 'Acción inmediata', 'Compromiso', 'Responsable', 'Plazo', 'Estado'],
+    d.mejoras.filter(r => [r.oportunidad, r.accion, r.compromiso, r.responsable, r.plazo].some(v => (v || '').trim())).map((r, i) => [String(i + 1), r.oportunidad, r.accion, r.compromiso, r.responsable, r.estado === 'Ejecutado' ? '—' : (/^\d{4}-\d{2}-\d{2}$/.test(r.plazo || '') ? r.plazo.split('-').reverse().join('-') : (r.plazo || '')), estadoPlan(r.estado, /^\d{4}-/.test(r.plazo || '') ? r.plazo : '')]))
+  tabla('6 Coordinaciones y comunicaciones relevantes', ['Hora', 'Duración (min)', 'Con quién / área', 'Tema e instrucción o acuerdo'], llenas(d.coordinaciones, ['hora', 'duracion', 'con', 'tema']))
   tabla('7 Pendientes para el siguiente turno', ['Pendiente', 'Responsable', 'Fecha comprometida'], llenas(d.pendientes, ['pendiente', 'responsable', 'fecha']).map(r => [r[0], r[1], r[2].split('-').reverse().join('-')]))
   autoTable(doc, { ...base, startY: titulo('8 Cierre de la jornada'), theme: 'grid', body: [
     [{ content: 'Sin novedades', styles: k }, sn(d.sinNovedades), { content: 'Reporte al cliente', styles: k }, sn(d.reporteCliente)],

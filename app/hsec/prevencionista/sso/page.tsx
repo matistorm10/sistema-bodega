@@ -74,7 +74,7 @@ export default function SsoFaena() {
     setRefirmando(false); setFirma(null); setAcepto(false); setDatosOk(false); await cargar()
   }
 
-  const verificado = desc?.estado === 'verificado'
+  const verificado = desc?.estado === 'verificado' || esAdmin || !!usuario?.esJefeHsec // la jefatura no queda bloqueada por su propio descriptor
   const estadoTxt = !desc ? 'Sin asignar' : desc.estado === 'pendiente' ? 'Pendiente de firma' : desc.estado === 'firmado' ? 'Firmado · esperando verificación de la jefatura' : 'Verificado'
   const estadoCol = !desc ? ['#f1f3f7', '#555'] : desc.estado === 'pendiente' ? ['#fde8e8', '#9b1c1c'] : desc.estado === 'firmado' ? ['#fef7e0', '#986a00'] : ['#d7efe0', '#14532d']
 

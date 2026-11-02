@@ -130,6 +130,7 @@ export default function InformeDiario() {
     const d = edit.d, ro = edit.estado === 'cerrado' && usuario?.rol !== 'admin' && !usuario?.esJefeHsec
     const set = (p: Partial<DatosInforme>) => setEdit({ ...edit, d: { ...d, ...p } })
     const T = (k: keyof DatosInforme) => <input value={(d[k] as string) || ''} onChange={e => set({ [k]: e.target.value } as any)} disabled={ro} style={input} />
+    const etiqueta = (c: any) => { const cli = clientes.find(x => x.id === c.cliente_id)?.nombre; return cli ? `${cli} · ${c.nombre}` : c.nombre }
     const dot = (Number(d.dotH) || 0) + (Number(d.dotM) || 0)
     const cliF = faenaCli.find(x => x.ubicacion_id === edit.ubicacion_id)?.cliente_id
     const contratosFaena = contratos.filter(c => !cliF || !c.cliente_id || c.cliente_id === cliF)
@@ -149,8 +150,8 @@ export default function InformeDiario() {
           </Fila>
           <Fila>
             <Campo titulo="Contrato *">
-              <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c?.nombre || '', mandante: clientes.find(x => x.id === c?.cliente_id)?.nombre || '', ptsSel: [] }) }} style={input}>
-                <option value="">— elegir contrato —</option>{contratosFaena.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              <select value={d.contratoId} disabled={ro} onChange={e => { const c = contratos.find(x => x.id === e.target.value); set({ contratoId: e.target.value, contrato: c ? etiqueta(c) : '', mandante: clientes.find(x => x.id === c?.cliente_id)?.nombre || '', ptsSel: [] }) }} style={input}>
+                <option value="">— elegir contrato —</option>{contratosFaena.map(c => <option key={c.id} value={c.id}>{etiqueta(c)}</option>)}
               </select>
               {contratosFaena.length === 0 && <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#986a00' }}>La jefatura aún no ha creado contratos{edit.ubicacion_id ? ' para el cliente de esta faena' : ''}.</p>}
             </Campo>

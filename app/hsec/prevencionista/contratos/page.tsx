@@ -16,14 +16,16 @@ export default function ContratosPrevencionista() {
   const [contratos, setContratos] = useState<any[]>([])
   const [docs, setDocs] = useState<any[]>([])
   const [sel, setSel] = useState('')
+  const [clientes, setClientes] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
     if (!usuario || !puede) return
     Promise.all([
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
+      supabase.from('pr_clientes_informe').select('id,nombre'),
       supabase.from('pr_contrato_documentos').select('*').eq('estado', 'Aprobado').order('nombre'),
-    ]).then(([c, d]) => { setContratos(c.data || []); setDocs(d.data || []); setSel((c.data || [])[0]?.id || ''); setCargando(false) })
+    ]).then(([c, cl, d]) => { setClientes(cl.data || []); setContratos(c.data || []); setDocs(d.data || []); setSel((c.data || [])[0]?.id || ''); setCargando(false) })
   }, [usuario, puede])
 
   const abrir = async (path: string) => {
@@ -45,7 +47,7 @@ export default function ContratosPrevencionista() {
           <>
             <div style={{ ...card, marginBottom: '12px' }}>
               <label style={label}>Contrato</label>
-              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
+              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{clientes.find(cl => cl.id === x.cliente_id)?.nombre ? `${clientes.find(cl => cl.id === x.cliente_id)?.nombre} · ` : ''}{x.nombre}</option>)}</select>
             </div>
             {c && CATS.map(([k, t]) => {
               const l = mios.filter(d => d.categoria === k)

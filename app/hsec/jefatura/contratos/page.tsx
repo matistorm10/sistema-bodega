@@ -61,6 +61,14 @@ export default function JefaturaContratos() {
     if (err((await supabase.from('pr_contratos').update({ nombre: edit.nombre.trim(), referencia: edit.referencia.trim() || null, cliente_id: edit.cliente_id }).eq('id', edit.id)).error)) return
     setEdit(null); await cargar()
   }
+  const eliminarContrato = async (c: any) => {
+    const n = docs.filter(d => d.contrato_id === c.id).length
+    const aviso = n === 0
+      ? `¿Eliminar el contrato «${c.nombre}»? No tiene documentos.`
+      : `¿Eliminar el contrato «${c.nombre}»?\n\nSe borrarán también sus ${n} documento(s), su historial y las personas asignadas. Los informes diarios ya hechos conservan el nombre del contrato. Esto no se puede deshacer.\n\nSi solo quieres dejar de usarlo, mejor usa «Archivar».`
+    if (!confirm(aviso)) return
+    if (!err((await supabase.from('pr_contratos').delete().eq('id', c.id)).error)) { if (abierto === c.id) setAbierto(null); await cargar() }
+  }
   const archivar = async (c: any) => { if (!err((await supabase.from('pr_contratos').update({ activo: !c.activo }).eq('id', c.id)).error)) await cargar() }
 
   // Documentos
@@ -181,6 +189,7 @@ export default function JefaturaContratos() {
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button onClick={() => setEdit({ id: c.id, nombre: c.nombre, referencia: c.referencia || '', cliente_id: c.cliente_id || '' })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>✏️ Editar</button>
                           <button onClick={() => archivar(c)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>{c.activo ? 'Archivar' : 'Reactivar'}</button>
+                          <button onClick={() => eliminarContrato(c)} style={{ ...btn(false, true), padding: '5px 10px', fontSize: '12px' }}>Eliminar</button>
                         </div>
                       </div>
                     )}

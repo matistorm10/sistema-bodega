@@ -64,7 +64,7 @@ export default function Jefatura() {
         supabase.from('pr_clientes_informe').select('*').eq('activo', true),
         supabase.from('pr_semanal_asignaciones').select('*'),
         supabase.from('pr_informes_semanales').select('cliente_id,usuario_id,periodo_fin'),
-        supabase.from('pr_contratos').select('id,nombre,cliente_id,activo').eq('activo', true).order('nombre'),
+        supabase.from('pr_contratos').select('id,nombre,referencia,cliente_id,activo').eq('activo', true).order('nombre'),
         supabase.from('pr_contrato_documentos').select('id,contrato_id,categoria,nombre,estado,fecha_envio'),
       ])
       setContratos(ct.data || []); setCdocs(cd.data || [])
@@ -241,7 +241,7 @@ export default function Jefatura() {
                           const obs = m.filter(d => d.estado === 'Observado').length
                           return (
                             <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
-                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}{c.referencia ?  : ''}</td>
                               <td style={{ padding: '6px 8px' }}>{f('PTS')}</td><td style={{ padding: '6px 8px' }}>{f('Matriz')}</td><td style={{ padding: '6px 8px' }}>{f('Plan de emergencia')}</td>
                               <td style={{ padding: '6px 8px', color: viejos ? '#9b1c1c' : undefined }}>{env.length}{viejos ? ` (${viejos} con más de 7 días ⚠️)` : ''}</td>
                               <td style={{ padding: '6px 8px', color: obs ? '#9b1c1c' : undefined, fontWeight: obs ? 700 : 400 }}>{obs}</td>

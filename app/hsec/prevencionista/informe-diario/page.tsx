@@ -8,6 +8,7 @@ import { card, btn, input, Campo, Fila, Opciones, OP_C } from '@/components/prog
 import { fechaCL, misUbicacionesIds } from '@/lib/prevencion'
 import { DatosInforme, Fila as FilaT, informeNuevo, vacias, COLS, SUGERENCIAS_ACTIVIDAD, CARGO_APR } from '@/lib/informeDiario'
 import { estadoPlan, COLOR_PLAN } from '@/lib/estadoPlan'
+import { etiquetaContrato } from '@/lib/contratos'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { generarInformeDiario } from '@/lib/generarInformeDiario'
 
@@ -130,7 +131,7 @@ export default function InformeDiario() {
     const d = edit.d, ro = edit.estado === 'cerrado' && usuario?.rol !== 'admin' && !usuario?.esJefeHsec
     const set = (p: Partial<DatosInforme>) => setEdit({ ...edit, d: { ...d, ...p } })
     const T = (k: keyof DatosInforme) => <input value={(d[k] as string) || ''} onChange={e => set({ [k]: e.target.value } as any)} disabled={ro} style={input} />
-    const etiqueta = (c: any) => { const cli = clientes.find(x => x.id === c.cliente_id)?.nombre; return cli ? `${cli} · ${c.nombre}` : c.nombre }
+    const etiqueta = (c: any) => etiquetaContrato(c, clientes)
     const dot = (Number(d.dotH) || 0) + (Number(d.dotM) || 0)
     const cliF = faenaCli.find(x => x.ubicacion_id === edit.ubicacion_id)?.cliente_id
     const contratosFaena = contratos.filter(c => !cliF || !c.cliente_id || c.cliente_id === cliF)

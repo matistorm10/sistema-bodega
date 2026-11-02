@@ -7,7 +7,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 
-import { CATEGORIAS as CATS, COLOR_DOC as COL_EST } from '@/lib/contratos'
+import { CATEGORIAS as CATS, COLOR_DOC as COL_EST, etiquetaContrato } from '@/lib/contratos'
 
 export default function ContratosPrevencionista() {
   const router = useRouter()
@@ -47,7 +47,7 @@ export default function ContratosPrevencionista() {
           <>
             <div style={{ ...card, marginBottom: '12px' }}>
               <label style={label}>Contrato</label>
-              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{clientes.find(cl => cl.id === x.cliente_id)?.nombre ? `${clientes.find(cl => cl.id === x.cliente_id)?.nombre} · ` : ''}{x.nombre}</option>)}</select>
+              <select value={sel} onChange={e => setSel(e.target.value)} style={input}>{contratos.map(x => <option key={x.id} value={x.id}>{etiquetaContrato(x, clientes)}</option>)}</select>
             </div>
             {c && CATS.map(([k, t]) => {
               const l = mios.filter(d => d.categoria === k)

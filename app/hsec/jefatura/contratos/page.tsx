@@ -24,8 +24,8 @@ export default function JefaturaContratos() {
   const [hist, setHist] = useState<Record<string, any[]>>({})
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState('')
-  const [nuevo, setNuevo] = useState({ nombre: '', cliente_id: '' })
-  const [edit, setEdit] = useState<{ id: string, nombre: string, cliente_id: string } | null>(null)
+  const [nuevo, setNuevo] = useState({ nombre: '', referencia: '', cliente_id: '' })
+  const [edit, setEdit] = useState<{ id: string, nombre: string, referencia: string, cliente_id: string } | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [nombres, setNombres] = useState<Record<string, string>>({})
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -46,13 +46,13 @@ export default function JefaturaContratos() {
   const err = (e: any) => { if (e) { alert(e.message || String(e)); return true } return false }
   const crear = async () => {
     if (!nuevo.nombre.trim() || !nuevo.cliente_id) { setMsg('Escribe el contrato y elige el cliente.'); return }
-    const { error } = await supabase.from('pr_contratos').insert({ nombre: nuevo.nombre.trim(), cliente_id: nuevo.cliente_id, created_by: usuario?.id })
+    const { error } = await supabase.from('pr_contratos').insert({ nombre: nuevo.nombre.trim(), referencia: nuevo.referencia.trim() || null, cliente_id: nuevo.cliente_id, created_by: usuario?.id })
     if (error) { setMsg('No se pudo crear: ' + error.message); return }
-    setMsg(''); setNuevo({ nombre: '', cliente_id: '' }); await cargar()
+    setMsg(''); setNuevo({ nombre: '', referencia: '', cliente_id: '' }); await cargar()
   }
   const guardarEdit = async () => {
     if (!edit || !edit.nombre.trim() || !edit.cliente_id) return
-    if (err((await supabase.from('pr_contratos').update({ nombre: edit.nombre.trim(), cliente_id: edit.cliente_id }).eq('id', edit.id)).error)) return
+    if (err((await supabase.from('pr_contratos').update({ nombre: edit.nombre.trim(), referencia: edit.referencia.trim() || null, cliente_id: edit.cliente_id }).eq('id', edit.id)).error)) return
     setEdit(null); await cargar()
   }
   const archivar = async (c: any) => { if (!err((await supabase.from('pr_contratos').update({ activo: !c.activo }).eq('id', c.id)).error)) await cargar() }
@@ -121,7 +121,8 @@ export default function JefaturaContratos() {
               <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Nuevo contrato</p>
               <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Al crearlo, dentro del contrato agregas sus documentos (PTS, matrices, planes de emergencia y otros) y les vas cambiando el estatus según avance la aprobación del cliente. Solo la jefatura puede hacerlo.</p>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '1 1 220px' }}><label style={label}>Contrato</label><input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Ej: Contrato 4500012345" style={input} /></div>
+                <div style={{ flex: '1 1 160px' }}><label style={label}>N° de contrato</label><input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Ej: 4500012345" style={input} /></div>
+                <div style={{ flex: '1 1 200px' }}><label style={label}>Nombre del contrato</label><input value={nuevo.referencia} onChange={e => setNuevo({ ...nuevo, referencia: e.target.value })} placeholder="Ej: Montaje Planta Litio" style={input} /></div>
                 <div style={{ flex: '1 1 180px' }}><label style={label}>Cliente</label><select value={nuevo.cliente_id} onChange={e => setNuevo({ ...nuevo, cliente_id: e.target.value })} style={input}><option value="">— elegir —</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
                 <button onClick={crear} style={btn()}>Crear contrato</button>
               </div>
@@ -138,20 +139,21 @@ export default function JefaturaContratos() {
                   <div key={c.id} style={{ ...card, opacity: c.activo ? 1 : 0.6 }}>
                     {edit && edit.id === c.id ? (
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                        <div style={{ flex: '1 1 180px' }}><label style={label}>Contrato</label><input value={edit.nombre} onChange={e => { const v = e.target.value; setEdit(x => x && { ...x, nombre: v }) }} style={input} /></div>
+                        <div style={{ flex: '1 1 140px' }}><label style={label}>N° de contrato</label><input value={edit.nombre} onChange={e => { const v = e.target.value; setEdit(x => x && { ...x, nombre: v }) }} style={input} /></div>
+                        <div style={{ flex: '1 1 180px' }}><label style={label}>Nombre del contrato</label><input value={edit.referencia} onChange={e => { const v = e.target.value; setEdit(x => x && { ...x, referencia: v }) }} style={input} /></div>
                         <div style={{ flex: '1 1 160px' }}><label style={label}>Cliente</label><select value={edit.cliente_id} onChange={e => { const v = e.target.value; setEdit(x => x && { ...x, cliente_id: v }) }} style={input}>{clientes.map(cl => <option key={cl.id} value={cl.id}>{cl.nombre}</option>)}</select></div>
                         <button onClick={guardarEdit} style={btn()}>Guardar</button><button onClick={() => setEdit(null)} style={btn(false)}>Cancelar</button>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <div onClick={() => setAbierto(open ? null : c.id)} style={{ cursor: 'pointer', flex: '1 1 260px' }}>
-                          <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14.5px', color: '#16213E' }}>{c.nombre}{!c.activo && <span style={{ fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}> · archivado</span>} <span style={{ fontWeight: 400, fontSize: '12px', color: '#667085' }}>· {cli || 'Sin cliente'} {open ? '▲' : '▼'}</span></p>
+                          <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14.5px', color: '#16213E' }}>{c.nombre}{c.referencia ? ` – ${c.referencia}` : ''}{!c.activo && <span style={{ fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}> · archivado</span>} <span style={{ fontWeight: 400, fontSize: '12px', color: '#667085' }}>· {cli || 'Sin cliente'} {open ? '▲' : '▼'}</span></p>
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                             {mios.length === 0 ? <span style={{ fontSize: '11.5px', color: '#98a2b3' }}>Sin documentos</span> : ESTADOS_DOC.map(e => { const n = mios.filter(d => d.estado === e).length; return n > 0 ? <Chip key={e} e={e} n={n} /> : null })}
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => setEdit({ id: c.id, nombre: c.nombre, cliente_id: c.cliente_id || '' })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>✏️ Editar</button>
+                          <button onClick={() => setEdit({ id: c.id, nombre: c.nombre, referencia: c.referencia || '', cliente_id: c.cliente_id || '' })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>✏️ Editar</button>
                           <button onClick={() => archivar(c)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>{c.activo ? 'Archivar' : 'Reactivar'}</button>
                         </div>
                       </div>

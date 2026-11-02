@@ -9,3 +9,7 @@ export const COLOR_DOC: Record<string, [string, string]> = {
   'En modificación': ['#e8f0fe', '#1B4F9C'],
 }
 export const diasDesde = (iso?: string | null) => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : 0
+export const etiquetaContrato = (c: { nombre: string, referencia?: string | null, cliente_id?: string | null }, clientes: { id: string, nombre: string }[]) => {
+  const cli = clientes.find(x => x.id === c.cliente_id)?.nombre
+  return [cli, c.nombre + (c.referencia ? ` – ${c.referencia}` : '')].filter(Boolean).join(' · ')
+}

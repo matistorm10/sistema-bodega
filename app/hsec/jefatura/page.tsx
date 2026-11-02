@@ -60,7 +60,7 @@ export default function Jefatura() {
         supabase.from('pr_charla_asistentes').select('id,charla_id,nombre,rut'),
         supabase.from('ubicaciones').select('id,nombre,activa').eq('tipo', 'faena').order('nombre'),
         supabase.from('usuarios').select('id,nombre'),
-        supabase.from('pr_informes_diarios').select('id,fecha,ubicacion_id,creado_por,estado').order('fecha', { ascending: false }),
+        supabase.from('pr_informes_diarios').select('id,fecha,ubicacion_id,creado_por,estado,revision').order('fecha', { ascending: false }),
         supabase.from('pr_clientes_informe').select('*').eq('activo', true),
         supabase.from('pr_semanal_asignaciones').select('*'),
         supabase.from('pr_informes_semanales').select('cliente_id,usuario_id,periodo_fin'),
@@ -201,8 +201,8 @@ export default function Jefatura() {
             <Link href="/hsec/prevencionista/informe-diario" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>📝</div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Informes diarios SSO de los APR</p>
-                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Revisa y descarga los informes de todos los prevencionistas y configura la lista de actividades</p>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Informes diarios SSO de los APR {informes.filter(i => i.estado === 'cerrado' && i.revision === 'pendiente').length > 0 && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', marginLeft: '6px' }}>⏳ {informes.filter(i => i.estado === 'cerrado' && i.revision === 'pendiente').length} por aprobar</span>}</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Aprueba o rechaza cada día los informes de los prevencionistas y configura la lista de actividades</p>
               </div>
             </Link>
 

@@ -50,8 +50,28 @@ function ActividadSelect({ valor, opciones, onChange }: { valor: string, opcione
   )
 }
 
+// Respaldo obligatorio para pasar a «Ejecutado»
+type SubirFn = (f: File) => Promise<{ path: string, nombre: string }>
+function Evidencia({ nombre, subir, onOk }: { nombre?: string, subir?: SubirFn, onOk: (path: string, nombre: string) => void }) {
+  const [subiendo, setSubiendo] = useState(false)
+  const [err, setErr] = useState('')
+  return (
+    <div style={{ background: '#f4f8fd', border: '1px dashed #9db8e0', borderRadius: '8px', padding: '6px 10px', fontSize: '12px', flex: '1 1 100%' }}>
+      <span style={{ fontWeight: 700, color: '#1B4F9C' }}>📎 Respaldo de lo ejecutado *</span>{' '}
+      {nombre ? <span style={{ color: '#14532d', fontWeight: 600 }}>{nombre} ✓ </span> : <span style={{ color: '#9b1c1c' }}>obligatorio (foto o PDF). </span>}
+      <input type="file" accept="image/*,application/pdf" disabled={subiendo || !subir} onChange={async e => {
+        const f = e.target.files?.[0]; if (!f || !subir) return
+        setSubiendo(true); setErr('')
+        try { const r = await subir(f); onOk(r.path, r.nombre) } catch (x: any) { setErr('No se pudo subir: ' + (x?.message || x)) }
+        setSubiendo(false)
+      }} style={{ fontSize: '12px' }} />
+      {subiendo && <span> Subiendo…</span>}{err && <span style={{ color: '#c5221f' }}> {err}</span>}
+    </div>
+  )
+}
+
 // Tabla editable por tarjetas (cómoda en celular)
-function Lista({ filas, cols, onChange, vacia, addTxt, actividades }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, tipo?: 'time' | 'date' | 'num' | 'actividad' | 'estado' }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string, actividades?: string[] }) {
+function Lista({ filas, cols, onChange, vacia, addTxt, actividades, subir }: { filas: FilaT[], cols: { k: string, t: string, ph?: string, tipo?: 'time' | 'date' | 'num' | 'actividad' | 'estado' }[], onChange: (f: FilaT[]) => void, vacia: FilaT, addTxt: string, actividades?: string[], subir?: SubirFn }) {
   return (
     <>
       {filas.map((f, i) => {
@@ -66,6 +86,7 @@ function Lista({ filas, cols, onChange, vacia, addTxt, actividades }: { filas: F
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <select value={f[c.k] === 'Ejecutado' ? 'Ejecutado' : 'En ejecución'} onChange={e => set(c.k, e.target.value)} style={{ ...input, width: 'auto' }}><option>En ejecución</option><option>Ejecutado</option></select>
                       {(() => { const e = estadoPlan(f[c.k], f.plazo); return <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: COLOR_PLAN[e][0], color: COLOR_PLAN[e][1] }}>{e}</span> })()}
+                      {f[c.k] === 'Ejecutado' && <Evidencia nombre={f.evidenciaNombre} subir={subir} onOk={(path, nombre) => onChange(filas.map((x, j) => j === i ? { ...x, evidencia: path, evidenciaNombre: nombre } : x))} />}
                     </div>)
                   : <input type={c.tipo === 'date' ? 'date' : 'text'} min={c.tipo === 'date' ? hoy() : undefined} inputMode={c.tipo === 'num' ? 'numeric' : undefined} value={f[c.k] || ''} placeholder={c.ph} onChange={e => { let v = e.target.value; if (c.tipo === 'num') v = v.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''); if (c.tipo === 'date' && v && v < hoy()) v = hoy(); set(c.k, v) }} style={input} />}
               </Campo>))}
@@ -96,6 +117,8 @@ export default function InformeDiario() {
   const [clientes, setClientes] = useState<any[]>([])
   const [catActs, setCatActs] = useState<string[]>([])
   const [ptsDocs, setPtsDocs] = useState<any[]>([])
+  const [cierres, setCierres] = useState<any[]>([])
+  const [comentRev, setComentRev] = useState('')
   const verTodos = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
 
   const cargar = useCallback(async () => {
@@ -108,6 +131,8 @@ export default function InformeDiario() {
       supabase.from('pr_clientes_informe').select('id,nombre'),
       supabase.from('pr_actividad_catalogo').select('nombre').order('orden').order('nombre'),
     ])
+    const ci = await supabase.from('pr_plan_cierres').select('*')
+    setCierres(ci.data || [])
     setClientes(cl.data || []); setCatActs((ca.data || []).map((x: any) => x.nombre))
     setUsuarios(us.data || []); setContratos(ct.data || []); setFaenaCli(fc.data || [])
     const propias = verTodos || !usuario ? null : await misUbicacionesIds(usuario.id)
@@ -121,8 +146,37 @@ export default function InformeDiario() {
     supabase.from('pr_contrato_documentos').select('id,nombre,estado,path,rev').eq('contrato_id', contratoId).eq('categoria', 'PTS').eq('estado', 'Aprobado').order('nombre').then(({ data }) => setPtsDocs(data || []))
   }, [contratoId])
   const recargarCat = useCallback(async () => { const { data } = await supabase.from('pr_actividad_catalogo').select('nombre').order('orden').order('nombre'); setCatActs((data || []).map((x: any) => x.nombre)) }, [])
+  const subirEvidencia: SubirFn = async (f) => {
+    if (!usuario) throw new Error('Sin sesión')
+    if (f.size > 10 * 1024 * 1024) throw new Error('El archivo supera 10 MB')
+    const limpio = f.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `evidencias/${usuario.id}/${Date.now()}_${limpio}`
+    const { error } = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
+    if (error) throw error
+    return { path, nombre: f.name }
+  }
+  const verEvidencia = async (path: string) => {
+    const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600)
+    if (error || !data) { alert('No se pudo abrir el respaldo'); return }
+    window.open(data.signedUrl, '_blank')
+  }
+  const cerrarPlan = async (informeId: string, clave: string, file: File, nota: string) => {
+    if (!usuario) return
+    const r = await subirEvidencia(file)
+    const { error } = await supabase.from('pr_plan_cierres').insert({ informe_id: informeId, clave, evidencia_path: r.path, evidencia_nombre: r.nombre, nota: nota.trim() || null, cerrado_por: usuario.id })
+    if (error) throw error
+    await cargar()
+  }
+  const revisar = async (revision: 'aprobado' | 'rechazado') => {
+    if (!edit?.id) return
+    if (revision === 'rechazado' && !comentRev.trim()) { setMsg('Escribe el motivo del rechazo para que el APR sepa qué corregir.'); return }
+    if (revision === 'aprobado' && !confirm('¿Aprobar este informe? Quedará registrado como aprobado.')) return
+    const { error } = await supabase.rpc('revisar_informe_diario', { p_id: edit.id, p_revision: revision, p_comentario: comentRev.trim() || null })
+    if (error) { setMsg('No se pudo registrar: ' + error.message); return }
+    setComentRev(''); setMsg(''); setEdit(null); await cargar()
+  }
   const nuevo = (fecha?: string) => setEdit({ fecha: typeof fecha === 'string' ? fecha : hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(CARGO_APR) })
-  const abrir = async (r: any) => setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } })
+  const abrir = async (r: any) => { setComentRev(''); setMsg(''); setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } }) }
 
   const guardar = async (cerrar: boolean) => {
     if (!usuario || !edit) return
@@ -133,12 +187,16 @@ export default function InformeDiario() {
       if (!edit.d.horaIni || !edit.d.horaFin) { setMsg('Indica el horario (inicio y término).'); return }
       const falta = edit.d.condiciones.find(c => c.estado === 'NC' && (!c.accion?.trim() || !c.responsable?.trim() || (c.status !== 'Ejecutado' && !c.fecha)))
       if (falta) { setMsg(`Condición «${falta.item || 'sin nombre'}»: al ser No conforme completa acción, responsable y fecha del plan de acción.`); return }
+      const sinResp = edit.d.condiciones.find(c => c.estado === 'NC' && c.status === 'Ejecutado' && !c.evidencia) || edit.d.mejoras.find(m => m.estado === 'Ejecutado' && !m.evidencia)
+      if (sinResp) { setMsg('Los ítems en estado «Ejecutado» necesitan adjuntar su respaldo (foto o PDF).'); return }
       const sinNombre = edit.d.condiciones.find(c => !c.item.trim() && (c.estado || c.obs))
       if (sinNombre) { setMsg('Hay una condición agregada sin nombre.'); return }
     }
-    if (cerrar && !confirm('Al cerrar el informe ya no podrás editarlo. ¿Cerrarlo?')) return
+    if (cerrar && !confirm('Al cerrar, el informe se envía al Jefe para su aprobación y ya no podrás editarlo (salvo que lo rechace). ¿Enviarlo?')) return
     setGuardando(true); setMsg('')
-    const cuerpo: any = { fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos: edit.d, updated_at: new Date().toISOString() }
+    const uid = (x: any) => ({ ...x, uid: x.uid || Math.random().toString(36).slice(2, 10) })
+    const datos: any = { ...edit.d, mejoras: edit.d.mejoras.map(uid), condiciones: edit.d.condiciones.map(uid), pendientes: edit.d.pendientes.map(uid) }
+    const cuerpo: any = { fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos, updated_at: new Date().toISOString() }
     if (cerrar) { cuerpo.estado = 'cerrado'; cuerpo.cerrado_at = new Date().toISOString() }
     const { data, error } = edit.id
       ? await supabase.from('pr_informes_diarios').update(cuerpo).eq('id', edit.id).select().maybeSingle()
@@ -177,7 +235,14 @@ export default function InformeDiario() {
   if (cargando) return wrap(<p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p>)
 
   if (edit) {
-    const d = edit.d, ro = edit.estado === 'cerrado' && usuario?.rol !== 'admin' && !usuario?.esJefeHsec
+    const d = edit.d
+    const reg = edit.id ? lista.find(x => x.id === edit.id) : null
+    const soyAutor = !reg || reg.creado_por === usuario?.id
+    const rechazado = !!reg && reg.estado === 'cerrado' && reg.revision === 'rechazado'
+    const ro = !soyAutor || (edit.estado === 'cerrado' && !rechazado)
+    const revisor = verTodos && !soyAutor && !!reg && reg.estado === 'cerrado'
+    const nombreDe = (id: string) => usuarios.find(u => u.id === id)?.nombre || '—'
+    const cierresInf = reg ? cierres.filter(c => c.informe_id === reg.id) : []
     const set = (p: Partial<DatosInforme>) => setEdit({ ...edit, d: { ...d, ...p } })
     const T = (k: keyof DatosInforme) => <input value={(d[k] as string) || ''} onChange={e => set({ [k]: e.target.value } as any)} disabled={ro} style={input} />
     const etiqueta = (c: any) => etiquetaContrato(c, clientes)
@@ -185,7 +250,33 @@ export default function InformeDiario() {
     const cliF = faenaCli.find(x => x.ubicacion_id === edit.ubicacion_id)?.cliente_id
     const contratosFaena = contratos.filter(c => !cliF || !c.cliente_id || c.cliente_id === cliF)
     const setCond = (i: number, p: Record<string, string>) => set({ condiciones: d.condiciones.map((x, j) => j === i ? { ...x, ...p } : x) })
-    return wrap(
+    return wrap(<>
+      {reg && reg.estado === 'cerrado' && (
+        <div style={{ ...card, marginBottom: '12px', borderColor: reg.revision === 'aprobado' ? '#9bd3b0' : reg.revision === 'rechazado' ? '#f3b4b4' : '#c9b8ee', background: reg.revision === 'aprobado' ? '#f1faf4' : reg.revision === 'rechazado' ? '#fff5f5' : '#f7f3fe' }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '13.5px' }}>
+            {reg.revision === 'aprobado' ? `✅ Aprobado por ${nombreDe(reg.revisado_por)}` : reg.revision === 'rechazado' ? '↩ Rechazado: corrígelo y vuelve a enviarlo' : '⏳ Enviado al Jefe: esperando aprobación'}
+            {reg.revisado_at && reg.revision !== 'pendiente' ? <span style={{ fontWeight: 400, color: '#667085' }}> · {new Date(reg.revisado_at).toLocaleDateString('es-CL')}</span> : null}
+          </p>
+          {reg.revision_comentario && <p style={{ margin: '6px 0 0', fontSize: '13px' }}>💬 {reg.revision_comentario}</p>}
+          {revisor && reg.revision === 'pendiente' && (
+            <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>Solo puedes aprobar o rechazar; el contenido lo modifica únicamente el APR.</p>
+              <textarea value={comentRev} onChange={e => setComentRev(e.target.value)} rows={2} placeholder="Comentario (obligatorio si rechazas)" style={{ ...input, resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => revisar('aprobado')} style={btn()}>✓ Aprobar</button>
+                <button type="button" onClick={() => revisar('rechazado')} style={btn(false, true)}>✗ Rechazar</button>
+              </div>
+              {msg && <p style={{ margin: 0, fontSize: '12.5px', color: '#c5221f' }}>{msg}</p>}
+            </div>
+          )}
+        </div>
+      )}
+      {cierresInf.length > 0 && (
+        <div style={{ ...card, marginBottom: '12px' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13px' }}>✔ Compromisos cerrados después del informe</p>
+          {cierresInf.map(c => <p key={c.id} style={{ margin: '0 0 3px', fontSize: '12.5px' }}>{new Date(c.cerrado_at).toLocaleDateString('es-CL')} · <button type="button" onClick={() => verEvidencia(c.evidencia_path)} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', padding: 0, fontSize: '12.5px', textDecoration: 'underline' }}>📎 {c.evidencia_nombre || 'respaldo'}</button>{c.nota ? ` · ${c.nota}` : ''}</p>)}
+        </div>
+      )}
       <fieldset disabled={ro} style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gap: '12px' }}>
         <div style={card}>
           <Fila>
@@ -266,6 +357,7 @@ export default function InformeDiario() {
                       <input value={c.responsable || ''} placeholder="Responsable" disabled={ro} onChange={ev => setCond(i, { responsable: ev.target.value })} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
                       <select value={c.status === 'Ejecutado' ? 'Ejecutado' : 'En ejecución'} disabled={ro} onChange={ev => setCond(i, { status: ev.target.value })} style={{ ...input, flex: '1 1 110px', width: 'auto' }}><option>En ejecución</option><option>Ejecutado</option></select>
                       <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: COLOR_PLAN[e][0], color: COLOR_PLAN[e][1] }}>{e}</span>
+                      {c.status === 'Ejecutado' && <Evidencia nombre={c.evidenciaNombre} subir={subirEvidencia} onOk={(path, nombre) => setCond(i, { evidencia: path, evidenciaNombre: nombre })} />}
                     </div>
                   </div>
                 )}
@@ -286,7 +378,7 @@ export default function InformeDiario() {
 
         <div style={card}><Titulo t="5 · Oportunidades de mejora" />
           <Lista filas={d.mejoras} onChange={f => set({ mejoras: f })} vacia={vacias(1, COLS.mejoras)[0]} addTxt="Agregar oportunidad"
-            cols={[{ k: 'oportunidad', t: 'Oportunidad de mejora' }, { k: 'accion', t: 'Acción inmediata' }, { k: 'compromiso', t: 'Compromiso' }, { k: 'responsable', t: 'Responsable' }, { k: 'plazo', t: 'Plazo (desde hoy)', tipo: 'date' }, { k: 'estado', t: 'Estado', tipo: 'estado' }]} />
+            subir={subirEvidencia} cols={[{ k: 'oportunidad', t: 'Oportunidad de mejora' }, { k: 'accion', t: 'Acción inmediata' }, { k: 'compromiso', t: 'Compromiso' }, { k: 'responsable', t: 'Responsable' }, { k: 'plazo', t: 'Plazo (desde hoy)', tipo: 'date' }, { k: 'estado', t: 'Estado', tipo: 'estado' }]} />
         </div>
 
         <div style={card}><Titulo t="6 · Coordinaciones y comunicaciones relevantes" />
@@ -308,36 +400,51 @@ export default function InformeDiario() {
           <Campo titulo="Observaciones generales"><textarea value={d.observaciones} onChange={e => set({ observaciones: e.target.value })} rows={3} style={{ ...input, resize: 'vertical' }} /></Campo>
         </div>
 
-        {msg && <p style={{ fontSize: '12.5px', color: msg.endsWith('✓') ? '#1e8e4e' : '#c5221f', margin: 0 }}>{msg}</p>}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {!ro && <button type="button" onClick={() => guardar(false)} disabled={guardando} style={btn(false)}>Guardar borrador</button>}
-          {!ro && <button type="button" onClick={() => guardar(true)} disabled={guardando} style={btn()}>Cerrar y firmar informe</button>}
-          {edit.id && <button type="button" onClick={() => pdf({ fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos: d, cerrado_at: edit.estado === 'cerrado' ? lista.find(x => x.id === edit.id)?.cerrado_at : null, creado_por: lista.find(x => x.id === edit.id)?.creado_por || usuario!.id })} style={btn(false)}>📄 Ver PDF</button>}
-          <button type="button" onClick={() => { setEdit(null); setMsg('') }} style={btn(false)}>Volver</button>
-        </div>
       </fieldset>
-    )
+      {msg && !revisor && <p style={{ fontSize: '12.5px', color: msg.endsWith('✓') ? '#1e8e4e' : '#c5221f', margin: 0 }}>{msg}</p>}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+        {!ro && edit.estado !== 'cerrado' && <button type="button" onClick={() => guardar(false)} disabled={guardando} style={btn(false)}>Guardar borrador</button>}
+        {!ro && <button type="button" onClick={() => guardar(true)} disabled={guardando} style={btn()}>{rechazado ? 'Corregir y reenviar al Jefe' : 'Cerrar y enviar al Jefe'}</button>}
+        {edit.id && <button type="button" onClick={() => pdf({ fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos: d, cerrado_at: edit.estado === 'cerrado' ? lista.find(x => x.id === edit.id)?.cerrado_at : null, creado_por: lista.find(x => x.id === edit.id)?.creado_por || usuario!.id })} style={btn(false)}>📄 Ver PDF</button>}
+        <button type="button" onClick={() => { setEdit(null); setMsg('') }} style={btn(false)}>Volver</button>
+      </div>
+    </>)
   }
 
   return wrap(
     <>
       <div style={{ ...card, marginBottom: '12px' }}>
-        <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#667085' }}>Un informe por faena y por día. Puedes guardarlo como borrador durante la jornada y cerrarlo al terminar (se firma con tu firma guardada).</p>
+        <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#667085' }}>{verTodos ? 'Cada día los APR envían su informe y tú lo apruebas o rechazas con comentario. Los informes solo los modifica su autor.' : 'Un informe por faena y por día. Guárdalo como borrador durante la jornada y ciérralo al terminar: se envía al Jefe, que lo aprueba o lo rechaza con comentarios (se firma con tu firma guardada).'}</p>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={() => nuevo()} style={btn()}>+ Nuevo informe del día</button>
+          {!!usuario?.esPrevencionista && <button onClick={() => nuevo()} style={btn()}>+ Nuevo informe del día</button>}
           {verTodos && <button onClick={() => setVerConfig(v => !v)} style={btn(false)}>⚙️ Configurar lista de actividades {verConfig ? '▲' : '▼'}</button>}
         </div>
       </div>
       {verTodos && verConfig && <div style={{ marginBottom: '12px' }}><ListadoActividades onCambio={recargarCat} /></div>}
-      <div style={{ marginBottom: '8px' }}>
-        {verTodos && (
-          <select value={verAPR} onChange={e => setVerAPR(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '10px' }}>
-            <option value="">Mi calendario</option>
-            {Array.from(new Set(lista.map(r => r.creado_por))).filter(id => id !== usuario?.id).map(id => <option key={id} value={id}>Calendario de {usuarios.find(u => u.id === id)?.nombre || '—'}</option>)}
-          </select>
-        )}
-        <CalendarioInformes informes={lista.filter(r => r.creado_por === (verAPR || usuario?.id))} onAbrir={abrir} onNuevo={f => nuevo(f)} />
-      </div>
+      {(() => {
+        const autores = Array.from(new Set([...(usuario?.esPrevencionista ? [usuario.id] : []), ...lista.map(r => r.creado_por)]))
+        const aprSel = verAPR || (verTodos ? (autores[0] || '') : usuario?.id)
+        const esMio = aprSel === usuario?.id
+        return (
+          <div style={{ marginBottom: '8px' }}>
+            {verTodos && autores.length > 0 && (
+              <select value={aprSel} onChange={e => setVerAPR(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '10px' }}>
+                {autores.map(id => <option key={id} value={id}>{id === usuario?.id ? 'Mi calendario' : `Calendario de ${usuarios.find(u => u.id === id)?.nombre || '—'}`}</option>)}
+              </select>
+            )}
+            <CalendarioInformes informes={lista.filter(r => r.creado_por === aprSel)} cierres={cierres} esAutor={esMio && !!usuario?.esPrevencionista} esJefe={verTodos}
+              onAbrir={abrir} onNuevo={f => nuevo(f)} onCerrarPlan={cerrarPlan} onEvidencia={verEvidencia} />
+          </div>
+        )
+      })()}
+      {verTodos && lista.some(r => r.estado === 'cerrado' && r.revision === 'pendiente') && (
+        <div style={{ ...card, background: '#f7f3fe', borderColor: '#c9b8ee', marginBottom: '10px' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#5b3aa6' }}>⏳ Informes por aprobar ({lista.filter(r => r.estado === 'cerrado' && r.revision === 'pendiente').length})</p>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {lista.filter(r => r.estado === 'cerrado' && r.revision === 'pendiente').map(r => <button key={r.id} onClick={() => abrir(r)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>{fechaCL(r.fecha)} · {usuarios.find(u => u.id === r.creado_por)?.nombre || '—'}</button>)}
+          </div>
+        </div>
+      )}
       <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>Todos los informes</p>
       {lista.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay informes.</p>}
       <div style={{ display: 'grid', gap: '8px' }}>
@@ -345,12 +452,12 @@ export default function InformeDiario() {
           <div key={r.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
               <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{fechaCL(r.fecha)} · {faenas.find(x => x.id === r.ubicacion_id)?.nombre || '—'}{verTodos ? <span style={{ fontWeight: 400, color: '#667085' }}> · {usuarios.find(u => u.id === r.creado_por)?.nombre || '—'}</span> : null}</p>
-              <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, background: r.estado === 'cerrado' ? '#d7efe0' : '#fef7e0', color: r.estado === 'cerrado' ? '#14532d' : '#986a00' }}>{r.estado === 'cerrado' ? 'Cerrado' : 'Borrador'}</span>
+              <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, ...(r.estado !== 'cerrado' ? { background: '#fef7e0', color: '#986a00' } : r.revision === 'aprobado' ? { background: '#d7efe0', color: '#14532d' } : r.revision === 'rechazado' ? { background: '#fde8e8', color: '#9b1c1c' } : { background: '#efe7fd', color: '#5b3aa6' }) }}>{r.estado !== 'cerrado' ? 'Borrador' : r.revision === 'aprobado' ? 'Aprobado' : r.revision === 'rechazado' ? 'Rechazado · corregir' : verTodos ? 'Por aprobar' : 'Enviado al Jefe'}</span>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={() => abrir(r)} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>{r.estado === 'cerrado' ? 'Ver' : 'Continuar'}</button>
+              <button onClick={() => abrir(r)} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>{r.estado === 'cerrado' ? (verTodos && r.revision === 'pendiente' ? 'Revisar' : r.revision === 'rechazado' && r.creado_por === usuario?.id ? 'Corregir' : 'Ver') : r.creado_por === usuario?.id ? 'Continuar' : 'Ver'}</button>
               <button onClick={() => pdf(r)} style={{ ...btn(false), padding: '6px 12px', fontSize: '12.5px' }}>PDF</button>
-              <button onClick={() => eliminar(r.id)} style={{ ...btn(false, true), padding: '6px 12px', fontSize: '12.5px' }}>Eliminar</button>
+              {r.estado === 'borrador' && r.creado_por === usuario?.id && <button onClick={() => eliminar(r.id)} style={{ ...btn(false, true), padding: '6px 12px', fontSize: '12.5px' }}>Eliminar</button>}
             </div>
           </div>
         ))}

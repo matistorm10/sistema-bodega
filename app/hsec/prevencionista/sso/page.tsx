@@ -32,6 +32,7 @@ export default function SsoFaena() {
   const [msg, setMsg] = useState('')
   const [canvasKey, setCanvasKey] = useState(0)
   const [verificador, setVerificador] = useState('')
+  const [abDesc, setAbDesc] = useState<boolean | null>(null) // null = automático (abierto si falta firmar)
   const [datos, setDatos] = useState({ nombre: '', rut: '', faena: '' })
   const [datosOk, setDatosOk] = useState(false)
   const [refirmando, setRefirmando] = useState(false)
@@ -92,12 +93,15 @@ export default function SsoFaena() {
           <>
             {/* Ítem 1 */}
             <div style={{ ...card, marginBottom: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div onClick={() => setAbDesc(!(abDesc ?? (!desc || desc.estado === 'pendiente' || refirmando)))} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', cursor: 'pointer' }}>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', color: '#16213E' }}>1. Descriptor de cargo</p>
-                <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: estadoCol[0], color: estadoCol[1], fontWeight: 600 }}>{estadoTxt}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: estadoCol[0], color: estadoCol[1], fontWeight: 600 }}>{estadoTxt}</span>
+                  <span style={{ fontSize: '12px', color: '#667085' }}>{(abDesc ?? (!desc || desc.estado === 'pendiente' || refirmando)) ? '▲' : '▼'}</span>
+                </span>
               </div>
 
-              {!desc ? (
+              {(abDesc ?? (!desc || desc.estado === 'pendiente' || refirmando)) && (!desc ? (
                 <p style={{ fontSize: '13px', color: '#667085', margin: '10px 0 0' }}>Aún no tienes un descriptor asignado. La jefatura debe asignarte a una faena para que puedas firmarlo.</p>
               ) : (
                 <>
@@ -166,7 +170,7 @@ export default function SsoFaena() {
                     </div>
                   )}
                 </>
-              )}
+              ))}
             </div>
 
             {/* Resto de los ítems */}

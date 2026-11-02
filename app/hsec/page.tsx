@@ -8,13 +8,14 @@ const AZUL = '#1B4F9C'
 export default function Hsec() {
   const { usuario, cargando } = useUsuarioActual()
   const esAdmin = usuario?.rol === 'admin'
-  const puedeAcceder = esAdmin || usuario?.accesoHsec || !!usuario?.cargoPrograma
+  const puedeAcceder = esAdmin || usuario?.accesoHsec || !!usuario?.cargoPrograma || !!usuario?.veDocumentos
   const veJefatura = esAdmin || !!usuario?.esJefeHsec
   const vePrevencionista = esAdmin || !!usuario?.esJefeHsec || !!usuario?.esPrevencionista
 
   const secciones = [
     { href: '/hsec/jefatura', icon: '📊', label: 'Panel de Jefatura', desc: 'Dashboard con los números de todas las faenas y prevencionistas', visible: veJefatura },
     { href: '/hsec/prevencionista', icon: '🦺', label: 'Espacio del Prevencionista', desc: 'Carga y seguimiento de la información de cada prevencionista', visible: vePrevencionista },
+    { href: '/hsec/prevencionista/contratos', icon: '📁', label: 'Documentos de contratos', desc: 'PTS, matrices y planes de emergencia aprobados de cada contrato (solo lectura)', visible: !!usuario?.veDocumentos && !vePrevencionista },
   ].filter(s => s.visible)
 
   const cabecera = (

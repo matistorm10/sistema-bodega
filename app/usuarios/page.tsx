@@ -29,6 +29,8 @@ export default function Usuarios() {
   const [esRevisor, setEsRevisor] = useState(false)
   const [esJefeHsec, setEsJefeHsec] = useState(false)
   const [esPrevencionista, setEsPrevencionista] = useState(false)
+  const [veDocs, setVeDocs] = useState(false)
+  const [editVeDocs, setEditVeDocs] = useState(false)
   const [cargoPrograma, setCargoPrograma] = useState('')
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
   const [guardando, setGuardando] = useState(false)
@@ -102,7 +104,7 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, cargoPrograma: cargoPrograma || null, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, veDocumentosContratos: veDocs, cargoPrograma: cargoPrograma || null, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
@@ -152,6 +154,7 @@ export default function Usuarios() {
     setEditEsRevisor(!!u.es_revisor_contabilidad)
     setEditEsJefeHsec(!!u.es_jefe_hsec)
     setEditEsPrevencionista(!!u.es_prevencionista)
+    setEditVeDocs(!!u.ve_documentos_contratos)
     setEditCargoPrograma(u.cargo_programa || '')
     const p: Record<string, {origen:boolean, destino:boolean}> = {}
     ;(u.usuario_ubicaciones || []).forEach((x: any) => { p[x.ubicacion_id] = { origen: x.puede_origen, destino: x.puede_destino } })
@@ -171,7 +174,7 @@ export default function Usuarios() {
       acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones,
       acceso_contabilidad: editAccesoContabilidad, acceso_hsec: editAccesoHsec,
       puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor,
-      es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista, cargo_programa: editCargoPrograma || null
+      es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista, ve_documentos_contratos: editVeDocs, cargo_programa: editCargoPrograma || null
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
@@ -351,6 +354,7 @@ export default function Usuarios() {
             <div style={{display:'grid',gap:'8px'}}>
               <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>setEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
               <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>setEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={veDocs} onChange={e=>setVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
             </div>
           </div>
         )}
@@ -432,6 +436,7 @@ export default function Usuarios() {
                       <div style={{display:'grid',gap:'8px'}}>
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>setEditEsJefeHsec(e.target.checked)}/>📊 Jefatura del departamento (panel de control con los números)</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>setEditEsPrevencionista(e.target.checked)}/>🦺 Prevencionista (carga información de su faena)</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editVeDocs} onChange={e=>setEditVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
                       </div>
                     </div>
                   )}
@@ -478,10 +483,11 @@ export default function Usuarios() {
                       <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #1B4F9C',color:'#1B4F9C'}}>📈 Programa: {CARGOS_PROGRAMA[u.cargo_programa] || u.cargo_programa}</span>
                     </div>
                   )}
-                  {(u.es_jefe_hsec || u.es_prevencionista) && (
+                  {(u.es_jefe_hsec || u.es_prevencionista || u.ve_documentos_contratos) && (
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
                       {u.es_jefe_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>📊 Jefatura Prevención de Riesgo</span>}
                       {u.es_prevencionista && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>🦺 Prevencionista</span>}
+                      {u.ve_documentos_contratos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #1B4F9C',color:'#1B4F9C'}}>📁 Ve documentos de contratos</span>}
                     </div>
                   )}
                   {u.usuario_ubicaciones?.length > 0 && (

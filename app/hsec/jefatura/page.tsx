@@ -241,7 +241,7 @@ export default function Jefatura() {
                           const obs = m.filter(d => d.estado === 'Observado').length
                           return (
                             <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
-                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}{c.referencia ?  : ''}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}{c.referencia ? ` – ${c.referencia}` : ''}</td>
                               <td style={{ padding: '6px 8px' }}>{f('PTS')}</td><td style={{ padding: '6px 8px' }}>{f('Matriz')}</td><td style={{ padding: '6px 8px' }}>{f('Plan de emergencia')}</td>
                               <td style={{ padding: '6px 8px', color: viejos ? '#9b1c1c' : undefined }}>{env.length}{viejos ? ` (${viejos} con más de 7 días ⚠️)` : ''}</td>
                               <td style={{ padding: '6px 8px', color: obs ? '#9b1c1c' : undefined, fontWeight: obs ? 700 : 400 }}>{obs}</td>

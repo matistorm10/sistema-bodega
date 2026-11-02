@@ -30,6 +30,7 @@ export default function Usuarios() {
   const [esJefeHsec, setEsJefeHsec] = useState(false)
   const [esPrevencionista, setEsPrevencionista] = useState(false)
   const [veDocs, setVeDocs] = useState(false)
+  const [nuevoAbierto, setNuevoAbierto] = useState(false)
   const [editVeDocs, setEditVeDocs] = useState(false)
   const [cargoPrograma, setCargoPrograma] = useState('')
   const [permisos, setPermisos] = useState<Record<string, {origen:boolean, destino:boolean}>>({})
@@ -109,7 +110,7 @@ export default function Usuarios() {
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
-    setExito(`${nombre} creado correctamente.`)
+    setExito(`${nombre} creado correctamente.`); setNuevoAbierto(false)
     setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
     setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setCargoPrograma(''); setPermisos({})
     cargar()
@@ -283,7 +284,12 @@ export default function Usuarios() {
       </div>
 
       <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1.5rem'}}>
-        <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 10px'}}>+ Nuevo usuario</p>
+        <button type="button" onClick={()=>setNuevoAbierto(v=>!v)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit'}}>
+          <span style={{fontSize:'14px',fontWeight:'700'}}>+ Nuevo usuario</span>
+          <span style={{fontSize:'13px',color:AZUL}}>{nuevoAbierto ? 'Cerrar ▲' : 'Abrir ▼'}</span>
+        </button>
+        {!nuevoAbierto && exito && <p style={{fontSize:'13px',color:'#137333',margin:'8px 0 0'}}>{exito}</p>}
+        {nuevoAbierto && (<div style={{marginTop:'10px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
           <div>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Nombre</label>
@@ -371,6 +377,7 @@ export default function Usuarios() {
         <button onClick={crearUsuario} disabled={guardando} style={{width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:guardando?0.6:1}}>
           {guardando ? 'Creando...' : 'Crear usuario'}
         </button>
+        </div>)}
       </div>
 
       {cargando ? <p style={{fontSize:'13px',color:'#999'}}>Cargando...</p> : (

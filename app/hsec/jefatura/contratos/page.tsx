@@ -64,25 +64,36 @@ export default function JefaturaContratos() {
     if (err((await supabase.from('pr_contrato_documentos').insert(lista.map(nombre => ({ contrato_id: c.id, categoria: cat, nombre, created_by: usuario?.id })))).error)) return
     setNombres({ ...nombres, [c.id + cat]: '' }); await cargar()
   }
-  const subirArchivo = async (c: any, d: any, f: File) => {
-    setOcupado(d.id)
-    const path = `contratos/${c.id}/${d.id}_r${d.rev}_${Date.now()}_${f.name.replace(/[^\w.\-]+/g, '_')}`
+  const limpio = (n: string) => n.replace(/[^\w.\-]+/g, '_')
+  const esPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+  // tipo 'pdf' = documento oficial firmado y escaneado (lo ven los APR); 'editable' = Word/Excel de trabajo (solo jefatura)
+  const subirArchivo = async (c: any, d: any, f: File, tipo: 'pdf' | 'editable') => {
+    if (tipo === 'pdf' && !esPdf(f)) { alert('El documento oficial debe ser un PDF (el escaneado con las firmas).'); return }
+    setOcupado(d.id + tipo)
+    const carpeta = tipo === 'pdf' ? 'contratos' : 'contratos_editables'
+    const path = `${carpeta}/${c.id}/${d.id}_r${d.rev}_${Date.now()}_${limpio(f.name)}`
     const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
     if (up.error) { setOcupado(''); alert('No se pudo subir: ' + up.error.message); return }
-    err((await supabase.from('pr_contrato_documentos').update({ path, archivo_nombre: f.name }).eq('id', d.id)).error)
+    const campos = tipo === 'pdf' ? { path, archivo_nombre: f.name, pdf_rev: d.rev } : { path_editable: path, editable_nombre: f.name, editable_at: new Date().toISOString() }
+    err((await supabase.from('pr_contrato_documentos').update(campos).eq('id', d.id)).error)
     setOcupado(''); await cargar()
   }
   const crearDesdeArchivos = async (c: any, cat: string, files: FileList | null) => {
     if (!files || files.length === 0) return
     setOcupado(c.id + cat)
     for (const f of Array.from(files)) {
-      const id = crypto.randomUUID()
-      const path = `contratos/${c.id}/${id}_r1_${Date.now()}_${f.name.replace(/[^\w.\-]+/g, '_')}`
+      const id = crypto.randomUUID(), pdf = esPdf(f)
+      const path = `${pdf ? 'contratos' : 'contratos_editables'}/${c.id}/${id}_r1_${Date.now()}_${limpio(f.name)}`
       const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
       if (up.error) { alert('No se pudo subir ' + f.name + ': ' + up.error.message); continue }
-      err((await supabase.from('pr_contrato_documentos').insert({ id, contrato_id: c.id, categoria: cat, nombre: f.name.replace(/\.[^.]+$/, ''), path, archivo_nombre: f.name, created_by: usuario?.id })).error)
+      const extra = pdf ? { path, archivo_nombre: f.name, pdf_rev: 1 } : { path_editable: path, editable_nombre: f.name, editable_at: new Date().toISOString() }
+      err((await supabase.from('pr_contrato_documentos').insert({ id, contrato_id: c.id, categoria: cat, nombre: f.name.replace(/\.[^.]+$/, ''), ...extra, created_by: usuario?.id })).error)
     }
     setOcupado(''); await cargar()
+  }
+  const aprobar = (d: any) => {
+    if (!d.path || (d.pdf_rev || 0) < d.rev) { alert('Para marcarlo aprobado carga primero el PDF oficial firmado (escaneado) de esta revisión.'); return }
+    cambiar([d.id], 'Aprobado')
   }
   const cambiar = async (ids: string[], estado: string, comentario?: string | null) => {
     if (ids.length === 0) return
@@ -177,15 +188,23 @@ export default function JefaturaContratos() {
                                 <Chip e={d.estado} />
                                 {d.estado === 'Enviado a aprobación' && <span style={{ fontSize: '11px', color: diasDesde(d.fecha_envio) > 7 ? '#9b1c1c' : '#667085' }}>hace {diasDesde(d.fecha_envio)} día(s)</span>}
                               </div>
-                              {d.comentario && (d.estado === 'Observado') && <p style={{ margin: '3px 0 0 24px', fontSize: '12px', color: '#9b1c1c' }}>Observación: {d.comentario}</p>}
+                              <p style={{ margin: '3px 0 0 24px', fontSize: '11.5px', color: '#667085' }}>
+                  PDF firmado: {d.path ? ((d.pdf_rev || 0) >= d.rev ? <span style={{ color: '#14532d' }}>✓ cargado ({d.archivo_nombre})</span> : <span style={{ color: '#986a00' }}>de la revisión anterior; falta el de la Rev. {d.rev}</span>) : <span style={{ color: '#986a00' }}>pendiente</span>}
+                  {' · '}Editable: {d.path_editable ? `✓ ${d.editable_nombre}` : <span style={{ color: '#98a2b3' }}>sin cargar</span>}
+                </p>
+              {d.comentario && (d.estado === 'Observado') && <p style={{ margin: '3px 0 0 24px', fontSize: '12px', color: '#9b1c1c' }}>Observación: {d.comentario}</p>}
                               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0 0 24px' }}>
                                 {(d.estado === 'En creación' || d.estado === 'Observado' || d.estado === 'En modificación') && <button onClick={() => cambiar([d.id], 'Enviado a aprobación')} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>{d.estado === 'En creación' ? 'Enviar a aprobación' : 'Reenviar a aprobación'}</button>}
-                                {d.estado === 'Enviado a aprobación' && <><button onClick={() => cambiar([d.id], 'Aprobado')} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>✓ Aprobado por el cliente</button><button onClick={() => observar(d)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Observado</button></>}
-                                {d.estado === 'Aprobado' && <button onClick={() => { if (confirm('Se abrirá una nueva revisión y el documento dejará de estar disponible para los APR hasta que se apruebe de nuevo. ¿Continuar?')) cambiar([d.id], 'En modificación', null) }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir para modificar</button>}
-                                <label style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', opacity: ocupado === d.id ? 0.5 : 1 }}>{ocupado === d.id ? 'Subiendo...' : d.path ? '⬆ Reemplazar archivo' : '⬆ Subir archivo'}
-                                  <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) subirArchivo(c, d, f); e.target.value = '' }} />
+                                {d.estado === 'Enviado a aprobación' && <><button onClick={() => aprobar(d)} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>✓ Aprobado por el cliente</button><button onClick={() => observar(d)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Observado</button></>}
+                                {d.estado === 'Aprobado' && <button onClick={() => { if (confirm('Se abrirá una nueva revisión: descarga el editable, haz los cambios y vuelve a pasar el documento por aprobación. Mientras tanto no estará disponible para los APR. ¿Continuar?')) cambiar([d.id], 'En modificación', null) }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir para modificar</button>}
+                                <label style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', opacity: ocupado === d.id + 'pdf' ? 0.5 : 1 }}>{ocupado === d.id + 'pdf' ? 'Subiendo...' : d.path ? '⬆ Reemplazar PDF firmado' : '⬆ Subir PDF firmado'}
+                                  <input type="file" accept=".pdf,application/pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) subirArchivo(c, d, f, 'pdf'); e.target.value = '' }} />
                                 </label>
-                                {d.path && <button onClick={() => abrir(d.path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir</button>}
+                                {d.path && <button onClick={() => abrir(d.path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir PDF</button>}
+                                <label style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', opacity: ocupado === d.id + 'editable' ? 0.5 : 1 }}>{ocupado === d.id + 'editable' ? 'Subiendo...' : d.path_editable ? '⬆ Reemplazar editable' : '⬆ Subir editable (Word/Excel)'}
+                                  <input type="file" accept=".doc,.docx,.xls,.xlsx,.xlsm,.ppt,.pptx,.odt,.ods" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) subirArchivo(c, d, f, 'editable'); e.target.value = '' }} />
+                                </label>
+                                {d.path_editable && <button onClick={() => abrir(d.path_editable)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>⬇ Descargar editable</button>}
                                 <button onClick={() => verHistorial(d.id)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Historial</button>
                                 <button onClick={() => quitar(d)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Eliminar</button>
                               </div>
@@ -209,8 +228,8 @@ export default function JefaturaContratos() {
                               <textarea rows={2} value={nombres[c.id + cat] || ''} onChange={e => setNombres({ ...nombres, [c.id + cat]: e.target.value })} placeholder={cat === 'PTS' ? 'Nombres de los PTS (uno por línea). Quedan «En creación».' : 'Nombres de los documentos (uno por línea).'} style={{ ...input, resize: 'vertical' }} />
                             </div>
                             <button onClick={() => crearDocs(c, cat)} style={btn()}>+ Crear</button>
-                            <label style={{ ...btn(false), opacity: ocupado === c.id + cat ? 0.5 : 1 }}>{ocupado === c.id + cat ? 'Subiendo...' : '⬆ Crear desde archivos'}
-                              <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" style={{ display: 'none' }} onChange={e => { crearDesdeArchivos(c, cat, e.target.files); e.target.value = '' }} />
+                            <label style={{ ...btn(false), opacity: ocupado === c.id + cat ? 0.5 : 1 }}>{ocupado === c.id + cat ? 'Subiendo...' : '⬆ Crear desde archivos (PDF o editables)'}
+                              <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm" style={{ display: 'none' }} onChange={e => { crearDesdeArchivos(c, cat, e.target.files); e.target.value = '' }} />
                             </label>
                           </div>
                         </div>

@@ -12,7 +12,7 @@ export const ITEMS_SSO: { n: string, titulo: string, detalle: string, listo: boo
   { n: '2', titulo: 'Programa de liderazgo percibido', detalle: 'Programa mensual de actividades (confirmación de procesos, ABC, reglas, rol, EPP, bloqueo, DS 594, comunicación, charlas, DS 132).', listo: true },
   { n: '3', titulo: 'Informes diarios', detalle: 'Informe diario SSO completado día a día por el prevencionista de terreno.', listo: true },
   { n: '4', titulo: 'Informes semanales', detalle: 'Carga del informe semanal (formato del mandante) con semáforo y recordatorio.', listo: true },
-  { n: '5', titulo: 'Auditoría Mandante', detalle: 'Auditoría REG-PR-004: 56 ítems con puntaje, % de cumplimiento, calificación y plan de acción; la aprueba el Jefe.', listo: true },
+  { n: '5', titulo: 'Auditoría Mandante', detalle: 'Checklist de cada cliente (SQM, Engie, Eurohinca, otros) por contrato: el Jefe y el APR suben los documentos de respaldo y se mantiene al día en la nube.', listo: true },
   { n: '6', titulo: 'Capacitaciones y charlas', detalle: 'Programa anual de capacitaciones, charlas realizadas y lista de asistentes.', listo: true },
 ]
 export const DOC_DESCRIPTOR = 'descriptor_apr'

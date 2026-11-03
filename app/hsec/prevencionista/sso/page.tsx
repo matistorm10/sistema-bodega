@@ -185,7 +185,7 @@ export default function SsoFaena() {
                     <p style={{ margin: 0, fontSize: '12px', color: '#667085' }}>{i.detalle}</p>
                   </div>
                   {(['2', '3', '4', '5', '6'].includes(i.n)) && verificado
-                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : i.n === '5' ? '/hsec/prevencionista/auditoria-p3' : '/hsec/prevencionista/capacitaciones'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
+                    ? <Link href={i.n === '2' ? '/hsec/programa' : i.n === '3' ? '/hsec/prevencionista/informe-diario' : i.n === '4' ? '/hsec/prevencionista/semanales' : i.n === '5' ? '/hsec/prevencionista/auditoria-mandante' : '/hsec/prevencionista/capacitaciones'} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</Link>
                     : <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', whiteSpace: 'nowrap' }}>{verificado ? 'Próximamente' : 'Bloqueado'}</span>}
                 </div>
               ))}

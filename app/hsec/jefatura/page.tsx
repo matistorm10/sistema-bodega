@@ -68,7 +68,7 @@ export default function Jefatura() {
         supabase.from('pr_contratos').select('id,nombre,referencia,cliente_id,activo').eq('activo', true).order('nombre'),
         supabase.from('pr_contrato_documentos').select('id,contrato_id,categoria,nombre,estado,fecha_envio'),
       ])
-      supabase.from('pr_auditorias_p3').select('id', { count: 'exact', head: true }).eq('estado', 'cerrado').eq('revision', 'pendiente').then(r => setP3Pend(r.count || 0))
+      supabase.from('aud_documentos').select('id', { count: 'exact', head: true }).eq('revision', 'pendiente').then(r => setP3Pend(r.count || 0))
       setContratos(ct.data || []); setCdocs(cd.data || [])
       setInformes(inf.data || []); setClientes(cl.data || []); setAsigs(asg.data || []); setSemanales(sem.data || [])
       setCharlas(c.data || []); setAsistentes(a.data || [])
@@ -208,11 +208,11 @@ export default function Jefatura() {
               </div>
             </Link>
 
-            <Link href="/hsec/prevencionista/auditoria-p3" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <Link href="/hsec/prevencionista/auditoria-mandante" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>🧾</div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Auditorías Mandante de los APR {p3Pend > 0 && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', marginLeft: '6px' }}>⏳ {p3Pend} por aprobar</span>}</p>
-                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Aprueba o rechaza las auditorías REG-PR-004 (SQM) con su % de cumplimiento y plan de acción</p>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Auditoría Mandante (checklists por cliente) {p3Pend > 0 && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', marginLeft: '6px' }}>⏳ {p3Pend} docs por revisar</span>}</p>
+                <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Formatos de SQM, Engie, Eurohinca y otros por contrato: documentos de respaldo, vencimientos y revisión</p>
               </div>
             </Link>
 

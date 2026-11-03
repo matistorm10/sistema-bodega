@@ -26,7 +26,7 @@ export default function ResumenAPR({ usuario }: { usuario: { id: string, nombre:
       const propias = usuario.rol === 'admin' || usuario.esJefeHsec ? null : await misUbicacionesIds(usuario.id)
       const [metas, acts, men, menPrev, inf, asg, cli, sem, prog, ubl, ubs, chs] = await Promise.all([
         cargo ? supabase.from('pr_prog_metas').select('*').eq('cargo', cargo) : Promise.resolve({ data: [] } as any),
-        supabase.from('pr_prog_actividades').select('actividad,revision_estado').eq('usuario_id', usuario.id).eq('mes', mes),
+        supabase.from('pr_prog_actividades').select('actividad,revision_estado,revision_comentario').eq('usuario_id', usuario.id).eq('mes', mes),
         supabase.from('pr_prog_mensual').select('estado,enviado_at').eq('usuario_id', usuario.id).eq('mes', mes).maybeSingle(),
         supabase.from('pr_prog_mensual').select('estado,enviado_at').eq('usuario_id', usuario.id).eq('mes', prev).maybeSingle(),
         supabase.from('pr_informes_diarios').select('fecha,estado,revision,ubicacion_id').eq('creado_por', usuario.id).gte('fecha', desdeMes),
@@ -43,6 +43,7 @@ export default function ResumenAPR({ usuario }: { usuario: { id: string, nombre:
         .map(k => { const meta = (metas.data || []).find((m: any) => m.actividad === k).meta as number; const real = (acts.data || []).filter((a: any) => a.actividad === k && a.revision_estado !== 'rechazado').length; return { k, meta, real } })
       const tMeta = filas.reduce((s, f) => s + f.meta, 0), tReal = filas.reduce((s, f) => s + Math.min(f.real, f.meta), 0)
       const liderazgo = { pct: pct(tReal, tMeta), faltan: filas.filter(f => f.real < f.meta), tiene: filas.length > 0 }
+      const progRech = (acts.data || []).filter((a: any) => a.revision_estado === 'rechazado')
       // Informes diarios
       const mis = inf.data || []
       const rechazados = mis.filter((i: any) => i.estado === 'cerrado' && i.revision === 'rechazado').length
@@ -72,7 +73,7 @@ export default function ResumenAPR({ usuario }: { usuario: { id: string, nombre:
       }
       const cap = { pct: plan ? Math.round(hechas / plan * 100) : null, pend, plan }
       const prevPend = !!cargo && prev >= INICIO_OPERACION.slice(0, 7) && (!menPrev.data || ['abierto', 'devuelto'].includes(menPrev.data.estado))
-      if (vivo) setD({ mes, liderazgo, men: men.data, prevPend, prev, rechazados, porAprobar, borradores, enviadoHoy, esHabil, diasHabiles, diasConInforme, atrasados, proximo, semRech, semHechos, cap, tieneFaena: ubics.length > 0, tieneSem: (asg.data || []).length > 0 })
+      if (vivo) setD({ progRech, mes, liderazgo, men: men.data, prevPend, prev, rechazados, porAprobar, borradores, enviadoHoy, esHabil, diasHabiles, diasConInforme, atrasados, proximo, semRech, semHechos, cap, tieneFaena: ubics.length > 0, tieneSem: (asg.data || []).length > 0 })
     })()
     return () => { vivo = false }
   }, [usuario.id, usuario.cargoPrograma, usuario.rol, usuario.esJefeHsec])
@@ -81,6 +82,7 @@ export default function ResumenAPR({ usuario }: { usuario: { id: string, nombre:
 
   // Lo que te toca resolver, de lo más urgente a lo menos urgente
   const tareas: Tarea[] = []
+  if (d.progRech.length) tareas.push({ nivel: 'rojo', txt: `${d.progRech.length} documento(s) del programa de liderazgo rechazado(s): ${d.progRech.map((a: any) => `${ACTIVIDADES[a.actividad]?.corto || a.actividad}${a.revision_comentario ? ' («' + a.revision_comentario + '»)' : ''}`).join(', ')}`, href: '/hsec/programa' })
   if (d.rechazados) tareas.push({ nivel: 'rojo', txt: `${d.rechazados} informe(s) diario(s) rechazado(s) por el Jefe: corrígelos y reenvíalos`, href: '/hsec/prevencionista/informe-diario' })
   if (d.semRech) tareas.push({ nivel: 'rojo', txt: `${d.semRech} informe(s) semanal(es) rechazado(s): sube la versión corregida`, href: '/hsec/prevencionista/semanales' })
   d.atrasados.forEach((i: any) => tareas.push({ nivel: 'rojo', txt: `Informe semanal de ${i.cliente.nombre} atrasado (semana al ${i.fin.split('-').reverse().slice(0, 2).join('-')})`, href: '/hsec/prevencionista/semanales' }))

@@ -56,6 +56,14 @@ export default function Programa() {
     setCargando(false)
   }, [usuario, cargo, mes])
   useEffect(() => { if (usuario) cargar() }, [usuario, cargar])
+  // Se actualiza solo: al volver a la pestaña y cada minuto (así ve de inmediato una aprobación o rechazo del Jefe)
+  useEffect(() => {
+    if (!usuario || form) return
+    const refrescar = () => { if (document.visibilityState === 'visible') cargar() }
+    const t = setInterval(refrescar, 60000)
+    document.addEventListener('visibilitychange', refrescar)
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', refrescar) }
+  }, [usuario, cargar, form])
 
   // Los primeros días del mes, si el mes anterior aún no se informa, se abre ese mes primero.
   useEffect(() => {

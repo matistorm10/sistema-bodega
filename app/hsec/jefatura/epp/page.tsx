@@ -27,6 +27,11 @@ export default function JefaturaEpp() {
   const [asigSel, setAsigSel] = useState({ u: '', ub: '' })
   const [fUbic, setFUbic] = useState('')
   const [msg, setMsg] = useState('')
+  const [ocultos, setOcultos] = useState<string[]>([])
+  useEffect(() => { try { const v = localStorage.getItem('epp_ocultos'); if (v) setOcultos(JSON.parse(v)) } catch {} }, [])
+  const oc = (k: string) => ocultos.includes(k)
+  const alternar = (k: string) => setOcultos(prev => { const n = prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]; try { localStorage.setItem('epp_ocultos', JSON.stringify(n)) } catch {} return n })
+  const hdr = (k: string, t: string, st: React.CSSProperties) => <p onClick={() => alternar(k)} title={oc(k) ? 'Mostrar' : 'Ocultar'} style={{ ...st, cursor: 'pointer', userSelect: 'none', ...(oc(k) ? { marginBottom: 0 } : {}) }}><span style={{ color: '#98a2b3', marginRight: '6px', fontSize: '11px' }}>{oc(k) ? '▸' : '▾'}</span>{t}</p>
   const [edit, setEdit] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
@@ -119,18 +124,21 @@ export default function JefaturaEpp() {
           <>
             {bajoMin.length > 0 && (
               <div style={{ ...card, background: '#fde8e8', borderColor: '#f3b4b4', marginBottom: '12px' }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#9b1c1c' }}>⚠️ Stock bajo el mínimo</p>
+                {hdr('bajo', "⚠️ Stock bajo el mínimo", { margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#9b1c1c' })}
+                {!oc('bajo') && <>
                 {bajoMin.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#9b1c1c' }}>{x.t}</p>)}
+                </>}
               </div>
             )}
 
             {(() => {
               const prob = activos.filter(c => c.requiere_certificado !== false).flatMap(c => { const cs = certs.filter(x => x.item_id === c.id); if (!cs.length) return [{ k: c.id, t: `${c.nombre}: sin certificado de calidad cargado` }]; return cs.filter(x => x.vence && x.vence <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)).map(x => ({ k: x.id, t: `${c.nombre}${x.proveedor ? ' (' + x.proveedor + ')' : ''}: certificado ${x.vence < new Date().toISOString().slice(0, 10) ? 'vencido' : 'por vencer'} el ${fechaCL(x.vence)}` })) })
-              return prob.length > 0 ? <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}><p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📎 Certificados de calidad por revisar</p>{prob.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#7a5600' }}>{x.t}</p>)}</div> : null
+              return prob.length > 0 ? <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}>{hdr('certrev', '📎 Certificados de calidad por revisar', { margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' })}{!oc('certrev') && prob.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#7a5600' }}>{x.t}</p>)}</div> : null
             })()}
 
             <div style={{ ...card, marginBottom: '12px' }}>
-              <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Resumen de stock por faena</p>
+              {hdr('resumen', "Resumen de stock por faena", { margin: '0 0 10px', fontWeight: 700, fontSize: '14px' })}
+              {!oc('resumen') && <>
               {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay ubicaciones con control de EPP. Asigna prevencionistas más abajo.</p> : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
@@ -155,10 +163,12 @@ export default function JefaturaEpp() {
                 </div>
               )}
               <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. Las tallas se suman en esta vista.</p>
+              </>}
             </div>
 
             <div style={{ ...card, marginBottom: '12px' }}>
-              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Stock mínimo por faena</p>
+              {hdr('minimos', "Stock mínimo por faena", { margin: '0 0 4px', fontWeight: 700, fontSize: '14px' })}
+              {!oc('minimos') && <>
               <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Celda vacía = sin mínimo definido. El prevencionista lo ve pero no lo puede editar.</p>
               {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay faenas con control de EPP.</p> : (
                 <div style={{ overflowX: 'auto' }}>
@@ -173,18 +183,22 @@ export default function JefaturaEpp() {
                   </table>
                 </div>
               )}
+              </>}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '12px', marginBottom: '12px' }}>
               <div style={card}>
-                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Prevencionistas por ubicación</p>
+                {hdr('prevs', "Prevencionistas por ubicación", { margin: '0 0 8px', fontWeight: 700, fontSize: '14px' })}
+                {!oc('prevs') && <>
                 {asigs.length === 0 && <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#999' }}>Sin asignaciones.</p>}
                 {asigs.map(a => <div key={a.id} style={{ borderTop: '1px solid #eef1f6', padding: '6px 0', fontSize: '13px' }}><strong>{nUser(a.usuario_id)}</strong> · {nUbic(a.ubicacion_id)}</div>)}
                 <p style={{ margin: '10px 0 0', fontSize: '12px', color: '#667085' }}>Se asignan en <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Faenas y asignaciones →</Link></p>
+                </>}
               </div>
 
               <div style={card}>
-                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Catálogo de EPP</p>
+                {hdr('catalogo', "Catálogo de EPP", { margin: '0 0 8px', fontWeight: 700, fontSize: '14px' })}
+                {!oc('catalogo') && <>
                 {catalogo.map(c => (
                   <div key={c.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', borderTop: '1px solid #eef1f6', padding: '5px 0', fontSize: '12.5px', opacity: c.activo ? 1 : 0.5 }}>
                     {edit && edit.id === c.id ? (
@@ -204,17 +218,18 @@ export default function JefaturaEpp() {
                   <button onClick={agregar} style={btn()}>Agregar</button>
                 </div>
                 {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '6px 0 0' }}>{msg}</p>}
+                </>}
               </div>
             </div>
 
-            <div style={{ marginBottom: '12px' }}><CertificadosEpp items={activos} certs={certs} usuarioId={usuario!.id} esJefe nombreDe={nUser} onCambio={cargar} /></div>
+            <div style={{ marginBottom: '12px' }}>{hdr('certs', '📎 Certificados de calidad', { margin: '0 0 8px', fontWeight: 700, fontSize: '14px' })}{!oc('certs') && <CertificadosEpp items={activos} certs={certs} usuarioId={usuario!.id} esJefe nombreDe={nUser} onCambio={cargar} />}</div>
 
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Últimos movimientos</p>
-                <select value={fUbic} onChange={e => setFUbic(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todas las ubicaciones</option>{ubicEpp.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+                {hdr('movs', "Últimos movimientos", { margin: 0, fontWeight: 700, fontSize: '14px' })}
+                {!oc('movs') && <select value={fUbic} onChange={e => setFUbic(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todas las ubicaciones</option>{ubicEpp.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>}
               </div>
-              {movsF.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Sin movimientos.</p> : (
+              {!oc('movs') && (movsF.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Sin movimientos.</p> : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                     <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '6px 8px' }}>Fecha</th><th style={{ padding: '6px 8px' }}>Ubicación</th><th style={{ padding: '6px 8px' }}>Movimiento</th><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Cant.</th><th style={{ padding: '6px 8px' }}>Detalle</th><th style={{ padding: '6px 8px' }}>Registró</th></tr></thead>
@@ -227,7 +242,7 @@ export default function JefaturaEpp() {
                       </tr>))}</tbody>
                   </table>
                 </div>
-              )}
+              ))}
             </div>
           </>
         )}

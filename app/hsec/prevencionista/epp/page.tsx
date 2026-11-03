@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
+import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const TIPOS: Record<string, string> = { ingreso: 'Ingreso', entrega: 'Entrega', ajuste: 'Ajuste', baja: 'Baja' }
@@ -21,20 +22,23 @@ export default function EppPrevencionista() {
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [stock, setStock] = useState<any[]>([])
   const [movs, setMovs] = useState<any[]>([])
+  const [certs, setCerts] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
-  const [tab, setTab] = useState<'stock' | 'registrar' | 'historial'>('stock')
+  const [tab, setTab] = useState<'stock' | 'registrar' | 'historial' | 'certificados'>('stock')
   const [msg, setMsg] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [f, setF] = useState({ tipo: 'entrega', item: '', talla: '', cantidad: '', fecha: hoy(), nombre: '', rut: '', motivo: '' })
 
   const cargarBase = useCallback(async () => {
     if (!usuario) return
-    const [u, c, asig] = await Promise.all([
+    const [u, c, asig, ce] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,activa').order('nombre'),
       supabase.from('pr_epp_catalogo').select('*').eq('activo', true).order('nombre'),
       supabase.from('pr_epp_ubicaciones').select('ubicacion_id').eq('usuario_id', usuario.id),
+      supabase.from('pr_epp_certificados').select('*'),
     ])
+    setCerts(ce.data || [])
     const propias = new Set((asig.data || []).map((x: any) => x.ubicacion_id))
     const lista = (u.data || []).filter((x: any) => x.activa !== false && (esJefe || propias.has(x.id)))
     setUbicaciones(lista); setCatalogo(c.data || [])
@@ -109,9 +113,10 @@ export default function EppPrevencionista() {
     <>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <select value={ubic} onChange={e => setUbic(e.target.value)} style={{ ...input, width: 'auto', fontWeight: 600 }}>{ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
-        {tabBtn('stock', 'Stock')}{tabBtn('registrar', '+ Registrar movimiento')}{tabBtn('historial', 'Historial')}
+        {tabBtn('stock', 'Stock')}{tabBtn('registrar', '+ Registrar movimiento')}{tabBtn('historial', 'Historial')}{tabBtn('certificados', '📎 Certificados')}
       </div>
 
+      {tab === 'certificados' && <CertificadosEpp items={catalogo} certs={certs} usuarioId={usuario!.id} esJefe={esJefe} nombreDe={id => usuarios.find(u => u.id === id)?.nombre || '—'} onCambio={cargarBase} />}
       {tab === 'stock' && (
         <div style={card}>
           <div style={{ overflowX: 'auto' }}>

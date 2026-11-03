@@ -23,7 +23,7 @@ export default function Home() {
     { href:'/licitaciones', icon:'📋', label:'Licitaciones', desc:'Seguimiento de licitaciones y propuestas', visible: esAdmin || usuario?.accesoLicitaciones },
     { href:'/contabilidad', icon:'🧾', label:'Contabilidad', desc:'Rendiciones y guías de traslado', visible: esAdmin || usuario?.accesoContabilidad },
     { href:'/hsec', icon:'🦺', label:'Departamento Prevención de Riesgo', desc:'Panel de jefatura y espacio de cada prevencionista', visible: esAdmin || usuario?.accesoHsec || !!usuario?.cargoPrograma },
-    { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles y permisos de acceso', visible: esAdmin },
+    { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles, permisos y centros de costo (CECO)', visible: esAdmin },
   ].filter(m => m.visible)
 
   const rolLegible = (r?: string) => !r ? '' : r === 'admin' ? 'Administrador' : r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g, ' ')

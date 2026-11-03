@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
+import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const TIPOS: Record<string, string> = { ingreso: 'Ingreso', entrega: 'Entrega', ajuste: 'Ajuste', baja: 'Baja' }
 
@@ -18,6 +19,7 @@ export default function JefaturaEpp() {
   const [asigs, setAsigs] = useState<any[]>([])
   const [prevs, setPrevs] = useState<any[]>([])
   const [movs, setMovs] = useState<any[]>([])
+  const [certs, setCerts] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [nuevo, setNuevo] = useState({ nombre: '', talla: false, min: '0' })
@@ -27,7 +29,7 @@ export default function JefaturaEpp() {
   const [edit, setEdit] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
-    const [c, s, u, a, p, m, us] = await Promise.all([
+    const [c, s, u, a, p, m, us, ce] = await Promise.all([
       supabase.from('pr_epp_catalogo').select('*').order('nombre'),
       supabase.from('pr_epp_stock').select('*'),
       supabase.from('ubicaciones').select('id,nombre,activa').order('nombre'),
@@ -35,7 +37,9 @@ export default function JefaturaEpp() {
       supabase.from('usuarios').select('id,nombre').eq('es_prevencionista', true).order('nombre'),
       supabase.from('pr_epp_movimientos').select('*').order('created_at', { ascending: false }).limit(300),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('pr_epp_certificados').select('*'),
     ])
+    setCerts(ce.data || [])
     setCatalogo(c.data || []); setStock(s.data || []); setUbicaciones((u.data || []).filter((x: any) => x.activa !== false))
     setAsigs(a.data || []); setPrevs(p.data || []); setMovs(m.data || []); setUsuarios(us.data || []); setCargando(false)
   }, [])
@@ -107,6 +111,11 @@ export default function JefaturaEpp() {
               </div>
             )}
 
+            {(() => {
+              const prob = activos.flatMap(c => { const cs = certs.filter(x => x.item_id === c.id); if (!cs.length) return [{ k: c.id, t: `${c.nombre}: sin certificado de calidad cargado` }]; return cs.filter(x => x.vence && x.vence <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)).map(x => ({ k: x.id, t: `${c.nombre}${x.proveedor ? ' (' + x.proveedor + ')' : ''}: certificado ${x.vence < new Date().toISOString().slice(0, 10) ? 'vencido' : 'por vencer'} el ${fechaCL(x.vence)}` })) })
+              return prob.length > 0 ? <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}><p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📎 Certificados de calidad por revisar</p>{prob.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#7a5600' }}>{x.t}</p>)}</div> : null
+            })()}
+
             <div style={{ ...card, marginBottom: '12px' }}>
               <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Resumen de stock por faena</p>
               {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay ubicaciones con control de EPP. Asigna prevencionistas más abajo.</p> : (
@@ -168,6 +177,8 @@ export default function JefaturaEpp() {
                 {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '6px 0 0' }}>{msg}</p>}
               </div>
             </div>
+
+            <div style={{ marginBottom: '12px' }}><CertificadosEpp items={activos} certs={certs} usuarioId={usuario!.id} esJefe nombreDe={nUser} onCambio={cargar} /></div>
 
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' }}>

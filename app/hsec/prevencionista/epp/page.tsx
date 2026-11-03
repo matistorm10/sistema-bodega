@@ -1,11 +1,12 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
+import { tallasDe, ordenTalla } from '@/lib/epp'
 import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
@@ -123,17 +124,28 @@ export default function EppPrevencionista() {
         <div style={card}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Talla</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Stock</th></tr></thead>
-              <tbody>{filas.map(r => {
-                const min = minimos.find(m => m.item_id === r.item.id)?.minimo || 0
-                const tot = r.item.usa_talla ? r.stock : stock.filter(s => s.item_id === r.item.id).reduce((a, s) => a + s.stock, 0)
+              <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Talla</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Mínimo faena</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Stock</th></tr></thead>
+              <tbody>{catalogo.map(c => {
+                const min = minimos.find(m => m.item_id === c.id)?.minimo || 0
+                const filasT = stock.filter(x => x.item_id === c.id && x.stock !== 0).sort((x, y) => ordenTalla(x.talla, y.talla))
+                const tot = filasT.reduce((a, x) => a + x.stock, 0)
                 const bajo = min > 0 && tot < min, igual = min > 0 && tot === min
                 return (
-                  <tr key={r.key} style={{ borderTop: '1px solid #eef1f6' }}>
-                    <td style={{ padding: '7px 8px', fontWeight: 600 }}>{r.item.nombre}{bajo && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo ({min})</span>}{igual && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fff3cd', color: '#7a5600' }}>en el mínimo ({min})</span>}</td>
-                    <td style={{ padding: '7px 8px', color: '#667085' }}>{r.talla || '—'}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: r.stock === 0 ? '#c0392b' : '#16213E' }}>{r.stock}</td>
-                  </tr>)
+                  <Fragment key={c.id}>
+                    <tr style={{ borderTop: '1px solid #eef1f6' }}>
+                      <td style={{ padding: '7px 8px', fontWeight: 600 }}>{c.nombre}{bajo && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo</span>}{igual && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fff3cd', color: '#7a5600' }}>en el mínimo</span>}</td>
+                      <td style={{ padding: '7px 8px', color: '#667085' }}>{c.usa_talla ? 'total' : '—'}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', color: min > 0 ? '#16213E' : '#98a2b3' }}>{min > 0 ? min : 'sin definir'}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: tot === 0 ? '#c0392b' : bajo ? '#c0392b' : '#16213E' }}>{tot}</td>
+                    </tr>
+                    {c.usa_talla && filasT.map(x => (
+                      <tr key={c.id + x.talla} style={{ background: '#fafbfd' }}>
+                        <td style={{ padding: '3px 8px 3px 24px', color: '#667085', fontSize: '12px' }}>↳ talla</td>
+                        <td style={{ padding: '3px 8px', fontWeight: 600, fontSize: '12.5px' }}>{x.talla}</td>
+                        <td></td>
+                        <td style={{ padding: '3px 8px', textAlign: 'right', fontSize: '12.5px' }}>{x.stock}</td>
+                      </tr>))}
+                  </Fragment>)
               })}</tbody>
             </table>
           </div>
@@ -148,7 +160,7 @@ export default function EppPrevencionista() {
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
             <div style={{ flex: '1 1 200px' }}><label style={label}>EPP *</label><select value={f.item} onChange={e => setF({ ...f, item: e.target.value, talla: '' })} style={input}><option value="">— elegir —</option>{catalogo.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
-            {itSel?.usa_talla && <div style={{ flex: '0 1 110px' }}><label style={label}>Talla *</label><input value={f.talla} onChange={e => setF({ ...f, talla: e.target.value })} placeholder="M, L, 42…" style={input} /></div>}
+            {itSel?.usa_talla && <div style={{ flex: '0 1 130px' }}><label style={label}>Talla *</label><select value={f.talla} onChange={e => setF({ ...f, talla: e.target.value })} style={input}><option value="">— talla —</option>{tallasDe(itSel).map(t => <option key={t} value={t}>{t}</option>)}</select></div>}
             <div style={{ flex: '0 1 110px' }}><label style={label}>Cantidad *{f.tipo === 'ajuste' ? ' (+/−)' : ''}</label><input type="number" value={f.cantidad} onChange={e => setF({ ...f, cantidad: e.target.value })} style={input} /></div>
             <div style={{ flex: '0 1 150px' }}><label style={label}>Fecha</label><input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={input} /></div>
           </div>

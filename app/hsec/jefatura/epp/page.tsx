@@ -1,11 +1,12 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
+import { TIPOS_TALLA, ordenTalla, type TipoTalla } from '@/lib/epp'
 import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const TIPOS: Record<string, string> = { ingreso: 'Ingreso', entrega: 'Entrega', ajuste: 'Ajuste', baja: 'Baja' }
@@ -23,7 +24,7 @@ export default function JefaturaEpp() {
   const [certs, setCerts] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
-  const [nuevo, setNuevo] = useState({ nombre: '', talla: false })
+  const [nuevo, setNuevo] = useState<{ nombre: string, talla: boolean, tipo: TipoTalla, otras: string }>({ nombre: '', talla: false, tipo: 'ropa', otras: '' })
   const [asigSel, setAsigSel] = useState({ u: '', ub: '' })
   const [fUbic, setFUbic] = useState('')
   const [msg, setMsg] = useState('')
@@ -73,11 +74,14 @@ export default function JefaturaEpp() {
   }
   const movsF = movs.filter(m => !fUbic || m.ubicacion_id === fUbic).slice(0, 25)
 
+  const parseTallas = (t: string) => Array.from(new Set(t.split(',').map(x => x.trim().toUpperCase()).filter(Boolean))).sort(ordenTalla)
   const agregar = async () => {
     if (!nuevo.nombre.trim()) { setMsg('Escribe el nombre del EPP.'); return }
-    const { error } = await supabase.from('pr_epp_catalogo').insert({ nombre: nuevo.nombre.trim(), usa_talla: nuevo.talla })
+    const otras = parseTallas(nuevo.otras)
+    if (nuevo.talla && nuevo.tipo === 'otra' && otras.length === 0) { setMsg('Escribe las tallas separadas por coma (ej: S, M, L).'); return }
+    const { error } = await supabase.from('pr_epp_catalogo').insert({ nombre: nuevo.nombre.trim(), usa_talla: nuevo.talla, tipo_talla: nuevo.talla ? nuevo.tipo : null, tallas: nuevo.talla && nuevo.tipo === 'otra' ? otras : null })
     if (error) { setMsg(error.code === '23505' ? 'Ese EPP ya existe.' : error.message); return }
-    setNuevo({ nombre: '', talla: false }); setMsg(''); await cargar()
+    setNuevo({ nombre: '', talla: false, tipo: 'ropa', otras: '' }); setMsg(''); await cargar()
   }
   const act = async (id: string, campos: any) => { const { error } = await supabase.from('pr_epp_catalogo').update(campos).eq('id', id); if (error) alert(error.message); else await cargar() }
   const stockTotal = (id: string) => stock.filter(x => x.item_id === id).reduce((a, x) => a + x.stock, 0)
@@ -150,19 +154,28 @@ export default function JefaturaEpp() {
                     <tbody>
                       {activos.map(c => {
                         const tot = ubicEpp.reduce((a, u) => a + total(c.id, u.id), 0)
+                        const tallas = c.usa_talla ? Array.from(new Set(stock.filter(x => x.item_id === c.id && x.stock !== 0 && ubicEpp.some(u => u.id === x.ubicacion_id)).map(x => x.talla))).sort(ordenTalla) : []
                         return (
-                          <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                          <Fragment key={c.id}>
+                          <tr style={{ borderTop: '1px solid #eef1f6' }}>
                             <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
                             {ubicEpp.map(u => { const v = total(c.id, u.id), bajo = minDe(c, u.id) > 0 && v < minDe(c, u.id), igual = minDe(c, u.id) > 0 && v === minDe(c, u.id)
                               return <td key={u.id} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: bajo ? '#c0392b' : igual ? '#b7791f' : '#16213E', background: bajo ? '#fff5f5' : igual ? '#fff8e5' : undefined }}>{v}</td> })}
                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{tot}</td>
-                          </tr>)
+                          </tr>
+                          {tallas.map(t => (
+                            <tr key={c.id + t} style={{ background: '#fafbfd' }}>
+                              <td style={{ padding: '3px 8px 3px 24px', color: '#667085', fontSize: '12px' }}>Talla {t}</td>
+                              {ubicEpp.map(u => { const v = stock.find(x => x.item_id === c.id && x.ubicacion_id === u.id && x.talla === t)?.stock || 0; return <td key={u.id} style={{ padding: '3px 8px', textAlign: 'right', color: '#667085', fontSize: '12px' }}>{v}</td> })}
+                              <td style={{ padding: '3px 8px', textAlign: 'right', color: '#667085', fontSize: '12px' }}>{ubicEpp.reduce((a, u) => a + (stock.find(x => x.item_id === c.id && x.ubicacion_id === u.id && x.talla === t)?.stock || 0), 0)}</td>
+                            </tr>))}
+                          </Fragment>)
                       })}
                     </tbody>
                   </table>
                 </div>
               )}
-              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. Las tallas se suman en esta vista.</p>
+              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. El número de cada EPP es el total; debajo se muestra el detalle por talla. El mínimo se compara contra el total.</p>
               </>}
             </div>
 
@@ -207,7 +220,11 @@ export default function JefaturaEpp() {
                         <button onClick={renombrar} style={{ ...btn(), padding: '3px 8px', fontSize: '11px' }}>OK</button>
                         <button onClick={() => setEdit(null)} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>✕</button>
                       </span>
-                    ) : <span style={{ flex: 1 }}>{c.nombre}{c.usa_talla ? ' · talla' : ''} <button onClick={() => setEdit({ id: c.id, nombre: c.nombre })} title="Editar nombre" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>}
+                    ) : <span style={{ flex: 1 }}>{c.nombre} <button onClick={() => setEdit({ id: c.id, nombre: c.nombre })} title="Editar nombre" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>}
+                    {c.usa_talla && <span style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <select value={c.tipo_talla || 'ropa'} onChange={e => act(c.id, { tipo_talla: e.target.value, tallas: e.target.value === 'otra' ? (c.tallas || []) : null })} title="Tallas disponibles al registrar" style={{ ...input, width: 'auto', padding: '3px 6px', fontSize: '11.5px' }}>{Object.entries(TIPOS_TALLA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                      {c.tipo_talla === 'otra' && <input defaultValue={(c.tallas || []).join(', ')} placeholder="S, M, L" onBlur={e => { const t = parseTallas(e.target.value); if (t.join() !== (c.tallas || []).join()) act(c.id, { tallas: t }) }} style={{ ...input, width: '110px', padding: '3px 6px', fontSize: '11.5px' }} />}
+                    </span>}
                     <button onClick={() => act(c.id, { activo: !c.activo })} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>{c.activo ? 'Ocultar' : 'Activar'}</button>
                     <button onClick={() => eliminar(c)} title={stockTotal(c.id) !== 0 ? 'Solo se puede eliminar con stock en cero' : 'Eliminar'} style={{ ...btn(false, true), padding: '3px 8px', fontSize: '11px', opacity: stockTotal(c.id) !== 0 ? 0.4 : 1 }}>🗑</button>
                   </div>
@@ -215,6 +232,8 @@ export default function JefaturaEpp() {
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px', alignItems: 'flex-end' }}>
                   <div style={{ flex: '1 1 140px' }}><label style={label}>Nuevo EPP</label><input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} style={input} /></div>
                   <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center', paddingBottom: '9px' }}><input type="checkbox" checked={nuevo.talla} onChange={e => setNuevo({ ...nuevo, talla: e.target.checked })} />Talla</label>
+                  {nuevo.talla && <select value={nuevo.tipo} onChange={e => setNuevo({ ...nuevo, tipo: e.target.value as TipoTalla })} style={{ ...input, width: 'auto' }}>{Object.entries(TIPOS_TALLA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>}
+                  {nuevo.talla && nuevo.tipo === 'otra' && <input value={nuevo.otras} onChange={e => setNuevo({ ...nuevo, otras: e.target.value })} placeholder="S, M, L" style={{ ...input, width: '110px' }} />}
                   <button onClick={agregar} style={btn()}>Agregar</button>
                 </div>
                 {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '6px 0 0' }}>{msg}</p>}

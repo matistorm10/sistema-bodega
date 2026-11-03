@@ -4,11 +4,13 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
-import { card } from '@/components/programa/ui'
+import { card, btn } from '@/components/programa/ui'
 import CalendarioCapacitaciones from '@/components/programa/CalendarioCapacitaciones'
 import FormCharla from '@/components/programa/FormCharla'
 import { misUbicacionesIds } from '@/lib/prevencion'
-import { etiquetaMes, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
+import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
+import { abrirVentanaPDF } from '@/lib/abrirPDF'
+import { desdeCiclo, etiquetaMes, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
 
 export default function CapPrevencionista() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
@@ -19,6 +21,7 @@ export default function CapPrevencionista() {
   const [lugares, setLugares] = useState<any[]>([])
   const [charlas, setCharlas] = useState<any[]>([])
   const [asist, setAsist] = useState<any[]>([])
+  const [config, setConfig] = useState<any[]>([])
   const [form, setForm] = useState<{ fecha: string, prog?: string } | null>(null)
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
@@ -27,13 +30,15 @@ export default function CapPrevencionista() {
 
   const cargar = useCallback(async () => {
     if (!usuario) return
-    const [p, u, l, c, a] = await Promise.all([
+    const [p, u, l, c, a, cf] = await Promise.all([
       supabase.from('pr_cap_programa').select('*').eq('activo', true).order('n'),
       supabase.from('ubicaciones').select('id,nombre,activa').order('nombre'),
       supabase.from('pr_cap_ubic_lugar').select('*'),
       supabase.from('pr_charlas').select('id,programa_id,ubicacion_id,fecha,tema,tipo,respaldo_path,creado_por').order('fecha', { ascending: false }),
       supabase.from('pr_charla_asistentes').select('charla_id,nombre,rut'),
+      supabase.from('pr_cap_config').select('*'),
     ])
+    setConfig(cf.data || [])
     setAsist(a.data || [])
     const propias = esJefe ? null : await misUbicacionesIds(usuario.id)
     const lista = (u.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))
@@ -97,7 +102,7 @@ export default function CapPrevencionista() {
       </div>
       {form
         ? <FormCharla key={form.fecha + (form.prog || '')} usuario={{ id: usuario!.id, nombre: usuario!.nombre }} ubicId={ubic} ubicNombre={ubics.find(u => u.id === ubic)?.nombre || ''} programas={filas.map(f => f.p)} previos={previos} fechaIni={form.fecha} progIni={form.prog} onListo={async () => { setForm(null); await cargar() }} onCancelar={() => setForm(null)} />
-        : <div style={{ marginBottom: '12px' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar capacitación</button></div>}
+        : <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar capacitación</button><button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desdeCiclo(config, prog) }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={btn(false)}>📄 Descargar calendario (PDF)</button></div>}
       <CalendarioCapacitaciones charlas={charlasU} asistCount={asistCount} filas={filas} puedeEditar onRegistrar={(fecha, prog) => { setForm({ fecha, prog }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onVer={abrirArchivo} onSubirPapel={subirPapel} subiendo={subiendo} />
 
       <details style={card}>

@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
+import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
+import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { LUGARES, ventana12, etiquetaMes, sumaMes, desdeCiclo } from '@/lib/capacitaciones'
 
 const chip = (on: boolean, col = AZUL): React.CSSProperties => ({ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? col : '#d0d5dd'}`, background: on ? col : '#fff', color: on ? '#fff' : '#667085', fontWeight: on ? 700 : 500 })
@@ -90,7 +92,7 @@ export default function ConfigCalendario() {
             <span style={{ fontSize: '12.5px', color: '#667085' }}>→ cubre {etiquetaMes(cols[0])} a {etiquetaMes(cols[11])} (12 meses). Cada mes lleva su año: marzo de este ciclo es marzo 2027 si el ciclo parte en 2026.</span>
           </div>
           {msg && <p style={{ fontSize: '12.5px', color: '#c5221f' }}>{msg}</p>}
-          <div style={{ marginBottom: '12px' }}>{!nuevo && <button onClick={() => setNuevo(true)} style={btn()}>＋ Agregar capacitación al calendario</button>}</div>
+          <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{!nuevo && <button onClick={() => setNuevo(true)} style={btn()}>＋ Agregar capacitación al calendario</button>}<button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desde }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), }}>📄 Descargar calendario (PDF)</button></div>
 
           {nuevo && (
             <div style={{ ...card, marginBottom: '12px', borderColor: '#cfe0f5' }}>

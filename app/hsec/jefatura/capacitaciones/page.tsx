@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
-import { card, input, label } from '@/components/programa/ui'
+import { card, input, label, btn } from '@/components/programa/ui'
+import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
+import { abrirVentanaPDF } from '@/lib/abrirPDF'
 import { LUGARES, ventana12, etiquetaMes, desdeCiclo, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
 
 export default function JefaturaCap() {
@@ -78,7 +80,7 @@ export default function JefaturaCap() {
           <>
             <div style={{ ...card, marginBottom: '12px', background: '#f6f8fb' }}><p style={{ margin: 0, fontSize: '12.5px', color: '#475467' }}>El grupo de cada faena (ENGIE, SQM, SACYR - EUROHINCA u oficina) se define en un solo lugar. <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Ir a Faenas y asignaciones →</Link></p></div>
 
-            <div style={{ marginBottom: '12px' }}><Link href="/hsec/jefatura/capacitaciones/calendario" style={{ display: 'inline-block', padding: '10px 18px', borderRadius: '10px', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>⚙️ Configurar calendario de capacitaciones</Link></div>
+            <div style={{ marginBottom: '12px' }}><Link href="/hsec/jefatura/capacitaciones/calendario" style={{ display: 'inline-block', padding: '10px 18px', borderRadius: '10px', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>⚙️ Configurar calendario de capacitaciones</Link> <button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desdeCiclo(config, prog) }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), marginLeft: '8px'}}>📄 Descargar calendario (PDF)</button></div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
               <select value={fLugar} onChange={e => setFLugar(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los grupos</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
               <select value={fUbic} onChange={e => setFUbic(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todas las faenas</option>{ubics.filter(u => lugarDe(u.id)).map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>

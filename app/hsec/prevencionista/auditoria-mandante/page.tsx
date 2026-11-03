@@ -7,7 +7,8 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label, Barra } from '@/components/programa/ui'
 import { etiquetaContrato } from '@/lib/contratos'
 import { hoyISO } from '@/lib/estadoPlan'
-import { AudItem, AudResp, AudDoc, resumen, vigencia, docValido, calificacion } from '@/lib/auditoriaMandante'
+import { AudItem, AudResp, AudDoc, AudTrab, resumen, vigencia, docValido, calificacion, estadoTrab, difCompleta, resumenTrabajadores, trabActivos } from '@/lib/auditoriaMandante'
+import { formatearRut, rutValido } from '@/lib/rut'
 import { P3_ITEMS, P3_SECCIONES, COLOR_CAL, DESC_CAL } from '@/lib/p3'
 import { generarEstadoAuditoria } from '@/lib/generarAuditoriaMandante'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
@@ -29,6 +30,7 @@ export default function AuditoriaMandante() {
   const [levs, setLevs] = useState<any[]>([])
   const [resps, setResps] = useState<AudResp[]>([])
   const [docs, setDocs] = useState<AudDoc[]>([])
+  const [trabs, setTrabs] = useState<AudTrab[]>([])
   const [contratos, setContratos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
@@ -36,7 +38,7 @@ export default function AuditoriaMandante() {
   const [msg, setMsg] = useState('')
 
   const cargar = useCallback(async () => {
-    const [f, it, lv, rs, dc, ct, cl, us] = await Promise.all([
+    const [f, it, lv, rs, dc, ct, cl, us, tr] = await Promise.all([
       supabase.from('aud_formatos').select('*').order('nombre'),
       supabase.from('aud_items').select('*').order('orden'),
       supabase.from('aud_levantamientos').select('*').order('created_at'),
@@ -45,7 +47,9 @@ export default function AuditoriaMandante() {
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
       supabase.from('pr_clientes_informe').select('id,nombre'),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('aud_trabajadores').select('*').order('nombre'),
     ])
+    setTrabs((tr.data || []) as AudTrab[])
     setFormatos(f.data || []); setItems((it.data || []) as AudItem[]); setLevs(lv.data || []); setResps((rs.data || []) as AudResp[]); setDocs((dc.data || []) as AudDoc[])
     setContratos(ct.data || []); setClientes(cl.data || []); setUsuarios(us.data || []); setCargando(false)
   }, [])
@@ -76,7 +80,7 @@ export default function AuditoriaMandante() {
     const lev = levs.find(l => l.id === vista.id)
     const fm = lev && formatos.find(f => f.id === lev.formato_id)
     if (!lev || !fm) return wrap(<p style={{ fontSize: '13px', color: '#999' }}>No se encontró el levantamiento.</p>, { txt: 'Volver', f: () => setVista({ t: 'lista' }) })
-    return <Levantamiento lev={lev} fm={fm} items={items.filter(i => i.formato_id === fm.id)} resps={resps.filter(r => r.levantamiento_id === lev.id)} docs={docs.filter(d => d.levantamiento_id === lev.id)}
+    return <Levantamiento lev={lev} fm={fm} items={items.filter(i => i.formato_id === fm.id)} resps={resps.filter(r => r.levantamiento_id === lev.id)} docs={docs.filter(d => d.levantamiento_id === lev.id)} trabs={trabs.filter(t => t.levantamiento_id === lev.id)}
       contratoTxt={ctEtiqueta(lev.contrato_id)} esJefe={esJefe} usuarioId={usuario!.id} nombreDe={nombreDe} abrirArchivo={abrirArchivo} recargar={cargar} wrap={wrap} volver={() => { setVista({ t: 'lista' }); cargar() }} />
   }
 
@@ -104,7 +108,9 @@ export default function AuditoriaMandante() {
         const fm = formatos.find(f => f.id === l.formato_id); if (!fm) return null
         const its = items.filter(i => i.formato_id === fm.id)
         const rm: Record<string, AudResp> = {}; resps.filter(r => r.levantamiento_id === l.id).forEach(r => { rm[r.item_id] = r })
-        const r = resumen(its, rm, docs.filter(d => d.levantamiento_id === l.id), !!fm.usa_puntaje)
+        const ds = docs.filter(d => d.levantamiento_id === l.id), tb = trabs.filter(t => t.levantamiento_id === l.id)
+        const r = resumen(its, rm, ds, !!fm.usa_puntaje, tb)
+        const rt = resumenTrabajadores(its, tb, ds)
         const cal = calificacion(r.pct)
         return (
           <div key={l.id} style={{ ...card, cursor: 'pointer' }} onClick={() => setVista({ t: 'lev', id: l.id })}>
@@ -121,6 +127,7 @@ export default function AuditoriaMandante() {
               <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#e7f6ec', color: '#14532d' }}>✓ {r.nCumple} cumple</span>
               <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>✗ {r.nNo} no cumple</span>
               <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#f1f3f7', color: '#475467' }}>{r.pend} pendientes de {r.n}</span>
+              {rt.its.length > 0 && <span style={{ padding: '2px 9px', borderRadius: '20px', background: rt.total > 0 && rt.completos === rt.total ? '#e7f6ec' : '#fef7e0', color: rt.total > 0 && rt.completos === rt.total ? '#14532d' : '#986a00', fontWeight: 700 }}>👷 {rt.completos}/{rt.total} trabajadores con respaldo completo</span>}
               {r.porRevisar > 0 && <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', fontWeight: 700 }}>⏳ {r.porRevisar} doc. por revisar</span>}
               {r.vencidos > 0 && <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c', fontWeight: 700 }}>⚠️ {r.vencidos} doc. vencido(s)</span>}
               {r.porVencer > 0 && <span style={{ padding: '2px 9px', borderRadius: '20px', background: '#fef7e0', color: '#986a00', fontWeight: 700 }}>{r.porVencer} por vencer</span>}
@@ -155,8 +162,8 @@ function NuevoLev({ formatos, contratos, levs, clientes, usuarioId, onCreado }: 
 }
 
 // ───────── Checklist de un contrato ─────────
-function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuarioId, nombreDe, abrirArchivo, recargar, wrap, volver }: {
-  lev: any, fm: any, items: AudItem[], resps: AudResp[], docs: AudDoc[], contratoTxt: string, esJefe: boolean, usuarioId: string,
+function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe, usuarioId, nombreDe, abrirArchivo, recargar, wrap, volver }: {
+  lev: any, fm: any, items: AudItem[], resps: AudResp[], docs: AudDoc[], trabs: AudTrab[], contratoTxt: string, esJefe: boolean, usuarioId: string,
   nombreDe: (id: string | null) => string, abrirArchivo: (p: string) => void, recargar: () => Promise<void>, wrap: (c: React.ReactNode, v?: any) => React.ReactNode, volver: () => void,
 }) {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'no_cumple' | 'revisar' | 'vencidos'>('todos')
@@ -166,8 +173,9 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
   const rm = useMemo(() => { const m: Record<string, AudResp> = {}; resps.forEach(r => { m[r.item_id] = r }); return m }, [resps])
-  const dpor = (id: string) => docs.filter(d => d.item_id === id)
-  const r = resumen(items, rm, docs, !!fm.usa_puntaje)
+  const dpor = (id: string) => docs.filter(d => d.item_id === id && !d.trabajador_id)
+  const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs)
+  const rt = resumenTrabajadores(items, trabs, docs)
   const cal = calificacion(r.pct)
   const secciones = Array.from(new Set(items.map(i => i.seccion)))
 
@@ -184,7 +192,11 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
   }
   const marcar = async (it: AudItem, v: AudResp['estado']) => {
     const actual = rm[it.id]?.estado
-    if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { setMsg(`Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
+    if (v === 'cumple' && actual !== 'cumple' && it.requiere_trabajador) {
+      const c = difCompleta(it.id, trabs, docs)
+      if (c.total === 0) { setMsg(`Ítem ${it.numero || ''}: primero agrega a los trabajadores del contrato.`); return }
+      if (!c.ok) { setMsg(`Ítem ${it.numero || ''}: faltan los documentos firmados de ${c.faltan} trabajador(es).`); return }
+    } else if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { setMsg(`Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
     await guardar(it, { estado: actual === v ? 'pendiente' : v })
   }
   const subir = async (it: AudItem, f: File) => {
@@ -197,6 +209,17 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
     setSubiendo('')
     if (error) { setMsg('No se pudo registrar: ' + error.message); return }
     setVenceNuevo({ ...venceNuevo, [it.id]: '' }); await recargar()
+  }
+  const subirTrab = async (it: AudItem, t: AudTrab, f: File) => {
+    if (f.size > 15 * 1024 * 1024) { setMsg('El archivo supera 15 MB.'); return }
+    setSubiendo(it.id + t.id); setMsg('')
+    const path = `auditoria/${lev.id}/${it.id}/${t.id}_${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
+    if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return }
+    const { error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, trabajador_id: t.id, path, nombre: f.name, subido_por: usuarioId })
+    setSubiendo('')
+    if (error) { setMsg('No se pudo registrar: ' + error.message); return }
+    await recargar()
   }
   const revisarDoc = async (d: AudDoc, revision: 'aprobado' | 'rechazado') => {
     let comentario: string | null = null
@@ -213,7 +236,7 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
   }
   const pdf = async () => {
     const v = abrirVentanaPDF()
-    try { await generarEstadoAuditoria({ formato: fm, contrato: contratoTxt, items, resp: rm, docs }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
+    try { await generarEstadoAuditoria({ formato: fm, contrato: contratoTxt, items, resp: rm, docs, trabs }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
   }
   const kpi = (v: string | number, t: string, col = '#16213E') => <div style={{ ...card, padding: '10px 12px', textAlign: 'center' }}><p style={{ margin: 0, fontSize: '21px', fontWeight: 800, color: col }}>{v}</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#667085' }}>{t}</p></div>
   const chip = (k: typeof filtro, t: string, n?: number) => <button key={k} onClick={() => setFiltro(k)} style={{ ...btn(filtro === k), padding: '5px 11px', fontSize: '12px' }}>{t}{n !== undefined ? ` (${n})` : ''}</button>
@@ -231,6 +254,7 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
       {kpi(r.porRevisar, 'Docs por revisar', r.porRevisar ? '#5b3aa6' : '#1e8e4e')}
     </div>
     {fm.usa_puntaje && <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: '#667085' }}>{DESC_CAL[cal].desc} <b>Escala:</b> Preferente 95–100% · Condicional 80–94% · Restringido bajo 80%.</p>}
+    {rt.its.length > 0 && <PanelTrabajadores lev={lev} trabs={trabs} docs={docs} rt={rt} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo} subirTrab={subirTrab} abrirArchivo={abrirArchivo} recargar={recargar} setMsg={setMsg} borrarDoc={borrarDoc} />}
     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px', alignItems: 'center' }}>
       {chip('todos', 'Todos')}{chip('pendientes', 'Pendientes', r.pend)}{chip('no_cumple', 'No cumple', r.nNo)}{chip('revisar', 'Docs por revisar', r.porRevisar)}{chip('vencidos', 'Docs vencidos', r.vencidos)}
       <button onClick={pdf} style={{ ...btn(false), padding: '5px 11px', fontSize: '12px', marginLeft: 'auto' }}>📄 Informe de estado (PDF)</button>
@@ -261,6 +285,20 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
                 </div>
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
+                {it.requiere_trabajador && (() => {
+                  const c = difCompleta(it.id, trabs, docs)
+                  return (
+                    <div style={{ background: '#f7f9fd', border: '1px solid #dfe7f5', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: c.ok ? '#14532d' : '#986a00' }}>👷 Documento firmado por cada trabajador · {c.total - c.faltan}/{c.total} cargados{c.total === 0 ? ' (agrega los trabajadores en el panel de arriba)' : ''}</p>
+                      {trabActivos(trabs).map(t => (
+                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', padding: '3px 0', fontSize: '12.5px' }}>
+                          <span>{t.nombre} <span style={{ color: '#98a2b3' }}>{t.rut}</span></span>
+                          <CeldaDif docs={docs} t={t} it={it} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo === it.id + t.id} subirTrab={subirTrab} abrirArchivo={abrirArchivo} borrarDoc={borrarDoc} />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
                 {/* Documentos */}
                 {ds.map(d => {
                   const [vb, vf, vt] = VIG_COL[vigencia(d.vence)], [rb, rf, rt] = REV_COL[d.revision]
@@ -312,6 +350,109 @@ function Levantamiento({ lev, fm, items, resps, docs, contratoTxt, esJefe, usuar
   </>, { txt: 'Volver a la lista', f: volver })
 }
 
+// ───────── Celda de respaldo de un trabajador en un ítem ─────────
+const CEL: Record<string, [string, string, string]> = { falta: ['#fff', '#9b1c1c', 'Falta'], revisar: ['#efe7fd', '#5b3aa6', '⏳'], ok: ['#d7efe0', '#14532d', '✓'], rechazado: ['#fde8e8', '#9b1c1c', '✗'] }
+function CeldaDif({ docs, t, it, esJefe, usuarioId, subiendo, subirTrab, abrirArchivo, borrarDoc, compacta }: { docs: AudDoc[], t: AudTrab, it: AudItem, esJefe: boolean, usuarioId: string, subiendo: boolean, subirTrab: (it: AudItem, t: AudTrab, f: File) => void, abrirArchivo: (p: string) => void, borrarDoc: (d: AudDoc) => void, compacta?: boolean }) {
+  const { e, doc } = estadoTrab(docs, t.id, it.id)
+  const [bg, fg, tx] = CEL[e]
+  return (
+    <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+      {doc && <button type="button" onClick={() => abrirArchivo(doc.path)} title={`${doc.nombre} · ${e === 'ok' ? 'aprobado' : e === 'revisar' ? 'por revisar' : 'rechazado'}${doc.comentario ? ' · ' + doc.comentario : ''}`} style={{ border: 'none', background: bg, color: fg, borderRadius: '6px', padding: '2px 8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📎 {tx}</button>}
+      {!doc && <span style={{ fontSize: '11px', fontWeight: 700, color: fg }}>{tx}</span>}
+      <label title="Subir el documento firmado y escaneado" style={{ border: '1px dashed #9db8e0', borderRadius: '6px', padding: compacta ? '1px 7px' : '2px 9px', fontSize: '11.5px', color: AZUL, cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}>
+        {subiendo ? '...' : e === 'falta' ? '＋ Subir' : '↻'}
+        <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={subiendo} onChange={ev => { const f = ev.target.files?.[0]; if (f) subirTrab(it, t, f); ev.target.value = '' }} />
+      </label>
+      {doc && (esJefe || (doc.subido_por === usuarioId && doc.revision === 'pendiente')) && <button type="button" onClick={() => borrarDoc(doc)} title="Eliminar" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', padding: 0 }}>🗑</button>}
+    </span>
+  )
+}
+
+// ───────── Panel: trabajadores del contrato y su respaldo ─────────
+function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, subiendo, subirTrab, abrirArchivo, recargar, setMsg, borrarDoc }: {
+  lev: any, trabs: AudTrab[], docs: AudDoc[], rt: ReturnType<typeof resumenTrabajadores>, esJefe: boolean, usuarioId: string, subiendo: string,
+  subirTrab: (it: AudItem, t: AudTrab, f: File) => void, abrirArchivo: (p: string) => void, recargar: () => Promise<void>, setMsg: (m: string) => void, borrarDoc: (d: AudDoc) => void,
+}) {
+  const [abierto, setAbierto] = useState(true)
+  const [soloInc, setSoloInc] = useState(false)
+  const [nom, setNom] = useState(''); const [rut, setRut] = useState(''); const [ing, setIng] = useState('')
+  const [pegar, setPegar] = useState('')
+  const [err, setErr] = useState('')
+  const bajas = trabs.filter(t => !t.activo)
+  const agregar = async (filas: { nombre: string, rut: string, fecha_ingreso?: string | null }[]) => {
+    const { error } = await supabase.from('aud_trabajadores').insert(filas.map(f => ({ levantamiento_id: lev.id, nombre: f.nombre, rut: f.rut, fecha_ingreso: f.fecha_ingreso || null, creado_por: usuarioId })))
+    if (error) { setErr(error.code === '23505' ? 'Alguno de esos RUT ya está en la nómina.' : error.message); return false }
+    setErr(''); await recargar(); return true
+  }
+  const filas = soloInc ? rt.filas.filter(f => !f.completo) : rt.filas
+  return (
+    <div style={{ ...card, marginBottom: '10px' }}>
+      <button type="button" onClick={() => setAbierto(a => !a)} style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', fontFamily: 'inherit' }}>
+        <span style={{ fontWeight: 700, fontSize: '14px', color: '#16213E' }}>👷 Trabajadores y respaldo firmado</span>
+        <span style={{ fontSize: '12px', color: rt.total > 0 && rt.completos === rt.total ? '#14532d' : '#986a00', fontWeight: 700 }}>{rt.completos}/{rt.total} con respaldo completo {abierto ? '▲' : '▼'}</span>
+      </button>
+      {abierto && <>
+        <p style={{ margin: '6px 0 8px', fontSize: '12px', color: '#667085' }}>Cada vez que se contrata a alguien, agrégalo aquí. Imprime en terreno el documento de difusión, haz que el trabajador lo firme, escanéalo y súbelo en su fila, bajo el ítem que corresponde (ítems {rt.its.map(i => i.numero).join(' · ')}).</p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          <div style={{ flex: '2 1 200px' }}><label style={label}>Nombre completo</label><input value={nom} onChange={e => setNom(e.target.value)} style={input} /></div>
+          <div style={{ flex: '1 1 140px' }}><label style={label}>RUT</label><input value={rut} maxLength={12} onChange={e => setRut(formatearRut(e.target.value))} placeholder="12.345.678-9" style={input} /></div>
+          <div style={{ flex: '1 1 130px' }}><label style={label}>Fecha de ingreso</label><input type="date" value={ing} max={new Date().toISOString().slice(0, 10)} onChange={e => setIng(e.target.value)} style={input} /></div>
+          <div style={{ alignSelf: 'flex-end' }}><button onClick={async () => {
+            if (!nom.trim()) { setErr('Escribe el nombre.'); return }
+            if (!rutValido(rut)) { setErr('El RUT no es válido.'); return }
+            if (await agregar([{ nombre: nom.trim(), rut, fecha_ingreso: ing || null }])) { setNom(''); setRut(''); setIng('') }
+          }} style={btn()}>+ Agregar</button></div>
+        </div>
+        <details style={{ marginBottom: '8px' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '12.5px', color: AZUL, fontWeight: 600 }}>Agregar varios a la vez</summary>
+          <textarea value={pegar} onChange={e => setPegar(e.target.value)} rows={4} placeholder={'Una persona por línea: Nombre; RUT\nJuan Pérez Soto; 12.345.678-5\nMaría Rojas Díaz; 9.876.543-3'} style={{ ...input, resize: 'vertical', marginTop: '6px' }} />
+          <button onClick={async () => {
+            const lineas = pegar.split('\n').map(l => l.trim()).filter(Boolean)
+            const out: { nombre: string, rut: string }[] = []
+            for (const l of lineas) { const [n, r] = l.split(/[;\t,]/).map(x => x.trim()); if (!n || !r || !rutValido(r)) { setErr(`Línea inválida: «${l}» (formato: Nombre; RUT)`); return } out.push({ nombre: n, rut: formatearRut(r) }) }
+            if (!out.length) { setErr('Pega al menos una línea.'); return }
+            if (await agregar(out)) setPegar('')
+          }} style={{ ...btn(), marginTop: '6px' }}>Agregar lista</button>
+        </details>
+        {err && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{err}</p>}
+
+        {rt.total === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Aún no hay trabajadores en este contrato.</p> : <>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' }}>
+            <span style={{ fontSize: '12.5px' }}><b>{rt.completos}</b> de <b>{rt.total}</b> con todo el respaldo cargado · <b>{rt.aprobados}</b> aprobados por el Jefe</span>
+            <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center', marginLeft: 'auto' }}><input type="checkbox" checked={soloInc} onChange={e => setSoloInc(e.target.checked)} /> Solo incompletos</label>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+              <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '11px' }}>
+                <th style={{ padding: '4px 6px' }}>Trabajador</th>
+                {rt.its.map(i => <th key={i.id} title={i.texto} style={{ padding: '4px 6px', whiteSpace: 'nowrap' }}>Ítem {i.numero}</th>)}
+                <th style={{ padding: '4px 6px' }}></th>
+              </tr></thead>
+              <tbody>{filas.map(f => (
+                <tr key={f.t.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                  <td style={{ padding: '6px', minWidth: '150px' }}>
+                    <span style={{ fontWeight: 600 }}>{f.t.nombre}</span> {f.completo && <span title="Respaldo completo" style={{ color: '#14532d' }}>✅</span>}
+                    <br /><span style={{ color: '#98a2b3', fontSize: '11px' }}>{f.t.rut}{f.t.fecha_ingreso ? ` · ingreso ${fcl(f.t.fecha_ingreso)}` : ''}</span>
+                  </td>
+                  {rt.its.map(i => <td key={i.id} style={{ padding: '6px' }}><CeldaDif compacta docs={docs} t={f.t} it={i} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo === i.id + f.t.id} subirTrab={subirTrab} abrirArchivo={abrirArchivo} borrarDoc={borrarDoc} /></td>)}
+                  <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
+                    <button type="button" title="Dar de baja (ya no se le exige respaldo)" onClick={async () => { if (!confirm(`¿Dar de baja a ${f.t.nombre}? Sus documentos se conservan.`)) return; const { error } = await supabase.from('aud_trabajadores').update({ activo: false }).eq('id', f.t.id); if (error) { setMsg(error.message); return } await recargar() }} style={{ ...btn(false), padding: '2px 8px', fontSize: '11px' }}>Baja</button>
+                    {esJefe && <button type="button" title="Eliminar de la nómina (borra también sus documentos)" onClick={async () => { if (!confirm(`¿Eliminar a ${f.t.nombre} y todos sus documentos?`)) return; const { error } = await supabase.from('aud_trabajadores').delete().eq('id', f.t.id); if (error) { setMsg(error.message); return } await recargar() }} style={{ ...btn(false, true), padding: '2px 8px', fontSize: '11px', marginLeft: '4px' }}>🗑</button>}
+                  </td>
+                </tr>))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#98a2b3' }}>Falta = sin documento · ⏳ cargado, por revisar · ✓ aprobado · ✗ rechazado o vencido.</p>
+        </>}
+        {bajas.length > 0 && <details style={{ marginTop: '8px' }}><summary style={{ cursor: 'pointer', fontSize: '12px', color: '#667085' }}>Dados de baja ({bajas.length})</summary>
+          {bajas.map(t => <p key={t.id} style={{ margin: '4px 0 0', fontSize: '12px' }}>{t.nombre} <span style={{ color: '#98a2b3' }}>{t.rut}</span> <button type="button" onClick={async () => { const { error } = await supabase.from('aud_trabajadores').update({ activo: true }).eq('id', t.id); if (error) { setMsg(error.message); return } await recargar() }} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>Reactivar</button></p>)}
+        </details>}
+      </>}
+    </div>
+  )
+}
+
 // ───────── Formatos de clientes (Jefe) ─────────
 function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos: any[], items: AudItem[], sel: string | null, setVista: (v: Vista) => void, recargar: () => Promise<void>, wrap: (c: React.ReactNode, v?: any) => React.ReactNode }) {
   const [nom, setNom] = useState(''); const [cod, setCod] = useState(''); const [punt, setPunt] = useState(false)
@@ -343,7 +484,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
             setBusy(true); setMsg('')
             const { data, error } = await supabase.from('aud_formatos').insert({ nombre: 'SQM · Auditoría de Calificación P3', codigo: 'REG-PR-004 v002', descripcion: 'Reglamento de Contratistas y Subcontratistas SQM', usa_puntaje: true }).select().maybeSingle()
             if (error || !data) { setBusy(false); err(error); return }
-            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p }))
+            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n) }))
             const r = await supabase.from('aud_items').insert(filas)
             setBusy(false); if (r.error) { err(r.error); return }
             await recargar()
@@ -436,6 +577,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
           <div key={i.id} style={{ borderTop: '1px solid #eef1f6', padding: '7px 0', display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <p style={{ margin: 0, fontSize: '12.5px', whiteSpace: 'pre-line', flex: 1 }}><b>{i.numero}.</b> {i.texto}{f.usa_puntaje ? <span style={{ color: '#98a2b3' }}> ({i.puntaje} pts)</span> : null}</p>
             <span style={{ display: 'flex', gap: '4px' }}>
+              <button onClick={async () => { const { error } = await supabase.from('aud_items').update({ requiere_trabajador: !i.requiere_trabajador }).eq('id', i.id); if (error) { err(error); return } await recargar() }} title="Pide un documento firmado por cada trabajador" style={{ ...btn(false), padding: '3px 9px', fontSize: '11.5px', background: i.requiere_trabajador ? '#e8f0fe' : '#fff' }}>{i.requiere_trabajador ? '👷 Por trabajador' : '👷'}</button>
               <button onClick={() => { setEditId(i.id); setEd({ seccion: i.seccion, texto: i.texto, orientacion: i.orientacion || '', puntaje: String(i.puntaje) }) }} style={{ ...btn(false), padding: '3px 9px', fontSize: '11.5px' }}>Editar</button>
               <button onClick={async () => { if (!confirm('¿Quitar este ítem? Se pierden las respuestas y documentos asociados a él en todos los contratos.')) return; const { error } = await supabase.from('aud_items').delete().eq('id', i.id); if (error) { err(error); return } await recargar() }} style={{ ...btn(false, true), padding: '3px 9px', fontSize: '11.5px' }}>Quitar</button>
             </span>

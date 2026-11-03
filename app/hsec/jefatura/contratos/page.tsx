@@ -200,7 +200,7 @@ export default function JefaturaContratos() {
                       return (
                         <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
                           <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>🖊️ Administrador de faena / contrato <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· firma como "Revisa" cuando cambia el calendario de capacitaciones de este contrato</span></p>
-                          {usuario?.rol === 'admin' ? (
+                          {puede ? (
                             <select value={c.admin_faena_id || ''} onChange={async e => { if (!err((await supabase.from('pr_contratos').update({ admin_faena_id: e.target.value || null }).eq('id', c.id)).error)) await cargar() }} style={{ ...input, marginBottom: '12px' }}>
                               <option value="">Sin asignar (firma cualquier Administrador de faena)</option>
                               {admins.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}

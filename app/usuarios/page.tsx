@@ -19,7 +19,7 @@ export default function Usuarios() {
   const [telefono, setTelefono] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rol, setRol] = useState('bodeguero')
+  const [rol, setRol] = useState('')
   const [accesoBodega, setAccesoBodega] = useState(true)
   const [accesoVehiculos, setAccesoVehiculos] = useState(false)
   const [accesoLicitaciones, setAccesoLicitaciones] = useState(false)
@@ -43,7 +43,7 @@ export default function Usuarios() {
   const [editNombre, setEditNombre] = useState('')
   const [editCargo, setEditCargo] = useState('')
   const [editTelefono, setEditTelefono] = useState('')
-  const [editRol, setEditRol] = useState('bodeguero')
+  const [editRol, setEditRol] = useState('')
   const [editAccesoBodega, setEditAccesoBodega] = useState(true)
   const [editAccesoVehiculos, setEditAccesoVehiculos] = useState(false)
   const [editAccesoLicitaciones, setEditAccesoLicitaciones] = useState(false)
@@ -84,6 +84,10 @@ export default function Usuarios() {
   }
 
   useEffect(() => { cargar() }, [])
+  // El rol elegido siempre debe existir: si no, se deja vacío (nunca se asume «Administrador» por error)
+  useEffect(() => {
+    if (roles.length && rol && !roles.some(r => r.nombre === rol)) setRol('')
+  }, [roles, rol])
 
   const bodegas = ubicaciones.filter(u => u.tipo === 'bodega')
   const faenas = ubicaciones.filter(u => u.tipo === 'faena')
@@ -99,6 +103,7 @@ export default function Usuarios() {
   const crearUsuario = async () => {
     setError(''); setExito('')
     if (!nombre || !email || !password) { setError('Nombre, correo y contraseña son obligatorios.'); return }
+    if (!rol || !roles.some(r => r.nombre === rol)) { setError('Elige el rol del usuario.'); return }
     if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
     setGuardando(true)
     const { data: { session } } = await supabase.auth.getSession()
@@ -114,7 +119,7 @@ export default function Usuarios() {
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`); setNuevoAbierto(false)
-    setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('bodeguero')
+    setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('')
     setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setCargoPrograma(''); setPermisos({})
     cargar()
   }
@@ -219,6 +224,8 @@ export default function Usuarios() {
     if (!confirm(`¿Cambiar el nombre del rol «${nombreRolLegible(viejo)}» a «${nombreRolLegible(nuevo)}»?${n ? ` Se actualizará en ${n} usuario(s).` : ''}`)) return
     const { error } = await supabase.from('roles').update({ nombre: nuevo }).eq('nombre', viejo)
     if (error) { setErrorRol(error.code === '23505' ? 'Ya existe un rol con ese nombre.' : 'No se pudo cambiar: ' + error.message); return }
+    if (rol === viejo) setRol(nuevo)
+    if (editRol === viejo) setEditRol(nuevo)
     setRenRol(''); setRenTxt(''); cargar()
   }
 
@@ -335,6 +342,7 @@ export default function Usuarios() {
           <div>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Rol</label>
             <select value={rol} onChange={e=>setRol(e.target.value)} style={inputStyle}>
+              <option value="">— Elegir rol —</option>
               {roles.map(r => <option key={r.nombre} value={r.nombre}>{nombreRolLegible(r.nombre)}</option>)}
             </select>
           </div>

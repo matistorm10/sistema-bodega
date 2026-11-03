@@ -105,13 +105,16 @@ export default function Jefatura() {
       })
       setAud({ levs, porRevisar: docs.filter(d => d.revision === 'pendiente').length, vencidos: docs.filter(d => d.revision !== 'rechazado' && vigencia(d.vence) === 'vencido').length, porVencer: docs.filter(d => d.revision !== 'rechazado' && vigencia(d.vence) === 'por_vencer').length })
       // Stock de EPP
-      const [st, eu] = await Promise.all([supabase.from('pr_epp_stock').select('*'), supabase.from('pr_epp_ubicaciones').select('ubicacion_id')])
+      const [st, eu, mn] = await Promise.all([supabase.from('pr_epp_stock').select('*'), supabase.from('pr_epp_ubicaciones').select('ubicacion_id'), supabase.from('pr_epp_minimos').select('*')])
       const activosEpp = (ec.data || []).filter((x: any) => x.activo !== false)
       const ubicEpp = (f.data || []).filter((x: any) => (eu.data || []).some((e: any) => e.ubicacion_id === x.id) || (st.data || []).some((s: any) => s.ubicacion_id === x.id))
       const tot = (itemId: string, ub: string) => (st.data || []).filter((s: any) => s.item_id === itemId && s.ubicacion_id === ub).reduce((a: number, s: any) => a + s.stock, 0)
-      const bajo = activosEpp.flatMap((x: any) => x.stock_minimo > 0 ? ubicEpp.filter((ub: any) => tot(x.id, ub.id) < x.stock_minimo).map((ub: any) => `${x.nombre} · ${ub.nombre}`) : [])
+      const minDe = (x: any, ub: string) => { const m = (mn.data || []).find((r: any) => r.item_id === x.id && r.ubicacion_id === ub); return m ? m.minimo : (x.stock_minimo || 0) }
+      const pares = activosEpp.flatMap((x: any) => ubicEpp.map((ub: any) => ({ x, ub, t: tot(x.id, ub.id), m: minDe(x, ub.id) }))).filter((p: any) => p.m > 0)
+      const bajo = pares.filter((p: any) => p.t < p.m).map((p: any) => `${p.x.nombre} · ${p.ub.nombre}: ${p.t} (mínimo ${p.m})`)
+      const igual = pares.filter((p: any) => p.t === p.m).map((p: any) => `${p.x.nombre} · ${p.ub.nombre}: ${p.t} (mínimo ${p.m})`)
       const certsVig = (ecs.data || []).filter((x: any) => x.vence)
-      setEpp({ bajo, items: activosEpp.length, ubic: ubicEpp.length, vencidos: certsVig.filter((x: any) => vigencia(x.vence) === 'vencido').length, porVencer: certsVig.filter((x: any) => vigencia(x.vence) === 'por_vencer').length, est: eppEst })
+      setEpp({ bajo, igual, items: activosEpp.length, ubic: ubicEpp.length, vencidos: certsVig.filter((x: any) => vigencia(x.vence) === 'vencido').length, porVencer: certsVig.filter((x: any) => vigencia(x.vence) === 'por_vencer').length, est: eppEst })
       // Calendario de capacitaciones a la fecha
       const [cp, cu] = await Promise.all([supabase.from('pr_cap_programa').select('*').eq('activo', true), supabase.from('pr_cap_ubic_lugar').select('*')])
       const hoyM = mesHoy(); let plan = 0, hechas = 0
@@ -367,13 +370,21 @@ export default function Jefatura() {
             </div>
 
             {/* 6 · Stock de EPP */}
-            {mod('/hsec/jefatura/epp', '🦺', 'Stock de EPP', 'Resumen de stock por faena, mínimos, catálogo, certificados y movimientos', pill(epp?.bajo.length || 0, 'bajo mínimo', true))}
+            {mod('/hsec/jefatura/epp', '🦺', 'Stock de EPP', 'Resumen de stock por faena, mínimos, catálogo, certificados y movimientos', pill((epp?.bajo.length || 0) + (epp?.igual.length || 0), 'en/bajo mínimo', true))}
             {epp && grid(150, <>
-              {kpiC(epp.bajo.length, 'EPP bajo el mínimo', epp.bajo.length ? '#c0392b' : '#1e8e4e')}
+              {kpiC(epp.igual.length, 'Ítems justo en el stock mínimo', epp.igual.length ? '#b7791f' : '#1e8e4e')}
+              {kpiC(epp.bajo.length, 'Ítems bajo el stock mínimo', epp.bajo.length ? '#c0392b' : '#1e8e4e')}
               {kpiC(epp.vencidos, 'Certificados vencidos', epp.vencidos ? '#c0392b' : '#1e8e4e')}
               {kpiC(epp.porVencer, 'Certificados por vencer (30 días)', epp.porVencer ? '#b7791f' : '#1e8e4e')}
               {kpiC(`${epp.est.conCert}/${epp.est.total}`, 'EPP con certificado vigente', epp.est.total && epp.est.ok ? '#1e8e4e' : '#b7791f')}
             </>)}
+            {epp && epp.igual.length > 0 && (
+              <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '10px' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>🟡 Justo en el stock mínimo ({epp.igual.length})</p>
+                {epp.igual.slice(0, 8).map((t: string) => <p key={t} style={{ margin: '2px 0', fontSize: '12.5px', color: '#7a5600' }}>{t}</p>)}
+                {epp.igual.length > 8 && <p style={{ margin: '2px 0', fontSize: '12px', color: '#7a5600' }}>…y {epp.igual.length - 8} más</p>}
+              </div>
+            )}
             {epp && epp.bajo.length > 0 && (
               <div style={{ ...card, background: '#fde8e8', borderColor: '#f3b4b4', marginBottom: '10px' }}>
                 <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#9b1c1c' }}>⚠️ Bajo el stock mínimo</p>

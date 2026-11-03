@@ -14,6 +14,7 @@ export default function JefaturaEpp() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
   const puede = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
   const [catalogo, setCatalogo] = useState<any[]>([])
+  const [minimos, setMinimos] = useState<any[]>([])
   const [stock, setStock] = useState<any[]>([])
   const [ubicaciones, setUbicaciones] = useState<any[]>([])
   const [asigs, setAsigs] = useState<any[]>([])
@@ -29,7 +30,7 @@ export default function JefaturaEpp() {
   const [edit, setEdit] = useState<{ id: string, nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
-    const [c, s, u, a, p, m, us, ce] = await Promise.all([
+    const [c, s, u, a, p, m, us, ce, mn] = await Promise.all([
       supabase.from('pr_epp_catalogo').select('*').order('nombre'),
       supabase.from('pr_epp_stock').select('*'),
       supabase.from('ubicaciones').select('id,nombre,activa').order('nombre'),
@@ -38,8 +39,9 @@ export default function JefaturaEpp() {
       supabase.from('pr_epp_movimientos').select('*').order('created_at', { ascending: false }).limit(300),
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('pr_epp_certificados').select('*'),
+      supabase.from('pr_epp_minimos').select('*'),
     ])
-    setCerts(ce.data || [])
+    setCerts(ce.data || []); setMinimos(mn.data || [])
     setCatalogo(c.data || []); setStock(s.data || []); setUbicaciones((u.data || []).filter((x: any) => x.activa !== false))
     setAsigs(a.data || []); setPrevs(p.data || []); setMovs(m.data || []); setUsuarios(us.data || []); setCargando(false)
   }, [])
@@ -52,7 +54,18 @@ export default function JefaturaEpp() {
   // ubicaciones con algún control de EPP (asignadas o con stock)
   const ubicEpp = useMemo(() => ubicaciones.filter(u => asigs.some(a => a.ubicacion_id === u.id) || stock.some(s => s.ubicacion_id === u.id)), [ubicaciones, asigs, stock])
   const total = (itemId: string, ubId: string) => stock.filter(s => s.item_id === itemId && s.ubicacion_id === ubId).reduce((a, s) => a + s.stock, 0)
-  const bajoMin = activos.flatMap(c => c.stock_minimo > 0 ? ubicEpp.filter(u => total(c.id, u.id) < c.stock_minimo).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (mínimo ${c.stock_minimo})` })) : [])
+  // mínimo efectivo: el definido por el Jefe para esa faena; si no hay, el valor por defecto del catálogo
+  const minDe = (c: any, ubId: string): number => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId); return m ? m.minimo : (c.stock_minimo || 0) }
+  const bajoMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) < minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (mínimo ${minDe(c, u.id)})` })))
+  const igualMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) === minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (= mínimo)` })))
+  const guardarMin = async (c: any, ubId: string, txt: string) => {
+    const actual = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId)
+    if (txt.trim() === '') { if (!actual) return; const { error } = await supabase.from('pr_epp_minimos').delete().eq('item_id', c.id).eq('ubicacion_id', ubId); if (error) { alert(error.message); return } await cargar(); return }
+    const v = Math.floor(Number(txt)); if (!(v >= 0)) return
+    if (actual && actual.minimo === v) return
+    const { error } = await supabase.from('pr_epp_minimos').upsert({ ubicacion_id: ubId, item_id: c.id, minimo: v }, { onConflict: 'ubicacion_id,item_id' })
+    if (error) alert(error.message); else await cargar()
+  }
   const movsF = movs.filter(m => !fUbic || m.ubicacion_id === fUbic).slice(0, 25)
 
   const agregar = async () => {
@@ -132,8 +145,8 @@ export default function JefaturaEpp() {
                         return (
                           <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
                             <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
-                            {ubicEpp.map(u => { const v = total(c.id, u.id), bajo = c.stock_minimo > 0 && v < c.stock_minimo
-                              return <td key={u.id} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: bajo ? '#c0392b' : '#16213E', background: bajo ? '#fff5f5' : undefined }}>{v}</td> })}
+                            {ubicEpp.map(u => { const v = total(c.id, u.id), bajo = minDe(c, u.id) > 0 && v < minDe(c, u.id), igual = minDe(c, u.id) > 0 && v === minDe(c, u.id)
+                              return <td key={u.id} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: bajo ? '#c0392b' : igual ? '#b7791f' : '#16213E', background: bajo ? '#fff5f5' : igual ? '#fff8e5' : undefined }}>{v}</td> })}
                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{tot}</td>
                           </tr>)
                       })}
@@ -141,7 +154,25 @@ export default function JefaturaEpp() {
                   </table>
                 </div>
               )}
-              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo definido para ese EPP. Las tallas se suman en esta vista.</p>
+              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. Las tallas se suman en esta vista.</p>
+            </div>
+
+            <div style={{ ...card, marginBottom: '12px' }}>
+              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Stock mínimo por faena</p>
+              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Si dejas la celda vacía se usa el mínimo general del catálogo (gris). El prevencionista lo ve pero no lo puede editar.</p>
+              {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay faenas con control de EPP.</p> : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+                    <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '6px 8px' }}>EPP</th>{ubicEpp.map(u => <th key={u.id} style={{ padding: '6px 8px', textAlign: 'right' }}>{u.nombre}</th>)}</tr></thead>
+                    <tbody>{activos.map(c => (
+                      <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
+                        {ubicEpp.map(u => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === u.id)
+                          return <td key={u.id} style={{ padding: '4px 8px', textAlign: 'right' }}><input type="number" min="0" key={c.id + u.id + (m ? m.minimo : 'x') + c.stock_minimo} defaultValue={m ? m.minimo : ''} placeholder={String(c.stock_minimo || 0)} onBlur={e => guardarMin(c, u.id, e.target.value)} style={{ ...input, width: '64px', padding: '4px 6px', textAlign: 'right' }} /></td> })}
+                      </tr>))}</tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '12px', marginBottom: '12px' }}>

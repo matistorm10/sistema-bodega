@@ -21,6 +21,7 @@ export default function EppPrevencionista() {
   const [ubic, setUbic] = useState('')
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [stock, setStock] = useState<any[]>([])
+  const [minimos, setMinimos] = useState<any[]>([])
   const [movs, setMovs] = useState<any[]>([])
   const [certs, setCerts] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
@@ -48,13 +49,14 @@ export default function EppPrevencionista() {
   useEffect(() => { if (usuario && puede) cargarBase() }, [usuario, puede, cargarBase])
 
   const cargarUbic = useCallback(async () => {
-    if (!ubic) { setStock([]); setMovs([]); return }
-    const [s, m, us] = await Promise.all([
+    if (!ubic) { setStock([]); setMovs([]); setMinimos([]); return }
+    const [s, m, us, mn] = await Promise.all([
       supabase.from('pr_epp_stock').select('*').eq('ubicacion_id', ubic),
       supabase.from('pr_epp_movimientos').select('*').eq('ubicacion_id', ubic).order('created_at', { ascending: false }).limit(60),
       supabase.from('usuarios').select('id,nombre'),
+      supabase.from('pr_epp_minimos').select('*').eq('ubicacion_id', ubic),
     ])
-    setStock(s.data || []); setMovs(m.data || []); setUsuarios(us.data || [])
+    setMinimos(mn.data || []); setStock(s.data || []); setMovs(m.data || []); setUsuarios(us.data || [])
   }, [ubic])
   useEffect(() => { cargarUbic() }, [cargarUbic])
 
@@ -123,10 +125,12 @@ export default function EppPrevencionista() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Talla</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Stock</th></tr></thead>
               <tbody>{filas.map(r => {
-                const bajo = r.item.stock_minimo > 0 && (r.item.usa_talla ? r.stock : stock.filter(s => s.item_id === r.item.id).reduce((a, s) => a + s.stock, 0)) < r.item.stock_minimo
+                const min = (minimos.find(m => m.item_id === r.item.id)?.minimo ?? r.item.stock_minimo) || 0
+                const tot = r.item.usa_talla ? r.stock : stock.filter(s => s.item_id === r.item.id).reduce((a, s) => a + s.stock, 0)
+                const bajo = min > 0 && tot < min, igual = min > 0 && tot === min
                 return (
                   <tr key={r.key} style={{ borderTop: '1px solid #eef1f6' }}>
-                    <td style={{ padding: '7px 8px', fontWeight: 600 }}>{r.item.nombre}{bajo && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo ({r.item.stock_minimo})</span>}</td>
+                    <td style={{ padding: '7px 8px', fontWeight: 600 }}>{r.item.nombre}{bajo && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo ({min})</span>}{igual && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fff3cd', color: '#7a5600' }}>en el mínimo ({min})</span>}</td>
                     <td style={{ padding: '7px 8px', color: '#667085' }}>{r.talla || '—'}</td>
                     <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: r.stock === 0 ? '#c0392b' : '#16213E' }}>{r.stock}</td>
                   </tr>)

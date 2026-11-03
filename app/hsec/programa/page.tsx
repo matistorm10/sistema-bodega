@@ -37,6 +37,7 @@ export default function Programa() {
   const [msg, setMsg] = useState('')
   const [pendiente, setPendiente] = useState<{ actividad: string, registro?: any, r: { fecha: string, ubicacion_id: string | null, datos: any, porcentaje: number | null } } | null>(null)
   const [inicial, setInicial] = useState(false)
+  const [rechOtros, setRechOtros] = useState<any[]>([])
 
   const cargar = useCallback(async () => {
     if (!usuario || !cargo) { setCargando(false); return }
@@ -50,6 +51,8 @@ export default function Programa() {
     ])
     setDs132ids(new Set((nm.data || []).map((x: any) => x.ubicacion_id)))
     setMetas(m.data || []); setActs(a.data || []); setMensual(mm.data || null)
+    const { data: rr } = await supabase.from('pr_prog_actividades').select('mes,actividad,revision_comentario').eq('usuario_id', usuario.id).eq('revision_estado', 'rechazado')
+    setRechOtros(rr || [])
     const propias = usuario.esPrevencionista && usuario.rol !== 'admin' && !usuario.esJefeHsec ? await misUbicacionesIds(usuario.id) : null
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id))))
     setDescVerificado(usuario.esPrevencionista ? d.data?.estado === 'verificado' : true)
@@ -71,7 +74,11 @@ export default function Programa() {
     setInicial(true)
     if (new Date().getDate() > 5) return
     const prev = mesAnterior(mesActual())
-    supabase.from('pr_prog_mensual').select('estado').eq('usuario_id', usuario.id).eq('mes', prev).maybeSingle().then(({ data }) => {
+    Promise.all([
+      supabase.from('pr_prog_mensual').select('estado').eq('usuario_id', usuario.id).eq('mes', prev).maybeSingle(),
+      supabase.from('pr_prog_actividades').select('id').eq('usuario_id', usuario.id).eq('mes', mesActual()).eq('revision_estado', 'rechazado'),
+    ]).then(([{ data }, { data: rech }]) => {
+      if ((rech || []).length > 0) return // hay documentos rechazados este mes: se queda en el mes en curso
       if (!data || data.estado === 'abierto' || data.estado === 'devuelto') setMes(prev)
     })
   }, [usuario, cargo, inicial])
@@ -208,6 +215,11 @@ export default function Programa() {
                 color: plazo.tipo === 'atraso' ? '#9b1c1c' : plazo.tipo === 'ok' ? '#14532d' : '#7a5600' }}>
                 {plazo.tipo === 'atraso' ? '⚠️' : plazo.tipo === 'ok' ? '✅' : '🗓️'} {plazo.texto}
               </p>
+              {Array.from(new Set(rechOtros.filter(r => r.mes !== mes).map(r => r.mes))).sort().map(m => (
+                <div key={m} style={{ margin: '8px 0 0', fontSize: '13px', color: '#9b1c1c', background: '#fde8e8', border: '1px solid #f5c2c2', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span><strong>❌ Tienes documentos rechazados en {nombreMes(m)}:</strong> {rechOtros.filter(r => r.mes === m).map(r => `${ACTIVIDADES[r.actividad as keyof typeof ACTIVIDADES]?.nombre}${r.revision_comentario ? ' («' + r.revision_comentario + '»)' : ''}`).join(', ')}</span>
+                  <button onClick={() => setMes(m)} style={{ ...btn(), padding: '5px 12px', fontSize: '12px' }}>Ir a {nombreMes(m)}</button>
+                </div>))}
               {(() => { const rech = acts.filter(a => a.revision_estado === 'rechazado'); const pend = acts.filter(a => a.revision_estado === 'pendiente' && a.firmado_at).length; const apr = acts.filter(a => a.revision_estado === 'aprobado').length
                 return <>
                   <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#475467' }}>Revisión de la jefatura: ✅ {apr} aprobados · ⏳ {pend} pendientes · ❌ {rech.length} rechazados</p>

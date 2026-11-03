@@ -363,6 +363,12 @@ export default function Usuarios() {
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Acceso a módulos</label>
             <div style={{display:'grid',gap:'8px'}}>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoBodega} onChange={e=>setAccesoBodega(e.target.checked)}/>📦 Bodega</label>
+              {accesoBodega && (
+                <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
+                  <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo (CECO) que puede usar: marca si es origen y/o destino</label>
+                  {tablaPermisos(permisos, togglePermiso)}
+                </div>
+              )}
               <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
@@ -397,13 +403,6 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>{setEsPrevencionista(e.target.checked); if(e.target.checked) setEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
               <label style={checkboxLabel}><input type="checkbox" checked={veDocs} onChange={e=>setVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
             </div>
-          </div>
-        )}
-
-        {rol !== 'admin' && accesoBodega && (
-          <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega (marca si puede usarla como origen y/o destino en Traslado)</label>
-            {tablaPermisos(permisos, togglePermiso)}
           </div>
         )}
 
@@ -449,6 +448,12 @@ export default function Usuarios() {
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Acceso a módulos</label>
                       <div style={{display:'grid',gap:'8px'}}>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoBodega} onChange={e=>setEditAccesoBodega(e.target.checked)}/>📦 Bodega</label>
+                        {editAccesoBodega && (
+                          <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
+                            <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo (CECO) que puede usar: marca si es origen y/o destino</label>
+                            {tablaPermisos(editPermisos, toggleEditPermiso)}
+                          </div>
+                        )}
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
@@ -480,12 +485,6 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>{setEditEsPrevencionista(e.target.checked); if(e.target.checked) setEditEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editVeDocs} onChange={e=>setEditVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
                       </div>
-                    </div>
-                  )}
-                  {editRol !== 'admin' && editAccesoBodega && (
-                    <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Bodegas y centros de costo permitidos dentro de Bodega</label>
-                      {tablaPermisos(editPermisos, toggleEditPermiso)}
                     </div>
                   )}
                   {errorEdicion && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{errorEdicion}</p>}
@@ -530,15 +529,6 @@ export default function Usuarios() {
                       {u.es_jefe_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>📊 Jefatura Prevención de Riesgo</span>}
                       {u.es_prevencionista && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #137333',color:'#137333'}}>🦺 Prevencionista</span>}
                       {u.ve_documentos_contratos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fff',border:'1px solid #1B4F9C',color:'#1B4F9C'}}>📁 Ve documentos de contratos</span>}
-                    </div>
-                  )}
-                  {u.usuario_ubicaciones?.length > 0 && (
-                    <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
-                      {u.usuario_ubicaciones.map((p: any) => (
-                        <span key={p.ubicacion_id} style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#f1f3f4',color:'#555'}}>
-                          {p.ubicaciones?.nombre}{p.puede_origen && p.puede_destino ? ' (origen/destino)' : p.puede_origen ? ' (origen)' : p.puede_destino ? ' (destino)' : ''}
-                        </span>
-                      ))}
                     </div>
                   )}
                   <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>

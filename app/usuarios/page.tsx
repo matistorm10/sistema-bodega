@@ -62,6 +62,9 @@ export default function Usuarios() {
   const [nuevoRol, setNuevoRol] = useState('')
   const [errorRol, setErrorRol] = useState('')
   const [creandoRol, setCreandoRol] = useState(false)
+  const [rolesAbierto, setRolesAbierto] = useState(false)
+  const [renRol, setRenRol] = useState('')
+  const [renTxt, setRenTxt] = useState('')
 
   const cargar = () => {
     setCargando(true)
@@ -207,6 +210,18 @@ export default function Usuarios() {
     cargar()
   }
 
+  const renombrarRol = async (viejo: string) => {
+    setErrorRol('')
+    const nuevo = renTxt.trim().toLowerCase().replace(/\s+/g, '_')
+    if (!nuevo) { setErrorRol('Escribe el nuevo nombre del rol.'); return }
+    if (nuevo === viejo) { setRenRol(''); return }
+    const n = usuarios.filter(u => u.rol === viejo).length
+    if (!confirm(`¿Cambiar el nombre del rol «${nombreRolLegible(viejo)}» a «${nombreRolLegible(nuevo)}»?${n ? ` Se actualizará en ${n} usuario(s).` : ''}`)) return
+    const { error } = await supabase.from('roles').update({ nombre: nuevo }).eq('nombre', viejo)
+    if (error) { setErrorRol(error.code === '23505' ? 'Ya existe un rol con ese nombre.' : 'No se pudo cambiar: ' + error.message); return }
+    setRenRol(''); setRenTxt(''); cargar()
+  }
+
   const eliminarRol = async (nombreRol: string) => {
     if (nombreRol === 'admin') { alert('El rol "admin" no se puede eliminar.'); return }
     const enUso = usuarios.filter(u => u.rol === nombreRol).length
@@ -262,14 +277,25 @@ export default function Usuarios() {
       </div>
 
       <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1.5rem'}}>
-        <p style={{fontSize:'14px',fontWeight:'700',margin:'0 0 10px'}}>Roles</p>
+        <button type="button" onClick={()=>setRolesAbierto(v=>!v)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit'}}>
+          <span style={{fontSize:'14px',fontWeight:'700'}}>Roles <span style={{fontWeight:400,color:'#999'}}>({roles.length})</span></span>
+          <span style={{fontSize:'13px',color:AZUL}}>{rolesAbierto ? 'Cerrar ▲' : 'Abrir ▼'}</span>
+        </button>
+        {rolesAbierto && (<div style={{marginTop:'10px'}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'10px'}}>
-          {roles.map(r => (
+          {roles.map(r => renRol === r.nombre ? (
+            <span key={r.nombre} style={{display:'inline-flex',alignItems:'center',gap:'6px'}}>
+              <input autoFocus value={renTxt} onChange={e=>setRenTxt(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') renombrarRol(r.nombre); if(e.key==='Escape') setRenRol('') }} style={{...inputStyle,width:'150px',padding:'4px 8px'}}/>
+              <button onClick={()=>renombrarRol(r.nombre)} style={{border:'none',background:AZUL,color:'#fff',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',cursor:'pointer'}}>Guardar</button>
+              <button onClick={()=>setRenRol('')} style={{border:'none',background:'none',color:'#666',cursor:'pointer',fontSize:'12px'}}>Cancelar</button>
+            </span>
+          ) : (
             <span key={r.nombre} style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',padding:'4px 6px 4px 10px',borderRadius:'20px',background:r.nombre==='admin'?'#fef7e0':'#f1f3f4',color:r.nombre==='admin'?'#986a00':'#444'}}>
               {nombreRolLegible(r.nombre)}
-              {r.nombre !== 'admin' && (
+              {r.nombre !== 'admin' && (<>
+                <button onClick={()=>{ setRenRol(r.nombre); setRenTxt(nombreRolLegible(r.nombre)); setErrorRol('') }} title="Cambiar nombre del rol" style={{border:'none',background:'none',cursor:'pointer',color:AZUL,fontSize:'12px',padding:'0 2px',lineHeight:1}}>✎</button>
                 <button onClick={()=>eliminarRol(r.nombre)} title="Eliminar rol" style={{border:'none',background:'none',cursor:'pointer',color:'#c5221f',fontSize:'13px',padding:'0 2px',lineHeight:1}}>×</button>
-              )}
+              </>)}
             </span>
           ))}
         </div>
@@ -281,6 +307,7 @@ export default function Usuarios() {
         </div>
         {errorRol && <p style={{fontSize:'12px',color:'#c5221f',margin:'8px 0 0'}}>{errorRol}</p>}
         <p style={{fontSize:'11px',color:'#999',margin:'8px 0 0'}}>Un rol nuevo se comporta igual que “Bodeguero”: queda restringido a las ubicaciones que le asignes. Solo “admin” tiene acceso total.</p>
+        </div>)}
       </div>
 
       <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:'12px',padding:'16px',marginBottom:'1.5rem'}}>
@@ -296,7 +323,7 @@ export default function Usuarios() {
             <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Juan Pérez" style={inputStyle}/>
           </div>
           <div>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cargo</label>
+            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cargo <span style={{color:'#999',fontWeight:400}}>(solo informativo)</span></label>
             <input value={cargo} onChange={e=>setCargo(e.target.value)} placeholder="Ej: Bodeguero" style={inputStyle}/>
           </div>
         </div>
@@ -347,7 +374,7 @@ export default function Usuarios() {
         )}
 
         <div style={{marginBottom:'10px'}}>
-          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido (Prevención de Riesgo)</label>
+          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido y firmas (Prevención de Riesgo)</label>
           <select value={cargoPrograma} onChange={e=>setCargoPrograma(e.target.value)} style={inputStyle}>
             <option value="">No participa</option>
             {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -393,7 +420,7 @@ export default function Usuarios() {
                       <input value={editNombre} onChange={e=>setEditNombre(e.target.value)} style={inputStyle}/>
                     </div>
                     <div>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cargo</label>
+                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Cargo <span style={{color:'#999',fontWeight:400}}>(solo informativo)</span></label>
                       <input value={editCargo} onChange={e=>setEditCargo(e.target.value)} style={inputStyle}/>
                     </div>
                   </div>
@@ -431,7 +458,7 @@ export default function Usuarios() {
                     </div>
                   )}
                   <div style={{marginBottom:'10px'}}>
-                    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido (Prevención de Riesgo)</label>
+                    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido y firmas (Prevención de Riesgo)</label>
                     <select value={editCargoPrograma} onChange={e=>setEditCargoPrograma(e.target.value)} style={inputStyle}>
                       <option value="">No participa</option>
                       {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}

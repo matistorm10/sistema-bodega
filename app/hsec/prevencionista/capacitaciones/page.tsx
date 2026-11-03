@@ -10,10 +10,18 @@ import FormCharla from '@/components/programa/FormCharla'
 import { misUbicacionesIds } from '@/lib/prevencion'
 import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
+import { useVersionesCap } from '@/lib/capVersiones'
 import { desdeCiclo, etiquetaMes, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
+
+const AvisoFirma = ({ pendiente }: { pendiente: any }) => pendiente ? (
+  <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}>
+    <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>🔒 El calendario de capacitaciones está en firma (versión {pendiente.numero})</p>
+    <p style={{ margin: 0, fontSize: '12.5px', color: '#7a5600' }}>Mientras falten las firmas del Jefe, el Administrador de Faena y el Gerente General no se pueden registrar nuevas capacitaciones ni descargar el PDF. Se habilita solo cuando estén las tres.</p>
+  </div>) : null
 
 export default function CapPrevencionista() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
+  const { pendiente, vigente } = useVersionesCap(!!usuario)
   const esJefe = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
   const puede = esJefe || !!usuario?.esPrevencionista
   const [prog, setProg] = useState<any[]>([])
@@ -95,6 +103,7 @@ export default function CapPrevencionista() {
       </div>
       {!lugar && <p style={{ fontSize: '12px', color: '#986a00', margin: '0 0 10px' }}>La jefatura aún no clasifica esta faena (ENGIE / SQM / SACYR / oficina); por ahora ves todo el programa.</p>}
 
+      <AvisoFirma pendiente={pendiente} />
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msg}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '8px', marginBottom: '12px' }}>
         {[[`${cumpl}%`, 'Cumplimiento del programa', cumpl >= 100 ? '#1e8e4e' : cumpl >= 70 ? '#b7791f' : '#c0392b'], [pendientes.length, 'Por hacer o atrasadas', pendientes.length ? '#c0392b' : '#1e8e4e'], [charlasU.filter(c => c.fecha.slice(0, 7) === hoy).length, 'Capacitaciones este mes', '#16213E'], [charlasU.filter(c => !c.respaldo_path).length, 'Sin papel firmado', charlasU.some(c => !c.respaldo_path) ? '#b7791f' : '#1e8e4e']].map(([v, t, col]) => (
@@ -102,8 +111,8 @@ export default function CapPrevencionista() {
       </div>
       {form
         ? <FormCharla key={form.fecha + (form.prog || '')} usuario={{ id: usuario!.id, nombre: usuario!.nombre }} ubicId={ubic} ubicNombre={ubics.find(u => u.id === ubic)?.nombre || ''} programas={filas.map(f => f.p)} previos={previos} fechaIni={form.fecha} progIni={form.prog} onListo={async () => { setForm(null); await cargar() }} onCancelar={() => setForm(null)} />
-        : <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar capacitación</button><button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desdeCiclo(config, prog) }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={btn(false)}>📄 Descargar calendario (PDF)</button></div>}
-      <CalendarioCapacitaciones charlas={charlasU} asistCount={asistCount} filas={filas} puedeEditar onRegistrar={(fecha, prog) => { setForm({ fecha, prog }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onVer={abrirArchivo} onSubirPapel={subirPapel} subiendo={subiendo} />
+        : <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button disabled={!!pendiente} onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', opacity: pendiente ? 0.5 : 1 }}>＋ Registrar capacitación</button><button disabled={!!pendiente || !vigente} title={pendiente ? 'Disponible cuando estén las tres firmas' : ''} onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog: vigente!.snapshot || prog, desde: vigente!.desde || desdeCiclo(config, prog), version: vigente }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), opacity: pendiente ? 0.5 : 1 }}>📄 Descargar calendario (PDF)</button></div>}
+      <CalendarioCapacitaciones charlas={charlasU} asistCount={asistCount} filas={filas} puedeEditar onRegistrar={(fecha, prog) => { if (pendiente) { setMsg('El calendario está en firma: no se pueden registrar capacitaciones hasta que estén las tres firmas.'); return } setForm({ fecha, prog }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onVer={abrirArchivo} onSubirPapel={subirPapel} subiendo={subiendo} />
 
       <details style={card}>
         <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '14px' }}>Programa anual completo de esta faena</summary>

@@ -3,12 +3,13 @@ import autoTable from 'jspdf-autotable'
 import { entregarPDF } from '@/lib/abrirPDF'
 import { cargarLogo } from '@/lib/generarGuiaTraslado'
 import { ventana12, etiquetaMes } from '@/lib/capacitaciones'
+import { VersionCap, FIRMAS_CAP, firmaDe } from '@/lib/capVersiones'
 
 const CORTO: Record<string, string> = { oficina: 'Oficina', engie: 'ENGIE', sacyr: 'SACYR-EUROHINCA', sqm: 'SQM' }
 const largo = (k: string) => { const [y, m] = k.split('-').map(Number); return `${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][m - 1]} ${y}` }
 
 // Calendario anual de capacitaciones de la empresa (12 meses), listo para imprimir y pegar
-export async function generarCalendarioCapacitaciones(o: { prog: any[], desde: string }, ventana: Window | null) {
+export async function generarCalendarioCapacitaciones(o: { prog: any[], desde: string, version?: VersionCap | null }, ventana: Window | null) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const W = 297, M = 8
   const cols = ventana12(o.desde)
@@ -38,11 +39,32 @@ export async function generarCalendarioCapacitaciones(o: { prog: any[], desde: s
     columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 82 }, 2: { cellWidth: 38 }, ...Object.fromEntries(cols.map((_, i) => [3 + i, { cellWidth: 13.4, halign: 'center' }])) },
     didParseCell: d => { if (d.section === 'body' && d.column.index >= 3 && d.cell.raw === 'X') { d.cell.styles.fillColor = [27, 79, 156]; d.cell.text = [''] } },
   })
+  // Bloque de firmas (versión vigente): Elabora · Revisa · Aprueba
+  if (o.version) {
+    const v = o.version
+    let y = ((doc as any).lastAutoTable?.finalY || 40) + 8
+    const alto = 38
+    if (y + alto > 198) { doc.addPage(); y = 30 }
+    const bw = (W - 2 * M - 8) / 3
+    FIRMAS_CAP.forEach((f, i) => {
+      const x = M + i * (bw + 4), s = firmaDe(v, f.k)
+      doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(x, y, bw, alto)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(0)
+      doc.text(f.t.toUpperCase(), x + bw / 2, y + 5, { align: 'center' })
+      if (s.firma) { try { doc.addImage(s.firma, 'PNG', x + bw / 2 - 20, y + 7, 40, 15) } catch { /* firma ilegible */ } }
+      doc.line(x + 8, y + 24, x + bw - 8, y + 24)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8)
+      doc.text(s.nombre || '—', x + bw / 2, y + 28.5, { align: 'center' })
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
+      doc.text(f.cargo, x + bw / 2, y + 32.5, { align: 'center' })
+      doc.text(s.at ? new Date(s.at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '', x + bw / 2, y + 36, { align: 'center' })
+    })
+  }
   const n = doc.getNumberOfPages()
   for (let i = 1; i <= n; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90)
     doc.text('Celda azul = mes en que se realiza la capacitación. Los APR registran cada capacitación realizada, con su asistencia firmada, en el sistema.', M, 205)
-    doc.text(`Impreso el ${new Date().toLocaleDateString('es-CL')} · Página ${i} de ${n}`, W - M, 205, { align: 'right' })
+    doc.text(`${o.version ? `Versión ${o.version.numero} · ` : ''}Impreso el ${new Date().toLocaleDateString('es-CL')} · Página ${i} de ${n}`, W - M, 205, { align: 'right' })
   }
   entregarPDF(doc, `Calendario_Capacitaciones_${cols[0]}.pdf`, ventana)
 }

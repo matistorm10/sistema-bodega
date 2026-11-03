@@ -7,10 +7,12 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, input, label, btn } from '@/components/programa/ui'
 import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
+import { useVersionesCap } from '@/lib/capVersiones'
 import { LUGARES, ventana12, etiquetaMes, desdeCiclo, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
 
 export default function JefaturaCap() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
+  const { pendiente, vigente } = useVersionesCap(!!usuario)
   const puede = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
   const [prog, setProg] = useState<any[]>([])
   const [ubics, setUbics] = useState<any[]>([])
@@ -80,7 +82,7 @@ export default function JefaturaCap() {
           <>
             <div style={{ ...card, marginBottom: '12px', background: '#f6f8fb' }}><p style={{ margin: 0, fontSize: '12.5px', color: '#475467' }}>El grupo de cada faena (ENGIE, SQM, SACYR - EUROHINCA u oficina) se define en un solo lugar. <Link href="/hsec/jefatura/faenas" style={{ color: AZUL, fontWeight: 600 }}>Ir a Faenas y asignaciones →</Link></p></div>
 
-            <div style={{ marginBottom: '12px' }}><Link href="/hsec/jefatura/capacitaciones/calendario" style={{ display: 'inline-block', padding: '10px 18px', borderRadius: '10px', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>⚙️ Configurar calendario de capacitaciones</Link> <button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desdeCiclo(config, prog) }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), marginLeft: '8px'}}>📄 Descargar calendario (PDF)</button></div>
+            <div style={{ marginBottom: '12px' }}><Link href="/hsec/capacitaciones-firma" style={{ display: 'inline-block', padding: '10px 18px', borderRadius: '10px', border: '1px solid #d0d5dd', background: '#fff', color: '#344054', fontWeight: 700, fontSize: '14px', textDecoration: 'none', marginRight: '8px' }}>✍️ Firmas del calendario{pendiente ? ' (en firma)' : ''}</Link><Link href="/hsec/jefatura/capacitaciones/calendario" style={{ display: 'inline-block', padding: '10px 18px', borderRadius: '10px', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>⚙️ Configurar calendario de capacitaciones</Link> <button disabled={!!pendiente || !vigente} title={pendiente ? 'Disponible cuando estén las tres firmas' : ''} onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog: vigente!.snapshot || prog, desde: vigente!.desde || desdeCiclo(config, prog), version: vigente }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), marginLeft: '8px'}}>📄 Descargar calendario (PDF)</button></div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
               <select value={fLugar} onChange={e => setFLugar(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los grupos</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
               <select value={fUbic} onChange={e => setFUbic(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todas las faenas</option>{ubics.filter(u => lugarDe(u.id)).map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>

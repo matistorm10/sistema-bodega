@@ -7,12 +7,14 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
+import { useVersionesCap } from '@/lib/capVersiones'
 import { LUGARES, ventana12, etiquetaMes, sumaMes, desdeCiclo } from '@/lib/capacitaciones'
 
 const chip = (on: boolean, col = AZUL): React.CSSProperties => ({ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? col : '#d0d5dd'}`, background: on ? col : '#fff', color: on ? '#fff' : '#667085', fontWeight: on ? 700 : 500 })
 
 export default function ConfigCalendario() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
+  const { pendiente, vigente, recargar: recargarVer } = useVersionesCap(!!usuario)
   const puede = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
   const [prog, setProg] = useState<any[]>([])
   const [config, setConfig] = useState<any[]>([])
@@ -44,6 +46,7 @@ export default function ConfigCalendario() {
     setProg(l => l.map(x => x.id === p.id ? { ...x, ...patch } : x))
     const { error } = await supabase.from('pr_cap_programa').update(patch).eq('id', p.id)
     if (error) { setMsg('No se pudo guardar: ' + error.message); await cargar() }
+    recargarVer()
   }
   const toggleMes = (p: any, k: string) => {
     const meses = { ...(p.meses || {}) }
@@ -91,8 +94,13 @@ export default function ConfigCalendario() {
             <button onClick={() => fijarDesde(sumaMes(desde, 1))} style={{ ...btn(false), padding: '4px 10px' }}>›</button>
             <span style={{ fontSize: '12.5px', color: '#667085' }}>→ cubre {etiquetaMes(cols[0])} a {etiquetaMes(cols[11])} (12 meses). Cada mes lleva su año: marzo de este ciclo es marzo 2027 si el ciclo parte en 2026.</span>
           </div>
+          <div style={{ ...card, marginBottom: '12px', background: pendiente ? '#fff8e5' : '#f3fbf6', borderColor: pendiente ? '#f0d98a' : '#b9e2c8' }}>
+            {pendiente
+              ? <p style={{ margin: 0, fontSize: '12.5px', color: '#7a5600' }}>🔒 <b>Este calendario está en firma (versión {pendiente.numero}).</b> Firma tú primero como Jefe (elabora) y luego deben firmar el Administrador de Faena y el Gerente General. Mientras tanto no se registran capacitaciones nuevas. Si sigues modificando, las firmas se reinician. <Link href="/hsec/capacitaciones-firma" style={{ color: AZUL, fontWeight: 700 }}>Ir a firmar →</Link></p>
+              : <p style={{ margin: 0, fontSize: '12.5px', color: '#14532d' }}>✅ Versión {vigente?.numero} vigente. <b>Al modificar el calendario quedará en firma</b> (Jefe elabora · Administrador de Faena revisa · Gerente General aprueba) y se pausará el registro de capacitaciones hasta que estén las tres firmas.</p>}
+          </div>
           {msg && <p style={{ fontSize: '12.5px', color: '#c5221f' }}>{msg}</p>}
-          <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{!nuevo && <button onClick={() => setNuevo(true)} style={btn()}>＋ Agregar capacitación al calendario</button>}<button onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog, desde: desde }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), }}>📄 Descargar calendario (PDF)</button></div>
+          <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{!nuevo && <button onClick={() => setNuevo(true)} style={btn()}>＋ Agregar capacitación al calendario</button>}<button disabled={!!pendiente || !vigente} title={pendiente ? 'Disponible cuando estén las tres firmas' : ''} onClick={async () => { const v = abrirVentanaPDF(); try { await generarCalendarioCapacitaciones({ prog: vigente!.snapshot || prog, desde: vigente!.desde || desde, version: vigente }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) } }} style={{ ...btn(false), }}>📄 Descargar calendario (PDF)</button></div>
 
           {nuevo && (
             <div style={{ ...card, marginBottom: '12px', borderColor: '#cfe0f5' }}>

@@ -16,6 +16,7 @@ export default function Hsec() {
     { href: '/hsec/jefatura', icon: '📊', label: 'Panel de Jefatura', desc: 'Dashboard con los números de todas las faenas y prevencionistas', visible: veJefatura },
     { href: '/hsec/prevencionista', icon: '🦺', label: 'Espacio del Prevencionista', desc: 'Carga y seguimiento de la información de cada prevencionista', visible: vePrevencionista },
     { href: '/hsec/prevencionista/contratos', icon: '📁', label: 'Documentos de contratos', desc: 'PTS, matrices y planes de emergencia aprobados de cada contrato (solo lectura)', visible: !!usuario?.veDocumentos && !vePrevencionista },
+    { href: '/hsec/capacitaciones-firma', icon: '✍️', label: 'Firmas del calendario de capacitaciones', desc: 'Elabora (Jefe) · Revisa (Administrador de Faena) · Aprueba (Gerente General)', visible: veJefatura || usuario?.cargoPrograma === 'administrador_faena' || usuario?.cargoPrograma === 'gerente_general' },
   ].filter(s => s.visible)
 
   const cabecera = (

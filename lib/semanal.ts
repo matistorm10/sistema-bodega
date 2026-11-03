@@ -1,3 +1,4 @@
+import { INICIO_OPERACION } from '@/lib/inicio'
 export const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const aFecha = (s: string) => { const [a, m, d] = s.split('-').map(Number); return new Date(a, m - 1, d) }
@@ -13,7 +14,7 @@ export function ultimoCierre(diaCierre: number, hoy = new Date()): string {
 // Últimos n períodos, del más reciente al más antiguo.
 export function periodos(diaCierre: number, n = 6, hoy = new Date()): string[] {
   const d = aFecha(ultimoCierre(diaCierre, hoy))
-  return Array.from({ length: n }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() - 7 * i); return iso(x) })
+  return Array.from({ length: n }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() - 7 * i); return iso(x) }).filter(fin => fin >= INICIO_OPERACION)
 }
 export const inicioPeriodo = (fin: string) => { const d = aFecha(fin); d.setDate(d.getDate() - 6); return iso(d) }
 export const limiteEntrega = (fin: string, diasPlazo: number) => { const d = aFecha(fin); d.setDate(d.getDate() + diasPlazo); return iso(d) }

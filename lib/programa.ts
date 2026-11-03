@@ -1,3 +1,4 @@
+import { INICIO_MES } from '@/lib/inicio'
 export const CARGOS_PROGRAMA: Record<string, string> = {
   administrador_faena: 'Administrador de faena / contrato',
   jefe_prevencion: 'Jefe de prevención de riesgos',
@@ -83,7 +84,7 @@ export const nombreMes = (m: string) => {
 export const mesesRecientes = (n = 12) => {
   const h = new Date(); const out: string[] = []
   for (let i = 0; i < n; i++) { const d = new Date(h.getFullYear(), h.getMonth() - i, 1); out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`) }
-  return out
+  return out.filter(m => m >= INICIO_MES)
 }
 
 // Plazo para informar el programa de un mes: hasta el día 5 (inclusive) del mes siguiente.
@@ -95,6 +96,7 @@ export const textoPlazo = (m: string) => `${DIA_LIMITE} de ${nombreMes(mesSiguie
 
 // Semáforo del plazo: 'ok' (a tiempo), 'atraso' (venció sin enviar o enviado tarde), 'vigente' (aún en plazo o mes en curso)
 export function estadoPlazo(m: string, estado: string | undefined, enviadoAt?: string | null) {
+  if (m < INICIO_MES) return { tipo: 'vigente' as const, texto: 'Anterior al inicio del sistema' }
   const fin = finPlazo(m), ahora = new Date()
   const enviado = estado === 'enviado' || estado === 'aprobado'
   if (enviado) return enviadoAt && new Date(enviadoAt) > fin ? { tipo: 'atraso' as const, texto: 'Enviado con atraso' } : { tipo: 'ok' as const, texto: 'Enviado a tiempo' }

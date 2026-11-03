@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import ResumenAPR from '@/components/programa/ResumenAPR'
 
 const AZUL = '#1B4F9C'
 
@@ -20,12 +21,14 @@ export default function EspacioPrevencionista() {
 
   return (
     <main style={fondoPagina}>
-      <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'760px',margin:'0 auto'}}>
+      <div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif',maxWidth:'820px',margin:'0 auto'}}>
         <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1.5rem',background:'#fff',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)'}}>
           <Link href="/hsec" style={{fontSize:'13px',color:AZUL,textDecoration:'none'}}>← Prevención de Riesgo</Link>
           <h1 style={{fontSize:'20px',fontWeight:'600',margin:'0'}}>Espacio del Prevencionista</h1>
         </div>
         {!puede ? <p style={{fontSize:'13px',color:'#999'}}>No tienes acceso a esta sección. Pídele al administrador que te la habilite en Usuarios.</p> : (
+          <>
+          {usuario && <ResumenAPR usuario={usuario} />}
           <div style={{display:'grid',gap:'10px'}}>
             {secciones.map(item => (
               <Link key={item.href} href={item.href} style={{textDecoration:'none',color:'inherit',background:'#fff',border:'1px solid #e2e6ed',borderRadius:'14px',padding:'14px 16px',display:'flex',alignItems:'center',gap:'14px'}}>
@@ -37,6 +40,7 @@ export default function EspacioPrevencionista() {
               </Link>
             ))}
           </div>
+          </>
         )}
       </div>
     </main>

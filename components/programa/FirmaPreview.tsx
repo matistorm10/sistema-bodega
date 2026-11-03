@@ -6,8 +6,8 @@ import FirmaCanvas from './FirmaCanvas'
 import { card, btn } from './ui'
 
 // Paso final de un registro: vista previa del PDF → consentimiento → firma. Al confirmar entrega la firma a usar.
-export default function FirmaPreview({ registro, usuarioId, exigeDescriptor = true, onVolver, onConfirmar }: {
-  registro: Omit<RegistroPDF, 'firma' | 'firmadoAt'>, usuarioId: string, exigeDescriptor?: boolean, onVolver: () => void,
+export default function FirmaPreview({ registro, generar, usuarioId, exigeDescriptor = true, onVolver, onConfirmar }: {
+  registro?: Omit<RegistroPDF, 'firma' | 'firmadoAt'>, generar?: () => Promise<Blob>, usuarioId: string, exigeDescriptor?: boolean, onVolver: () => void,
   onConfirmar: (firma: string, firmaNueva: boolean) => Promise<void>,
 }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -20,7 +20,7 @@ export default function FirmaPreview({ registro, usuarioId, exigeDescriptor = tr
 
   useEffect(() => {
     let u: string | null = null, vivo = true
-    generarRegistroActividad(registro).then(b => { if (!vivo) return; u = URL.createObjectURL(b); setUrl(u) }).catch(e => setMsg('No se pudo generar la vista previa: ' + (e?.message || e)))
+    ;(generar ? generar() : generarRegistroActividad(registro!)).then(b => { if (!vivo) return; u = URL.createObjectURL(b); setUrl(u) }).catch(e => setMsg('No se pudo generar la vista previa: ' + (e?.message || e)))
     return () => { vivo = false; if (u) URL.revokeObjectURL(u) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

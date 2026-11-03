@@ -44,6 +44,13 @@ export default function JefaturaSemanales() {
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
+  const revisar = async (i: any, estado: 'aprobado' | 'rechazado') => {
+    let comentario: string | null = null
+    if (estado === 'rechazado') { const c = prompt('Motivo del rechazo (obligatorio, lo verá el prevencionista):'); if (!c || !c.trim()) return; comentario = c.trim() }
+    const { error } = await supabase.from('pr_informes_semanales').update({ revision: estado, revision_comentario: comentario }).eq('id', i.id)
+    if (error) { alert(error.message); return }
+    await cargar()
+  }
   const nombreU = (id: string) => prevs.find(p => p.id === id)?.nombre || '—'
   const crear = async () => {
     if (!nuevo.nombre.trim()) { setMsg('Escribe el nombre del cliente.'); return }
@@ -105,6 +112,21 @@ export default function JefaturaSemanales() {
                 </div>
               )
             })()}
+            {informes.some(i => i.revision === 'pendiente') && (
+              <div style={{ ...card, marginBottom: '12px', background: '#fff8e5', borderColor: '#f0d98a' }}>
+                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13.5px', color: '#7a5600' }}>⏳ Informes semanales por aprobar ({informes.filter(i => i.revision === 'pendiente').length})</p>
+                {informes.filter(i => i.revision === 'pendiente').sort((a, b) => b.periodo_fin.localeCompare(a.periodo_fin)).map(i => (
+                  <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid #f0e3b8', padding: '6px 0', fontSize: '12.5px' }}>
+                    <span><b>{clientes.find(c => c.id === i.cliente_id)?.nombre || '—'}</b> · semana al {fechaLarga(i.periodo_fin)} · {nombreU(i.usuario_id)}</span>
+                    <span style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={() => abrir(i.path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Ver</button>
+                      <button onClick={() => revisar(i, 'aprobado')} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>✓ Aprobar</button>
+                      <button onClick={() => revisar(i, 'rechazado')} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Rechazar</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ ...card, marginBottom: '12px' }}>
               <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Nuevo cliente / calendario</p>
               <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Cada cliente tiene su formato y su calendario: el día en que cierra su semana y cuántos días después se debe entregar el informe.</p>

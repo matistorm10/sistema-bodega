@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import FirmaPreview from '@/components/programa/FirmaPreview'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
@@ -175,10 +176,36 @@ export default function InformeDiario() {
     if (error) { setMsg('No se pudo registrar: ' + error.message); return }
     setComentRev(''); setMsg(''); setEdit(null); await cargar()
   }
+  // Autoguardado: 6 segundos después del último cambio se guarda el borrador solo
+  const ultimoAuto = useRef(''); const ocupadoAuto = useRef(false)
+  useEffect(() => {
+    if (!edit || !usuario || edit.estado !== 'borrador' || !edit.ubicacion_id || guardando) return
+    if (edit.id && lista.find(x => x.id === edit.id)?.creado_por !== usuario.id) return
+    const firma = JSON.stringify({ f: edit.fecha, u: edit.ubicacion_id, d: edit.d })
+    if (firma === ultimoAuto.current) return
+    const t = setTimeout(async () => {
+      if (ocupadoAuto.current) return
+      ocupadoAuto.current = true
+      const uid = (x: any) => ({ ...x, uid: x.uid || Math.random().toString(36).slice(2, 10) })
+      const datos: any = { ...edit.d, mejoras: edit.d.mejoras.map(uid), condiciones: edit.d.condiciones.map(uid), pendientes: edit.d.pendientes.map(uid) }
+      const cuerpo: any = { fecha: edit.fecha, ubicacion_id: edit.ubicacion_id, datos, updated_at: new Date().toISOString() }
+      const { data, error } = edit.id
+        ? await supabase.from('pr_informes_diarios').update(cuerpo).eq('id', edit.id).eq('estado', 'borrador').select().maybeSingle()
+        : await supabase.from('pr_informes_diarios').insert({ ...cuerpo, creado_por: usuario.id }).select().maybeSingle()
+      ocupadoAuto.current = false
+      if (error || !data) return
+      ultimoAuto.current = firma
+      setEdit(e => e && !e.id ? { ...e, id: data.id } : e)
+      setMsg('Autoguardado ' + new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) + ' ✓')
+      cargar()
+    }, 6000)
+    return () => clearTimeout(t)
+  }, [edit, usuario, guardando, lista, cargar])
   const nuevo = (fecha?: string) => setEdit({ fecha: typeof fecha === 'string' ? fecha : hoy(), ubicacion_id: faenas.length === 1 ? faenas[0].id : '', estado: 'borrador', d: informeNuevo(CARGO_APR) })
   const abrir = async (r: any) => { setComentRev(''); setMsg(''); setEdit({ id: r.id, fecha: r.fecha, ubicacion_id: r.ubicacion_id || '', estado: r.estado, d: { ...informeNuevo(CARGO_APR), ...r.datos, cargo: CARGO_APR, criticosL: (r.datos?.criticosL && r.datos.criticosL.length) ? r.datos.criticosL : (r.datos?.criticos ? [r.datos.criticos] : ['']) } }) }
 
-  const guardar = async (cerrar: boolean) => {
+  const [firmando, setFirmando] = useState(false)
+  const guardar = async (cerrar: boolean, firmado = false) => {
     if (!usuario || !edit) return
     if (!edit.ubicacion_id) { setMsg('Elige la faena.'); return }
     if (!edit.id && (edit.fecha > hoy() || edit.fecha < hace3())) { setMsg('La fecha debe ser hoy o hasta 3 días antes.'); return }
@@ -192,7 +219,7 @@ export default function InformeDiario() {
       const sinNombre = edit.d.condiciones.find(c => !c.item.trim() && (c.estado || c.obs))
       if (sinNombre) { setMsg('Hay una condición agregada sin nombre.'); return }
     }
-    if (cerrar && !confirm('Al cerrar, el informe se envía al Jefe para su aprobación y ya no podrás editarlo (salvo que lo rechace). ¿Enviarlo?')) return
+    if (cerrar && !firmado) { setMsg(''); setFirmando(true); return }
     setGuardando(true); setMsg('')
     const uid = (x: any) => ({ ...x, uid: x.uid || Math.random().toString(36).slice(2, 10) })
     const datos: any = { ...edit.d, mejoras: edit.d.mejoras.map(uid), condiciones: edit.d.condiciones.map(uid), pendientes: edit.d.pendientes.map(uid) }
@@ -204,6 +231,16 @@ export default function InformeDiario() {
     setGuardando(false)
     if (error) { setMsg(error.code === '23505' ? 'Ya existe un informe tuyo para esa faena y fecha. Ábrelo desde la lista.' : 'No se pudo guardar: ' + error.message); return }
     if (cerrar) { setEdit(null); await cargar() } else { setEdit({ ...edit, id: data?.id }); setMsg('Borrador guardado ✓'); await cargar() }
+  }
+  const confirmarFirma = async (firma: string, firmaNueva: boolean) => {
+    if (!usuario) return
+    const ahora = new Date().toISOString()
+    const { error } = firmaNueva
+      ? await supabase.from('firmas_usuario').upsert({ usuario_id: usuario.id, imagen: firma, consentimiento_at: ahora, updated_at: ahora })
+      : await supabase.from('firmas_usuario').update({ consentimiento_at: ahora }).eq('usuario_id', usuario.id)
+    if (error) throw new Error('No se pudo guardar tu firma: ' + error.message)
+    setFirmando(false)
+    await guardar(true, true)
   }
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este informe?')) return
@@ -234,6 +271,10 @@ export default function InformeDiario() {
   if (!puede) return wrap(<p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p>)
   if (cargando) return wrap(<p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p>)
 
+  if (edit && firmando) {
+    return wrap(<FirmaPreview usuarioId={usuario!.id} exigeDescriptor={false} onVolver={() => setFirmando(false)} onConfirmar={confirmarFirma}
+      generar={async () => (await generarInformeDiario({ fecha: edit.fecha, faena: faenas.find(x => x.id === edit.ubicacion_id)?.nombre || '', elaboro: usuario?.nombre || '', d: { ...informeNuevo(''), ...edit.d }, cerradoAt: null, firma: null }, 'blob')) as Blob} />)
+  }
   if (edit) {
     const d = edit.d
     const reg = edit.id ? lista.find(x => x.id === edit.id) : null

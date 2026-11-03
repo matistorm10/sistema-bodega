@@ -181,6 +181,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
   const [venceNuevo, setVenceNuevo] = useState<Record<string, string>>({})
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
+  const [auto, setAuto] = useState<any>(null)
   const rm = useMemo(() => { const m: Record<string, AudResp> = {}; resps.forEach(r => { m[r.item_id] = r }); return m }, [resps])
   const dpor = (id: string) => docs.filter(d => d.item_id === id)
   const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs, eppEst.ok)
@@ -199,6 +200,22 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
     if (error) { setMsg('No se pudo guardar: ' + error.message); return }
     await recargar()
   }
+  // Ítems que se responden solos con datos que el sistema ya tiene (solo si aún están pendientes)
+  const evaluarAuto = (it: AudItem): { ok: boolean, txt: string } | null => {
+    if (!auto) return null
+    if (it.fuente === 'trabajadores') return { ok: auto.trab_total > 0, txt: `${auto.trab_total} trabajador(es) activo(s) en el listado del contrato.` }
+    if (it.fuente === 'liderazgo') return { ok: auto.lider_total > 0 && auto.lider_aprobados === auto.lider_total, txt: `Programa de liderazgo de ${auto.mes}: ${auto.lider_aprobados} de ${auto.lider_total} aprobados por el Jefe.` }
+    if (it.fuente === 'epp_entrega') return { ok: auto.trab_total > 0 && auto.trab_con_entrega === auto.trab_total, txt: `${auto.trab_con_entrega} de ${auto.trab_total} trabajadores tienen entrega de EPP registrada en el módulo EPP.` }
+    return null
+  }
+  useEffect(() => { supabase.rpc('aud_auto', { p_lev: lev.id }).then(({ data }) => setAuto(data || null)) }, [lev.id, resps.length])
+  useEffect(() => {
+    if (!auto) return
+    items.forEach(it => {
+      const ev = evaluarAuto(it)
+      if (ev?.ok && !rm[it.id]) guardar(it, { estado: 'cumple', obs: 'Completado automáticamente: ' + ev.txt })
+    })
+  }, [auto]) // eslint-disable-line react-hooks/exhaustive-deps
   const marcar = async (it: AudItem, v: AudResp['estado']) => {
     const actual = rm[it.id]?.estado
     if (v === 'cumple' && actual !== 'cumple' && it.requiere_trabajador) {
@@ -208,6 +225,8 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
     } else if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'epp') {
       if (eppEst.total === 0) { setMsg(`Ítem ${it.numero || ''}: el Jefe aún no define qué EPP aplican ni carga sus certificados en el módulo EPP.`); return }
       if (!eppEst.ok) { setMsg(`Ítem ${it.numero || ''}: faltan certificados vigentes de ${eppEst.total - eppEst.conCert} EPP (los carga el Jefe en el módulo EPP).`); return }
+    } else if (v === 'cumple' && actual !== 'cumple' && evaluarAuto(it)?.ok) {
+      // respaldado por datos del sistema
     } else if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { setMsg(`Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
     await guardar(it, { estado: actual === v ? 'pendiente' : v })
   }
@@ -309,6 +328,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                 </div>
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
+                {(() => { const ev = evaluarAuto(it); return ev ? <p style={{ margin: '0 0 6px', fontSize: '12px', padding: '7px 10px', borderRadius: '8px', background: ev.ok ? '#f3fbf6' : '#fff8e5', border: `1px solid ${ev.ok ? '#b9e2c8' : '#f0d98a'}`, color: ev.ok ? '#14532d' : '#7a5600' }}>{ev.ok ? '✓ Se completa solo con datos del sistema: ' : '⏳ Se completará solo cuando se cumpla: '}{ev.txt}</p> : null })()}
                 {it.fuente === 'epp' && <BloqueEpp est={eppEst} abrirArchivo={abrirArchivo} />}
                 {it.requiere_trabajador && <SelectorTrab it={it} trabs={trabs} docs={docs} subiendo={subiendo === it.id} subirVarios={subirVarios} />}
                 {/* Documentos */}
@@ -557,7 +577,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
             setBusy(true); setMsg('')
             const { data, error } = await supabase.from('aud_formatos').insert({ nombre: 'SQM · Auditoría de Calificación P3', codigo: 'REG-PR-004 v002', descripcion: 'Reglamento de Contratistas y Subcontratistas SQM', usa_puntaje: true }).select().maybeSingle()
             if (error || !data) { setBusy(false); err(error); return }
-            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : null }))
+            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : i.n === 1 ? 'trabajadores' : i.n === 7 ? 'liderazgo' : i.n === 19 ? 'epp_entrega' : null }))
             const r = await supabase.from('aud_items').insert(filas)
             setBusy(false); if (r.error) { err(r.error); return }
             await recargar()

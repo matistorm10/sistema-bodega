@@ -94,13 +94,15 @@ export default function Semanales() {
                           <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 600 }}>Semana {fechaLarga(inicioPeriodo(fin))} al {fechaLarga(fin)}</p>
                           <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', background: bg, color: col, fontWeight: 600 }}>{ic} {e.texto}</span>
                           {inf && <span style={{ fontSize: '11.5px', color: '#667085', marginLeft: '8px' }}>{inf.archivo_nombre}</span>}
+                          {inf && <span style={{ fontSize: '11px', marginLeft: '8px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, background: inf.revision === 'aprobado' ? '#d7efe0' : inf.revision === 'rechazado' ? '#fde8e8' : '#fef7e0', color: inf.revision === 'aprobado' ? '#14532d' : inf.revision === 'rechazado' ? '#9b1c1c' : '#986a00' }}>{inf.revision === 'aprobado' ? '✓ Aprobado por el Jefe' : inf.revision === 'rechazado' ? 'Rechazado' : 'Por aprobar'}</span>}
+                          {inf?.revision === 'rechazado' && inf.revision_comentario && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#9b1c1c' }}>Motivo: {inf.revision_comentario}. Corrígelo y vuelve a subirlo.</p>}
                         </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           {inf && <button onClick={() => abrir(inf.path)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>Ver</button>}
-                          <label style={{ ...btn(!inf), padding: '5px 12px', fontSize: '12px', display: 'inline-block' }}>
+                          {inf?.revision !== 'aprobado' && <label style={{ ...btn(!inf), padding: '5px 12px', fontSize: '12px', display: 'inline-block' }}>
                             {subiendo === c.id + fin ? 'Subiendo...' : inf ? 'Reemplazar' : 'Subir informe'}
                             <input type="file" style={{ display: 'none' }} onChange={ev => { const f = ev.target.files?.[0]; if (f) subir(c, fin, f); ev.target.value = '' }} />
-                          </label>
+                          </label>}
                         </div>
                       </div>
                     )

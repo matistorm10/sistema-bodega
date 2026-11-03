@@ -8,7 +8,7 @@ import { estadoPlan } from '@/lib/estadoPlan'
 const sn = (v: string) => v === 'si' ? 'Sí' : v === 'no' ? 'No' : '—'
 const ce = (v: string) => v === 'C' ? 'Conforme' : v === 'NC' ? 'No conforme' : v === 'NA' ? 'N/A' : '—'
 
-export async function generarInformeDiario(o: { fecha: string, faena: string, elaboro: string, d: DatosInforme, cerradoAt?: string | null, firma?: string | null }, ventana: Window | null) {
+export async function generarInformeDiario(o: { fecha: string, faena: string, elaboro: string, d: DatosInforme, cerradoAt?: string | null, firma?: string | null }, ventana: Window | null | 'blob'): Promise<Blob | void> {
   const { d } = o
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const W = 210, M = 12
@@ -78,5 +78,6 @@ export async function generarInformeDiario(o: { fecha: string, faena: string, el
 
   const n = doc.getNumberOfPages()
   for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Informe diario SSO · ${o.faena} · ${fecha} · Página ${i} de ${n}`, W / 2, 291, { align: 'center' }) }
+  if (ventana === 'blob') return doc.output('blob') as Blob
   entregarPDF(doc, `Informe_diario_SSO_${o.faena.replace(/\s+/g, '_')}_${o.fecha}.pdf`, ventana)
 }

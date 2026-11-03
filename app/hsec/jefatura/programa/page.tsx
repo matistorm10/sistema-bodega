@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, input, Barra } from '@/components/programa/ui'
+import EditorMetas from '@/components/programa/EditorMetas'
 import MiFirma from '@/components/programa/MiFirma'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
 import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior, textoPlazo } from '@/lib/programa'
@@ -118,6 +119,7 @@ export default function JefaturaPrograma() {
                 <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📥 {pend.length} documento(s) esperando tu aprobación o rechazo</p>
                 {personas.filter(u => pend.some((a: any) => a.usuario_id === u.id)).map(u => <button key={u.id} onClick={() => setAbierto(u.id)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', margin: '2px 6px 2px 0' }}>{u.nombre} ({pend.filter((a: any) => a.usuario_id === u.id).length}) → Revisar</button>)}
               </div>) : null })()}
+            <EditorMetas metas={metas} onCambio={cargar} />
             {usuario && <MiFirma usuarioId={usuario.id} />}
             <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '12px' }}>
               {Array.from(new Set([mes, ...mesesRecientes(12)])).sort().reverse().map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}

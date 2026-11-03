@@ -23,6 +23,7 @@ export default function JefaturaContratos() {
   const [clientes, setClientes] = useState<any[]>([])
   const [asig, setAsig] = useState<any[]>([])
   const [personal, setPersonal] = useState<any[]>([])
+  const [admins, setAdmins] = useState<any[]>([])
   const [aAsignar, setAAsignar] = useState<Record<string, string>>({})
   const [hist, setHist] = useState<Record<string, any[]>>({})
   const [cargando, setCargando] = useState(true)
@@ -42,9 +43,9 @@ export default function JefaturaContratos() {
       supabase.from('pr_contrato_documentos').select('*').order('nombre'),
       supabase.from('pr_clientes_informe').select('id,nombre').eq('activo', true).order('nombre'),
       supabase.from('pr_contrato_apr').select('*'),
-      supabase.from('usuarios').select('id,nombre,es_prevencionista,ve_documentos_contratos').order('nombre'),
+      supabase.from('usuarios').select('id,nombre,es_prevencionista,ve_documentos_contratos,cargo_programa').order('nombre'),
     ])
-    setAsig(ap.data || []); setPersonal((us.data || []).filter((u: any) => u.es_prevencionista || u.ve_documentos_contratos))
+    setAsig(ap.data || []); setAdmins((us.data || []).filter((u: any) => u.cargo_programa === 'administrador_faena')); setPersonal((us.data || []).filter((u: any) => u.es_prevencionista || u.ve_documentos_contratos))
     setContratos(c.data || []); setDocs(d.data || []); setClientes(cl.data || []); setCargando(false)
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
@@ -198,6 +199,13 @@ export default function JefaturaContratos() {
                       const libres = personal.filter(u => !mios2.some(a => a.usuario_id === u.id))
                       return (
                         <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
+                          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>🖊️ Administrador de faena / contrato <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· firma como "Revisa" cuando cambia el calendario de capacitaciones de este contrato</span></p>
+                          {usuario?.rol === 'admin' ? (
+                            <select value={c.admin_faena_id || ''} onChange={async e => { if (!err((await supabase.from('pr_contratos').update({ admin_faena_id: e.target.value || null }).eq('id', c.id)).error)) await cargar() }} style={{ ...input, marginBottom: '12px' }}>
+                              <option value="">Sin asignar (firma cualquier Administrador de faena)</option>
+                              {admins.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                            </select>
+                          ) : <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#344054' }}>{c.admin_faena_id ? (admins.find(u => u.id === c.admin_faena_id)?.nombre || '—') : 'Sin asignar (solo el administrador lo asigna)'}</p>}
                           <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>👥 Personal asignado <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '12px' }}>· solo ellos ven los documentos y pueden elegir este contrato en sus informes</span></p>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             {mios2.length === 0 && <span style={{ fontSize: '12.5px', color: '#9b1c1c' }}>Nadie asignado todavía.</span>}

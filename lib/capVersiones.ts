@@ -7,7 +7,10 @@ export type VersionCap = {
   elabora_por: string | null, elabora_nombre: string | null, elabora_cargo: string | null, elabora_firma: string | null, elabora_at: string | null,
   revisa_por: string | null, revisa_nombre: string | null, revisa_cargo: string | null, revisa_firma: string | null, revisa_at: string | null,
   aprueba_por: string | null, aprueba_nombre: string | null, aprueba_cargo: string | null, aprueba_firma: string | null, aprueba_at: string | null,
+  revisiones?: Revision[],
 }
+export type Revision = { version_id: string, usuario_id: string, nombre: string | null, cargo: string | null, firma: string | null, firmado_at: string | null }
+export type Requerido = { usuario_id: string, nombre: string, contratos: string, firmado: boolean }
 // Orden de firmas del calendario: el Jefe elabora → el Administrador de Faena revisa → el Gerente General aprueba
 export const FIRMAS_CAP = [
   { k: 'elabora', t: 'Elabora', cargo: 'Jefe de Prevención de Riesgos' },
@@ -31,12 +34,18 @@ export const rolQuePuedeFirmar = (u: { rol?: string, esJefeHsec?: boolean, cargo
 export function useVersionesCap(activo = true) {
   const [versiones, setVersiones] = useState<VersionCap[]>([])
   const [cargado, setCargado] = useState(false)
+  const [requeridos, setRequeridos] = useState<Requerido[]>([])
   const recargar = useCallback(async () => {
-    const { data } = await supabase.from('pr_cap_versiones').select('*').order('numero', { ascending: false })
-    setVersiones((data || []) as VersionCap[]); setCargado(true)
+    const [{ data }, { data: revs }] = await Promise.all([
+      supabase.from('pr_cap_versiones').select('*').order('numero', { ascending: false }),
+      supabase.from('pr_cap_revisiones').select('*').order('firmado_at'),
+    ])
+    const vs = ((data || []) as VersionCap[]).map(v => ({ ...v, revisiones: ((revs || []) as Revision[]).filter(r => r.version_id === v.id) }))
+    setVersiones(vs); setCargado(true)
+    if (vs.some(v => v.estado === 'pendiente')) { const { data: rq } = await supabase.rpc('cap_revisores_requeridos'); setRequeridos((rq || []) as Requerido[]) } else setRequeridos([])
   }, [])
   useEffect(() => { if (activo) recargar() }, [activo, recargar])
   const pendiente = versiones.find(v => v.estado === 'pendiente') || null
   const vigente = versiones.find(v => v.estado === 'vigente') || null
-  return { versiones, pendiente, vigente, cargado, recargar }
+  return { versiones, pendiente, vigente, cargado, recargar, requeridos }
 }

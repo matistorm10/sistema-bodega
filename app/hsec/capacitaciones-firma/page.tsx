@@ -18,7 +18,7 @@ export default function FirmaCalendario() {
   const esJefe = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
   const miRol = rolQuePuedeFirmar(usuario)
   const puede = esJefe || !!usuario?.cargoPrograma
-  const { versiones, pendiente, vigente, cargado, recargar } = useVersionesCap(!!usuario && puede)
+  const { versiones, pendiente, vigente, cargado, recargar, requeridos } = useVersionesCap(!!usuario && puede)
   const [prog, setProg] = useState<any[]>([])
   const [config, setConfig] = useState<any[]>([])
   const [miFirma, setMiFirma] = useState<string | null | undefined>(undefined)
@@ -71,15 +71,31 @@ export default function FirmaCalendario() {
   if (cargandoUsuario) return <main style={fondoPagina}><div style={{ padding: '1.5rem' }}><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></div></main>
   const cols = ventana12(desdeCiclo(config, prog))
   const sig = pendiente ? siguienteFirma(pendiente) : null
-  const meToca = !!pendiente && !!sig && miRol === sig
+  const meToca = !!pendiente && !!sig && (sig === 'revisa' && requeridos.length > 0 ? requeridos.some(r => r.usuario_id === usuario?.id && !r.firmado) : miRol === sig)
   const usarGuardada = !!miFirma && !cambiar
   const anteriores = versiones.filter(v => v.estado === 'vigente' && (!!pendiente || v.id !== vigente?.id))
-  const yaFirme = !!pendiente && !!usuario && [pendiente.elabora_por, pendiente.revisa_por, pendiente.aprueba_por].includes(usuario.id)
+  const yaFirme = !!pendiente && !!usuario && ([pendiente.elabora_por, pendiente.aprueba_por].includes(usuario.id) || !!pendiente.revisiones?.some(r => r.usuario_id === usuario.id))
 
   const caja = (v: VersionCap) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '8px' }}>
       {FIRMAS_CAP.map(f => {
         const s = firmaDe(v, f.k); const turno = v.estado === 'pendiente' && siguienteFirma(v) === f.k
+        if (f.k === 'revisa' && (requeridos.length > 0 || (v.revisiones?.length || 0) > 0)) {
+          const filas = v.estado === 'pendiente' ? requeridos.map(r => ({ id: r.usuario_id, nombre: r.nombre, sub: r.contratos, rev: v.revisiones?.find(x => x.usuario_id === r.usuario_id) })) : (v.revisiones || []).map(x => ({ id: x.usuario_id, nombre: x.nombre || '', sub: '', rev: x }))
+          return (
+            <div key={f.k} style={{ border: `1px solid ${s.at ? '#b9e2c8' : turno ? '#f0d98a' : '#e2e6ed'}`, background: s.at ? '#f3fbf6' : turno ? '#fffaf0' : '#fff', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#667085' }}>{f.t.toUpperCase()} · Administrador de contrato</p>
+              {filas.map(x => (
+                <div key={x.id} style={{ borderTop: '1px solid #eef1f6', marginTop: '4px', paddingTop: '4px' }}>
+                  <div style={{ height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{x.rev?.firma ? <img src={x.rev.firma} alt="" style={{ maxHeight: '34px', maxWidth: '100%' }} /> : <span style={{ fontSize: '11px', color: '#b7791f' }}>⏳ pendiente</span>}</div>
+                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>{x.nombre}</p>
+                  {x.sub && <p style={{ margin: 0, fontSize: '10.5px', color: '#98a2b3' }}>Contratos: {x.sub}</p>}
+                  {x.rev?.firmado_at && <p style={{ margin: 0, fontSize: '11px', color: '#98a2b3' }}>{fh(x.rev.firmado_at)}</p>}
+                </div>
+              ))}
+            </div>
+          )
+        }
         return (
           <div key={f.k} style={{ border: `1px solid ${s.at ? '#b9e2c8' : turno ? '#f0d98a' : '#e2e6ed'}`, background: s.at ? '#f3fbf6' : turno ? '#fffaf0' : '#fff', borderRadius: '10px', padding: '8px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#667085' }}>{f.t.toUpperCase()} · {f.cargo}</p>
@@ -125,7 +141,7 @@ export default function FirmaCalendario() {
                   <button onClick={() => firmar(sig!)} disabled={enviando || !acepta || (!usarGuardada && !dibujada)} style={{ ...btn(), opacity: enviando || !acepta || (!usarGuardada && !dibujada) ? 0.5 : 1 }}>{enviando ? 'Firmando...' : 'Firmar'}</button>
                 </div>
               )}
-              {!meToca && sig && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#667085' }}>{yaFirme ? 'Ya firmaste. ' : ''}Falta la firma de: <b>{FIRMAS_CAP.find(f => f.k === sig)?.cargo}</b>.</p>}
+              {!meToca && sig && <p style={{ margin: '10px 0 0', fontSize: '12.5px', color: '#667085' }}>{yaFirme ? 'Ya firmaste. ' : ''}Falta la firma de: <b>{sig === 'revisa' && requeridos.length > 0 ? requeridos.filter(r => !r.firmado).map(r => r.nombre).join(', ') : FIRMAS_CAP.find(f => f.k === sig)?.cargo}</b>.</p>}
             </div>
           ) : (
             <div style={{ ...card, marginBottom: '12px', borderColor: '#b9e2c8' }}>

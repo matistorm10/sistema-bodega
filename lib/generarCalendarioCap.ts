@@ -49,6 +49,20 @@ export async function generarCalendarioCapacitaciones(o: { prog: any[], desde: s
     FIRMAS_CAP.forEach((f, i) => {
       const x = M + i * (bw + 4), s = firmaDe(v, f.k)
       doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(x, y, bw, alto)
+      if (f.k === 'revisa' && (v.revisiones?.length || 0) > 1) {
+        const rs = v.revisiones!, sw = bw / rs.length
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(0)
+        doc.text('REVISA · ADMINISTRADOR DE CONTRATO', x + bw / 2, y + 5, { align: 'center' })
+        rs.forEach((r, j) => {
+          const cx = x + j * sw
+          if (r.firma) { try { doc.addImage(r.firma, 'PNG', cx + sw / 2 - Math.min(18, sw / 2 - 3), y + 7, Math.min(36, sw - 6), 15) } catch { /* firma ilegible */ } }
+          doc.line(cx + 4, y + 24, cx + sw - 4, y + 24)
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text(r.nombre || '—', cx + sw / 2, y + 28.5, { align: 'center', maxWidth: sw - 4 })
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7)
+          doc.text(r.firmado_at ? new Date(r.firmado_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '', cx + sw / 2, y + 36, { align: 'center' })
+        })
+        return
+      }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(0)
       doc.text(f.t.toUpperCase(), x + bw / 2, y + 5, { align: 'center' })
       if (s.firma) { try { doc.addImage(s.firma, 'PNG', x + bw / 2 - 20, y + 7, 40, 15) } catch { /* firma ilegible */ } }

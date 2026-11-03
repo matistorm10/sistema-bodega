@@ -391,15 +391,22 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
+        {accesoContabilidad && (
+          <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
+            <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
+            <div style={{display:'grid',gap:'8px'}}>
+              <label style={checkboxLabel}><input type="checkbox" checked={puedeAprobar} onChange={e=>setPuedeAprobar(e.target.checked)}/>✅ Puede aprobar rendiciones y guías de traslado</label>
+              <label style={checkboxLabel}><input type="checkbox" checked={esRevisor} onChange={e=>setEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
+            </div>
+          </div>
+        )}
               <label style={checkboxLabel}><input type="checkbox" checked={accesoHsec} onChange={e=>setAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
               {accesoHsec && bloqueHsec({cargo:cargoPrograma,setCargo:setCargoPrograma,jefe:esJefeHsec,setJefe:setEsJefeHsec,prev:esPrevencionista,setPrev:setEsPrevencionista,ve:veDocs,setVe:setVeDocs})}
             </div>
           </div>
         )}
 
-        {rol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:cargoPrograma,setCargo:setCargoPrograma,jefe:esJefeHsec,setJefe:setEsJefeHsec,prev:esPrevencionista,setPrev:setEsPrevencionista,ve:veDocs,setVe:setVeDocs})}</div>}
-
-        {(rol === 'admin' || accesoContabilidad) && (
+        {rol === 'admin' && (
           <div style={{marginBottom:'10px'}}>
             <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
             <div style={{display:'grid',gap:'8px'}}>
@@ -407,7 +414,9 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={esRevisor} onChange={e=>setEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
             </div>
           </div>
-        )}
+        )}        {rol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:cargoPrograma,setCargo:setCargoPrograma,jefe:esJefeHsec,setJefe:setEsJefeHsec,prev:esPrevencionista,setPrev:setEsPrevencionista,ve:veDocs,setVe:setVeDocs})}</div>}
+
+
 
 
         {error && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{error}</p>}
@@ -461,13 +470,21 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
+                  {editAccesoContabilidad && (
+                    <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
+                      <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
+                      <div style={{display:'grid',gap:'8px'}}>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editPuedeAprobar} onChange={e=>setEditPuedeAprobar(e.target.checked)}/>✅ Puede aprobar rendiciones y guías de traslado</label>
+                        <label style={checkboxLabel}><input type="checkbox" checked={editEsRevisor} onChange={e=>setEditEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
+                      </div>
+                    </div>
+                  )}
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoHsec} onChange={e=>setEditAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
                         {editAccesoHsec && bloqueHsec({cargo:editCargoPrograma,setCargo:setEditCargoPrograma,jefe:editEsJefeHsec,setJefe:setEditEsJefeHsec,prev:editEsPrevencionista,setPrev:setEditEsPrevencionista,ve:editVeDocs,setVe:setEditVeDocs})}
                       </div>
                     </div>
                   )}
-                  {editRol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:editCargoPrograma,setCargo:setEditCargoPrograma,jefe:editEsJefeHsec,setJefe:setEditEsJefeHsec,prev:editEsPrevencionista,setPrev:setEditEsPrevencionista,ve:editVeDocs,setVe:setEditVeDocs})}</div>}
-                  {(editRol === 'admin' || editAccesoContabilidad) && (
+                  {editRol === 'admin' && (
                     <div style={{marginBottom:'10px'}}>
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
                       <div style={{display:'grid',gap:'8px'}}>
@@ -475,7 +492,8 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsRevisor} onChange={e=>setEditEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
                       </div>
                     </div>
-                  )}
+                  )}                  {editRol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:editCargoPrograma,setCargo:setEditCargoPrograma,jefe:editEsJefeHsec,setJefe:setEditEsJefeHsec,prev:editEsPrevencionista,setPrev:setEditEsPrevencionista,ve:editVeDocs,setVe:setEditVeDocs})}</div>}
+
                   {errorEdicion && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{errorEdicion}</p>}
                   <div style={{display:'flex',gap:'8px'}}>
                     <button onClick={()=>guardarEdicion(u.id)} disabled={guardandoEdicion} style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',background:AZUL,color:'#fff',fontSize:'13px',fontWeight:'600',cursor:'pointer',opacity:guardandoEdicion?0.6:1}}>

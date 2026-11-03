@@ -74,7 +74,7 @@ export default function CapPrevencionista() {
   const cab = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', background: '#fff', borderRadius: '16px', padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
       <Link href="/hsec/prevencionista/sso" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← SSO Faena</Link>
-      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Capacitaciones y charlas {anio}</h1>
+      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Capacitaciones {anio}</h1>
     </div>
   )
   if (cargandoUsuario) return <main style={fondoPagina}><div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif' }}><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></div></main>
@@ -93,12 +93,12 @@ export default function CapPrevencionista() {
 
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msg}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '8px', marginBottom: '12px' }}>
-        {[[`${cumpl}%`, 'Cumplimiento del programa', cumpl >= 100 ? '#1e8e4e' : cumpl >= 70 ? '#b7791f' : '#c0392b'], [pendientes.length, 'Por hacer o atrasadas', pendientes.length ? '#c0392b' : '#1e8e4e'], [charlasU.filter(c => c.fecha.slice(0, 7) === hoy).length, 'Charlas este mes', '#16213E'], [charlasU.filter(c => !c.respaldo_path).length, 'Sin papel firmado', charlasU.some(c => !c.respaldo_path) ? '#b7791f' : '#1e8e4e']].map(([v, t, col]) => (
+        {[[`${cumpl}%`, 'Cumplimiento del programa', cumpl >= 100 ? '#1e8e4e' : cumpl >= 70 ? '#b7791f' : '#c0392b'], [pendientes.length, 'Por hacer o atrasadas', pendientes.length ? '#c0392b' : '#1e8e4e'], [charlasU.filter(c => c.fecha.slice(0, 7) === hoy).length, 'Capacitaciones este mes', '#16213E'], [charlasU.filter(c => !c.respaldo_path).length, 'Sin papel firmado', charlasU.some(c => !c.respaldo_path) ? '#b7791f' : '#1e8e4e']].map(([v, t, col]) => (
           <div key={String(t)} style={{ ...card, padding: '10px 12px', textAlign: 'center' }}><p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: String(col) }}>{v}</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#667085' }}>{t}</p></div>))}
       </div>
       {form
         ? <FormCharla key={form.fecha + (form.prog || '')} usuario={{ id: usuario!.id, nombre: usuario!.nombre }} ubicId={ubic} ubicNombre={ubics.find(u => u.id === ubic)?.nombre || ''} programas={filas.map(f => f.p)} previos={previos} fechaIni={form.fecha} progIni={form.prog} onListo={async () => { setForm(null); await cargar() }} onCancelar={() => setForm(null)} />
-        : <div style={{ marginBottom: '12px' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar charla</button></div>}
+        : <div style={{ marginBottom: '12px' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar capacitación</button></div>}
       <CalendarioCapacitaciones anio={anio} charlas={charlasU} asistCount={asistCount} filas={filas} puedeEditar onRegistrar={(fecha, prog) => { setForm({ fecha, prog }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onVer={abrirArchivo} onSubirPapel={subirPapel} subiendo={subiendo} />
 
       <details style={card}>

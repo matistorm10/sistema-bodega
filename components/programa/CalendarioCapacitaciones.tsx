@@ -46,10 +46,10 @@ export default function CalendarioCapacitaciones({ anio, charlas, asistCount, fi
         </div>
         {ayuda && (
           <div style={{ background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '10px', padding: '10px 12px', fontSize: '12.5px', color: '#344054', marginBottom: '10px', lineHeight: 1.5 }}>
-            • Cada día con charla muestra un número: cuántas charlas hiciste.<br />
-            • <b style={{ color: '#14532d' }}>Verde ✓</b> = charla con el papel firmado subido · <b style={{ color: '#986a00' }}>Amarillo</b> = charla hecha, falta subir el papel firmado.<br />
+            • Cada día con capacitación muestra un número: cuántas hiciste.<br />
+            • <b style={{ color: '#14532d' }}>Verde ✓</b> = capacitación con el papel firmado subido · <b style={{ color: '#986a00' }}>Amarillo</b> = capacitación hecha, falta subir el papel firmado.<br />
             • Debajo del calendario ves <b>qué capacitaciones del programa tocan ese mes</b>: toca «Registrar» y se abre el formulario ya con el tema.<br />
-            • Toca un día para ver sus charlas{puedeEditar ? ' o registrar una nueva en esa fecha' : ''}.
+            • Toca un día para ver sus capacitaciones{puedeEditar ? ' o registrar una nueva en esa fecha' : ''}.
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
@@ -74,9 +74,9 @@ export default function CalendarioCapacitaciones({ anio, charlas, asistCount, fi
           <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '4px' }}>
               <p style={{ margin: 0, fontWeight: 700, fontSize: '13.5px' }}>{fechaLarga(sel)}{sel === hoy ? ' · hoy' : ''}</p>
-              {puedeEditar && sel <= hoy && <button onClick={() => onRegistrar(sel)} style={{ ...btn(), padding: '5px 12px', fontSize: '12px' }}>＋ Registrar charla este día</button>}
+              {puedeEditar && sel <= hoy && <button onClick={() => onRegistrar(sel)} style={{ ...btn(), padding: '5px 12px', fontSize: '12px' }}>＋ Registrar capacitación este día</button>}
             </div>
-            {delDia.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin charlas este día.</p>}
+            {delDia.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>Sin capacitaciones este día.</p>}
             {delDia.map(c => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderTop: '1px solid #f0f2f6' }}>
                 <div style={{ flex: '1 1 200px' }}>

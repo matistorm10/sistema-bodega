@@ -52,19 +52,19 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
     if (error || !data) { setGuardando(false); setMsg('No se pudo guardar: ' + (error?.message || '')); return }
     if (marcados.length) {
       const { error: e2 } = await supabase.from('pr_charla_asistentes').insert(marcados.map(a => ({ charla_id: data.id, nombre: a.nombre, rut: a.rut || null })))
-      if (e2) { setGuardando(false); setMsg('La charla se guardó, pero fallaron los asistentes: ' + e2.message); return }
+      if (e2) { setGuardando(false); setMsg('La capacitación se guardó, pero fallaron los asistentes: ' + e2.message); return }
     }
     setGuardando(false); onListo()
   }
   const paso = (n: number, t: string) => <p style={{ margin: '12px 0 6px', fontWeight: 700, fontSize: '13px', color: '#16213E' }}><span style={{ display: 'inline-block', width: '20px', height: '20px', lineHeight: '20px', textAlign: 'center', borderRadius: '50%', background: AZUL, color: '#fff', fontSize: '11px', marginRight: '6px' }}>{n}</span>{t}</p>
   return (
     <div style={{ ...card, marginBottom: '14px', borderColor: '#cfe0f5', background: '#fbfdff' }}>
-      <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Registrar charla · <span style={{ fontWeight: 500, color: '#667085' }}>{ubicNombre}</span></p>
+      <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Registro de capacitación · <span style={{ fontWeight: 500, color: '#667085' }}>{ubicNombre}</span></p>
 
-      {paso(1, '¿Qué charla fue?')}
+      {paso(1, '¿Qué capacitación fue?')}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '8px' }}>
-        <div style={{ gridColumn: '1 / -1' }}><label style={label}>Tema del programa (o charla libre)</label>
-          <select value={progId} onChange={e => elegir(e.target.value)} style={input}><option value="">— Charla libre (escribo el tema) —</option>{programas.map(p => <option key={p.id} value={p.id}>{p.n}. {p.tematica}</option>)}</select></div>
+        <div style={{ gridColumn: '1 / -1' }}><label style={label}>Tema del programa (o capacitación libre)</label>
+          <select value={progId} onChange={e => elegir(e.target.value)} style={input}><option value="">— Capacitación libre (escribo el tema) —</option>{programas.map(p => <option key={p.id} value={p.id}>{p.n}. {p.tematica}</option>)}</select></div>
         {!progId && <div style={{ gridColumn: '1 / -1' }}><label style={label}>Tema</label><input value={tema} onChange={e => setTema(e.target.value)} placeholder="Ej: Trabajo en altura, uso de arnés" style={input} /></div>}
         <div><label style={label}>Fecha</label><input type="date" value={fecha} max={new Date().toISOString().slice(0, 10)} onChange={e => setFecha(e.target.value)} style={input} /></div>
         <div><label style={label}>Tipo</label><select value={tipo} onChange={e => setTipo(e.target.value)} style={input}>{Object.entries(TIPOS_CHARLA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
@@ -74,7 +74,7 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
 
       {paso(2, `¿Quiénes asistieron? (${marcados.length} marcados)`)}
       {pool.length > 0 && <>
-        <p style={{ margin: '0 0 6px', fontSize: '11.5px', color: '#667085' }}>Toca los nombres de quienes estuvieron. Aquí aparecen los que ya han asistido a charlas en esta faena.</p>
+        <p style={{ margin: '0 0 6px', fontSize: '11.5px', color: '#667085' }}>Toca los nombres de quienes estuvieron. Aquí aparecen los que ya han asistido a capacitaciones en esta faena.</p>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {pool.map(p => { const on = sel.includes(clave(p)); return (
             <button key={clave(p)} type="button" title={p.rut} onClick={() => setSel(s => on ? s.filter(x => x !== clave(p)) : [...s, clave(p)])}
@@ -85,7 +85,7 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
           <button type="button" onClick={() => setSel([])} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>Ninguno</button>
         </div>
       </>}
-      <p style={{ margin: '0 0 4px', fontSize: '11.5px', color: '#667085' }}>¿Alguien nuevo? Agrégalo una vez y queda disponible para las próximas charlas.</p>
+      <p style={{ margin: '0 0 4px', fontSize: '11.5px', color: '#667085' }}>¿Alguien nuevo? Agrégalo una vez y queda disponible para las próximas capacitaciones.</p>
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Nombre" style={{ ...input, flex: '2 1 160px', width: 'auto' }} />
         <input value={rut} onChange={e => setRut(formatearRut(e.target.value))} placeholder="RUT (opcional)" maxLength={12} style={{ ...input, flex: '1 1 120px', width: 'auto' }} />
@@ -112,7 +112,7 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
 
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '10px 0 0' }}>{msg}</p>}
       <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-        <button onClick={guardar} disabled={guardando} style={btn()}>{guardando ? 'Guardando...' : 'Guardar charla'}</button>
+        <button onClick={guardar} disabled={guardando} style={btn()}>{guardando ? 'Guardando...' : 'Guardar capacitación'}</button>
         <button onClick={onCancelar} style={btn(false)}>Cancelar</button>
       </div>
     </div>

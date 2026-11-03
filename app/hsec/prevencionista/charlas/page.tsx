@@ -112,7 +112,7 @@ export default function Prevencionista() {
     if (error || !data) { setGuardando(false); setMsg('No se pudo guardar: ' + (error?.message || '')); return }
     if (lista.length) {
       const { error: e2 } = await supabase.from('pr_charla_asistentes').insert(lista.map(a => ({ charla_id: data.id, nombre: a.nombre, rut: a.rut || null })))
-      if (e2) { setGuardando(false); setMsg('La charla se guardó, pero fallaron los asistentes: ' + e2.message); await cargar(); return }
+      if (e2) { setGuardando(false); setMsg('La capacitación se guardó, pero fallaron los asistentes: ' + e2.message); await cargar(); return }
     }
     setGuardando(false); setNueva(false); await cargar(); setAbierta(data.id)
   }
@@ -129,18 +129,18 @@ export default function Prevencionista() {
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '900px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', background: '#fff', borderRadius: '16px', padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
-          <Link href="/hsec/prevencionista/capacitaciones" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← Capacitaciones y charlas</Link>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Charlas y capacitaciones</h1>
+          <Link href="/hsec/prevencionista/capacitaciones" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← Capacitaciones</Link>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Capacitaciones</h1>
         </div>
 
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección. Pídele al administrador que te la habilite en Usuarios.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px', flexWrap: 'wrap' }}>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#16213E' }}>🗣️ Charlas y capacitaciones <span style={{ fontWeight: 400, color: '#667085' }}>({charlas.length}{veTodas ? ' en total' : ''})</span></p>
-              <Link href="/hsec/prevencionista/capacitaciones" style={{ ...btn(), textDecoration: 'none' }}>＋ Registrar charla</Link>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#16213E' }}>🗣️ Capacitaciones <span style={{ fontWeight: 400, color: '#667085' }}>({charlas.length}{veTodas ? ' en total' : ''})</span></p>
+              <Link href="/hsec/prevencionista/capacitaciones" style={{ ...btn(), textDecoration: 'none' }}>＋ Registrar capacitación</Link>
             </div>
 
-            {charlas.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay charlas registradas.</p>}
+            {charlas.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay capacitaciones registradas.</p>}
             <div style={{ display: 'grid', gap: '8px' }}>
               {charlas.map(c => {
                 const as = asistDe(c.id)

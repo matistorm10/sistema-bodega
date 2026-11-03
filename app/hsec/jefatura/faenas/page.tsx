@@ -1,4 +1,5 @@
 'use client'
+import TabsConfig from '@/components/programa/TabsConfig'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -130,6 +131,7 @@ export default function FaenasAsignaciones() {
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '900px', margin: '0 auto' }}>
         {cab}
+        <TabsConfig />
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
             <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>Todo se configura aquí, por faena. Al asignar un prevencionista queda habilitado para SSO Faena, informes diarios, charlas, stock de EPP y los informes semanales del cliente de esa faena.</p>

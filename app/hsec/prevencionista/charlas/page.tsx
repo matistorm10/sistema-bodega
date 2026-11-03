@@ -78,7 +78,7 @@ export default function Prevencionista() {
   useEffect(() => {
     if (cargando || programas.length === 0 || typeof window === 'undefined') return
     const id = new URLSearchParams(window.location.search).get('prog')
-    if (id && programas.some(p => p.id === id)) { abrirForm(); elegirPrograma(id); window.history.replaceState(null, '', window.location.pathname) }
+    if (id) window.location.replace('/hsec/prevencionista/capacitaciones')
   }, [cargando, programas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const abrirForm = () => {
@@ -137,58 +137,10 @@ export default function Prevencionista() {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px', flexWrap: 'wrap' }}>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#16213E' }}>🗣️ Charlas y capacitaciones <span style={{ fontWeight: 400, color: '#667085' }}>({charlas.length}{veTodas ? ' en total' : ''})</span></p>
-              {!nueva && <button onClick={abrirForm} style={btn()}>+ Nueva charla</button>}
+              <Link href="/hsec/prevencionista/capacitaciones" style={{ ...btn(), textDecoration: 'none' }}>＋ Registrar charla</Link>
             </div>
 
-            {nueva && (
-              <div style={{ ...card, marginBottom: '14px' }}>
-                <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Nueva charla o capacitación</p>
-                <div style={{ marginBottom: '10px' }}><label style={label}>Vincular al Programa Anual de Capacitaciones (opcional)</label>
-                  <select value={progId} onChange={e => elegirPrograma(e.target.value)} style={input}><option value="">— Charla libre (no es del programa) —</option>{programas.map(p => <option key={p.id} value={p.id}>{p.n}. {p.tematica}</option>)}</select></div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px', marginBottom: '10px' }}>
-                  <div><label style={label}>Fecha</label><input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={input} /></div>
-                  <div><label style={label}>Tipo</label>
-                    <select value={tipo} onChange={e => setTipo(e.target.value)} style={input}>{Object.entries(TIPOS_CHARLA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                  <div><label style={label}>Faena / centro de costo</label>
-                    <select value={faena} onChange={e => setFaena(e.target.value)} style={input}><option value="">Seleccionar…</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select></div>
-                  <div><label style={label}>Duración (minutos)</label><input type="number" min="0" value={duracion} onChange={e => setDuracion(e.target.value)} style={input} placeholder="5" /></div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '10px', marginBottom: '10px' }}>
-                  <div><label style={label}>Tema</label><input value={tema} onChange={e => setTema(e.target.value)} style={input} placeholder="Ej: Trabajo en altura, uso de arnés" /></div>
-                  <div><label style={label}>Relator</label><input value={relator} onChange={e => setRelator(e.target.value)} style={input} /></div>
-                </div>
-                <div style={{ marginBottom: '12px' }}><label style={label}>Observaciones (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} style={input} /></div>
-
-                <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13px' }}>Asistentes ({lista.length})</p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                  <input value={aNombre} onChange={e => setANombre(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') agregarAsistente() }} placeholder="Nombre" style={{ ...input, flex: '2 1 180px', width: 'auto' }} />
-                  <input value={aRut} onChange={e => setARut(formatearRut(e.target.value))} onKeyDown={e => { if (e.key === 'Enter') agregarAsistente() }} placeholder="RUT" maxLength={12} style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
-                  <button onClick={agregarAsistente} style={btn(false)}>Agregar</button>
-                </div>
-                <details style={{ marginBottom: '8px' }}>
-                  <summary style={{ fontSize: '12px', color: AZUL, cursor: 'pointer' }}>Pegar una lista (un asistente por línea, desde Excel o WhatsApp)</summary>
-                  <textarea value={pegar} onChange={e => setPegar(e.target.value)} rows={4} placeholder={'Juan Pérez, 12.345.678-9\nPedro Soto, 9.876.543-2'} style={{ ...input, marginTop: '6px', fontFamily: 'inherit' }} />
-                  <button onClick={procesarPegado} disabled={!pegar.trim()} style={{ ...btn(false), marginTop: '6px' }}>Agregar lista</button>
-                </details>
-                {lista.length > 0 && (
-                  <div style={{ border: '1px solid #eef1f6', borderRadius: '8px', marginBottom: '10px', maxHeight: '220px', overflowY: 'auto' }}>
-                    {lista.map((a, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', fontSize: '13px', borderTop: i ? '1px solid #eef1f6' : undefined }}>
-                        <span>{a.nombre}{a.rut ? <span style={{ color: '#667085' }}> · {a.rut}</span> : null}</span>
-                        <button onClick={() => setLista(l => l.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '15px' }}>×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msg}</p>}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={guardar} disabled={guardando} style={btn()}>{guardando ? 'Guardando...' : 'Guardar charla'}</button>
-                  <button onClick={() => setNueva(false)} style={btn(false)}>Cancelar</button>
-                </div>
-              </div>
-            )}
-
-            {charlas.length === 0 && !nueva && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay charlas registradas.</p>}
+            {charlas.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay charlas registradas.</p>}
             <div style={{ display: 'grid', gap: '8px' }}>
               {charlas.map(c => {
                 const as = asistDe(c.id)
@@ -208,6 +160,7 @@ export default function Prevencionista() {
                     {open && (
                       <div style={{ marginTop: '10px', borderTop: '1px solid #eef1f6', paddingTop: '10px', fontSize: '13px' }}>
                         <p style={{ margin: '0 0 4px', color: '#475467' }}>Relator: <strong>{c.relator || '—'}</strong>{c.duracion_min ? ` · ${c.duracion_min} min` : ''}</p>
+                        {c.respaldo_path ? <button onClick={async () => { const { data } = await supabase.storage.from('hsec-documentos').createSignedUrl(c.respaldo_path, 600); if (data) window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px', marginBottom: '6px' }}>📎 Ver papel firmado</button> : <p style={{ margin: '0 0 6px', color: '#986a00', fontSize: '12px' }}>Falta el papel firmado.</p>}
                         {c.observaciones && <p style={{ margin: '0 0 6px', color: '#475467' }}>Observaciones: {c.observaciones}</p>}
                         {as.length > 0 && (
                           <ul style={{ margin: '6px 0 0', paddingLeft: '18px', columns: as.length > 8 ? 2 : 1 }}>

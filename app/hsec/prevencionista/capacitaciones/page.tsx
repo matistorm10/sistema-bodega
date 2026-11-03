@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card } from '@/components/programa/ui'
+import CalendarioCapacitaciones from '@/components/programa/CalendarioCapacitaciones'
+import FormCharla from '@/components/programa/FormCharla'
 import { misUbicacionesIds } from '@/lib/prevencion'
 import { MESES_C, mesKey, mesHoy, aplica, estadoCelda, COLOR_CELDA } from '@/lib/capacitaciones'
 
@@ -17,17 +19,23 @@ export default function CapPrevencionista() {
   const [ubics, setUbics] = useState<any[]>([])
   const [lugares, setLugares] = useState<any[]>([])
   const [charlas, setCharlas] = useState<any[]>([])
+  const [asist, setAsist] = useState<any[]>([])
+  const [form, setForm] = useState<{ fecha: string, prog?: string } | null>(null)
+  const [subiendo, setSubiendo] = useState('')
+  const [msg, setMsg] = useState('')
   const [ubic, setUbic] = useState('')
   const [cargando, setCargando] = useState(true)
 
   const cargar = useCallback(async () => {
     if (!usuario) return
-    const [p, u, l, c] = await Promise.all([
+    const [p, u, l, c, a] = await Promise.all([
       supabase.from('pr_cap_programa').select('*').eq('anio', anio).eq('activo', true).order('n'),
       supabase.from('ubicaciones').select('id,nombre,activa').order('nombre'),
       supabase.from('pr_cap_ubic_lugar').select('*'),
-      supabase.from('pr_charlas').select('id,programa_id,ubicacion_id,fecha').not('programa_id', 'is', null),
+      supabase.from('pr_charlas').select('id,programa_id,ubicacion_id,fecha,tema,tipo,respaldo_path,creado_por').order('fecha', { ascending: false }),
+      supabase.from('pr_charla_asistentes').select('charla_id,nombre,rut'),
     ])
+    setAsist(a.data || [])
     const propias = esJefe ? null : await misUbicacionesIds(usuario.id)
     const lista = (u.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id)))
     setProg(p.data || []); setUbics(lista); setLugares(l.data || []); setCharlas(c.data || [])
@@ -35,12 +43,27 @@ export default function CapPrevencionista() {
   }, [usuario, esJefe])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
+  const charlasU = useMemo(() => charlas.filter(c => c.ubicacion_id === ubic), [charlas, ubic])
+  const asistCount = useMemo(() => { const m: Record<string, number> = {}; asist.forEach(a => { m[a.charla_id] = (m[a.charla_id] || 0) + 1 }); return m }, [asist])
+  const previos = useMemo(() => { const ids = new Set(charlasU.map(c => c.id)); const m = new Map<string, { nombre: string, rut: string }>(); asist.filter(a => ids.has(a.charla_id)).forEach(a => { const k = (a.rut || a.nombre).toLowerCase(); if (!m.has(k)) m.set(k, { nombre: a.nombre, rut: a.rut || '' }) }); return Array.from(m.values()).sort((a, b) => a.nombre.localeCompare(b.nombre)) }, [charlasU, asist])
+  const abrirArchivo = async (path: string) => { const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600); if (error || !data) { alert('No se pudo abrir el archivo'); return } window.open(data.signedUrl, '_blank') }
+  const subirPapel = async (c: any, f: File) => {
+    if (!usuario) return
+    if (f.size > 15 * 1024 * 1024) { setMsg('El archivo supera 15 MB.'); return }
+    setSubiendo(c.id); setMsg('')
+    const path = `charlas/${usuario.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
+    if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return }
+    const { error } = await supabase.from('pr_charlas').update({ respaldo_path: path, respaldo_nombre: f.name }).eq('id', c.id)
+    setSubiendo(''); if (error) { setMsg(error.message); return }
+    await cargar()
+  }
   const lugar = lugares.find(l => l.ubicacion_id === ubic)?.lugar
   const hoy = mesHoy()
   const filas = useMemo(() => prog.filter(p => aplica(p, lugar)).map(p => ({
     p, celdas: Object.keys(p.meses).map(Number).sort((a, b) => a - b).map(m => {
       const k = mesKey(anio, m)
-      const hechas = charlas.filter(c => c.programa_id === p.id && c.ubicacion_id === ubic && c.fecha.slice(0, 7) === k).length
+      const hechas = charlasU.filter(c => c.programa_id === p.id && c.ubicacion_id === ubic && c.fecha.slice(0, 7) === k).length
       return { m, k, e: estadoCelda(k, hechas, 1, hoy), hechas, cod: p.meses[m] }
     }),
   })), [prog, lugar, charlas, ubic, hoy])
@@ -68,23 +91,18 @@ export default function CapPrevencionista() {
       </div>
       {!lugar && <p style={{ fontSize: '12px', color: '#986a00', margin: '0 0 10px' }}>La jefatura aún no clasifica esta faena (ENGIE / SQM / SACYR / oficina); por ahora ves todo el programa.</p>}
 
-      <Link href="/hsec/prevencionista/charlas" style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit', marginBottom: '12px' }}>
-        <span><strong style={{ fontSize: '13.5px', color: '#16213E' }}>🗣️ Charlas y lista de asistentes</strong><br /><span style={{ fontSize: '12px', color: '#667085' }}>Ver las charlas realizadas o registrar una charla libre (fuera del programa)</span></span>
-        <span style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: AZUL, color: '#fff', fontWeight: 600, whiteSpace: 'nowrap' }}>Abrir</span>
-      </Link>
-
-      <div style={{ ...card, marginBottom: '12px', background: pendientes.length ? '#fff8e5' : '#e7f6ec', borderColor: pendientes.length ? '#f0d98a' : '#b9e2c8' }}>
-        <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13px', color: pendientes.length ? '#7a5600' : '#14532d' }}>{pendientes.length ? `🗓️ Por realizar o atrasadas (${pendientes.length})` : '✅ Estás al día con el programa'}</p>
-        {pendientes.map(x => (
-          <div key={x.p.id + x.k} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', padding: '5px 0', borderTop: '1px solid rgba(0,0,0,0.06)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12.5px', color: '#344054' }}>{x.p.n}. {x.p.tematica} <span style={{ color: x.e === 'atraso' ? '#9b1c1c' : '#667085' }}>· {MESES_C[x.m - 1]}{x.e === 'atraso' ? ' (atrasada)' : ' (este mes)'}</span></span>
-            <Link href={`/hsec/prevencionista/charlas?prog=${x.p.id}`} style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '8px', background: AZUL, color: '#fff', textDecoration: 'none', fontWeight: 600 }}>Registrar</Link>
-          </div>
-        ))}
+      {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msg}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '8px', marginBottom: '12px' }}>
+        {[[`${cumpl}%`, 'Cumplimiento del programa', cumpl >= 100 ? '#1e8e4e' : cumpl >= 70 ? '#b7791f' : '#c0392b'], [pendientes.length, 'Por hacer o atrasadas', pendientes.length ? '#c0392b' : '#1e8e4e'], [charlasU.filter(c => c.fecha.slice(0, 7) === hoy).length, 'Charlas este mes', '#16213E'], [charlasU.filter(c => !c.respaldo_path).length, 'Sin papel firmado', charlasU.some(c => !c.respaldo_path) ? '#b7791f' : '#1e8e4e']].map(([v, t, col]) => (
+          <div key={String(t)} style={{ ...card, padding: '10px 12px', textAlign: 'center' }}><p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: String(col) }}>{v}</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#667085' }}>{t}</p></div>))}
       </div>
+      {form
+        ? <FormCharla key={form.fecha + (form.prog || '')} usuario={{ id: usuario!.id, nombre: usuario!.nombre }} ubicId={ubic} ubicNombre={ubics.find(u => u.id === ubic)?.nombre || ''} programas={filas.map(f => f.p)} previos={previos} fechaIni={form.fecha} progIni={form.prog} onListo={async () => { setForm(null); await cargar() }} onCancelar={() => setForm(null)} />
+        : <div style={{ marginBottom: '12px' }}><button onClick={() => setForm({ fecha: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) })} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: AZUL, color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>＋ Registrar charla</button></div>}
+      <CalendarioCapacitaciones anio={anio} charlas={charlasU} asistCount={asistCount} filas={filas} puedeEditar onRegistrar={(fecha, prog) => { setForm({ fecha, prog }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onVer={abrirArchivo} onSubirPapel={subirPapel} subiendo={subiendo} />
 
-      <div style={card}>
-        <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Programa anual de esta faena</p>
+      <details style={card}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '14px' }}>Programa anual completo de esta faena</summary>
         {filas.map(f => (
           <div key={f.p.id} style={{ borderTop: '1px solid #eef1f6', padding: '8px 0' }}>
             <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600 }}>{f.p.n}. {f.p.tematica}</p>
@@ -94,7 +112,7 @@ export default function CapPrevencionista() {
             </div>
           </div>
         ))}
-      </div>
+      </details>
     </>
   )
 }

@@ -222,7 +222,7 @@ export default function JefaturaEpp() {
               </div>
             </div>
 
-            <div style={{ marginBottom: '12px' }}>{hdr('certs', '📎 Certificados de calidad', { margin: '0 0 8px', fontWeight: 700, fontSize: '14px' })}{!oc('certs') && <CertificadosEpp items={activos} certs={certs} usuarioId={usuario!.id} esJefe nombreDe={nUser} onCambio={cargar} />}</div>
+            <div style={{ marginBottom: '12px' }}>{hdr('certs', '📎 Certificados de calidad por EPP', { margin: '0 0 8px', fontWeight: 700, fontSize: '14px' })}{!oc('certs') && <CertificadosEpp items={activos} certs={certs} usuarioId={usuario!.id} esJefe nombreDe={nUser} onCambio={cargar} sinTitulo />}</div>
 
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' }}>

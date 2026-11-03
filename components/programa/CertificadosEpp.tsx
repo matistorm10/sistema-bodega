@@ -9,7 +9,8 @@ const fcl = (f?: string | null) => f ? f.split('-').reverse().join('-') : ''
 const VIG: Record<string, [string, string, string]> = { vigente: ['#e7f6ec', '#14532d', 'Vigente'], por_vencer: ['#fef7e0', '#986a00', 'Por vencer'], vencido: ['#fde8e8', '#9b1c1c', 'Vencido'], sin_fecha: ['#f1f3f7', '#667085', 'Sin vencimiento'] }
 
 // Certificados de calidad de cada EPP: pueden ser varios por ítem (uno por proveedor) y cada uno con su vencimiento
-export default function CertificadosEpp({ items, certs, usuarioId, esJefe, nombreDe, onCambio }: {
+export default function CertificadosEpp({ items, certs, usuarioId, esJefe, nombreDe, onCambio, sinTitulo }: {
+  sinTitulo?: boolean
   items: any[], certs: any[], usuarioId: string, esJefe: boolean, nombreDe: (id: string) => string, onCambio: () => Promise<void> | void,
 }) {
   const [abierto, setAbierto] = useState<string | null>(null)
@@ -59,7 +60,7 @@ export default function CertificadosEpp({ items, certs, usuarioId, esJefe, nombr
   }
   return (
     <div style={card}>
-      <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>📎 Certificados de calidad por EPP</p>
+      {!sinTitulo && <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>📎 Certificados de calidad por EPP</p>}
       <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{esJefe ? 'Sube el certificado de cada proveedor. Un mismo EPP puede tener varios archivos, cada uno con su fecha de vencimiento. Marca «No aplica» en los EPP que no requieren certificado.' : 'Aquí puedes ver y descargar los certificados de calidad. Solo el Jefe los carga y modifica.'}</p>
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 6px' }}>{msg}</p>}
       {items.filter(it => esJefe || it.requiere_certificado !== false).map(it => {

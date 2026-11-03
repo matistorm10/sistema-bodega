@@ -161,6 +161,7 @@ export default function Prevencionista() {
                       <div style={{ marginTop: '10px', borderTop: '1px solid #eef1f6', paddingTop: '10px', fontSize: '13px' }}>
                         <p style={{ margin: '0 0 4px', color: '#475467' }}>Relator: <strong>{c.relator || '—'}</strong>{c.duracion_min ? ` · ${c.duracion_min} min` : ''}</p>
                         {c.respaldo_path ? <button onClick={async () => { const { data } = await supabase.storage.from('hsec-documentos').createSignedUrl(c.respaldo_path, 600); if (data) window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px', marginBottom: '6px' }}>📎 Ver papel firmado</button> : <p style={{ margin: '0 0 6px', color: '#986a00', fontSize: '12px' }}>Falta el papel firmado.</p>}
+                        {(c.fotos || []).length > 0 && <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>{(c.fotos as string[]).map((p, i) => <button key={p} onClick={async () => { const { data } = await supabase.storage.from('hsec-documentos').createSignedUrl(p, 600); if (data) window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>📷 Foto {i + 1}</button>)}</div>}
                         {c.observaciones && <p style={{ margin: '0 0 6px', color: '#475467' }}>Observaciones: {c.observaciones}</p>}
                         {as.length > 0 && (
                           <ul style={{ margin: '6px 0 0', paddingLeft: '18px', columns: as.length > 8 ? 2 : 1 }}>

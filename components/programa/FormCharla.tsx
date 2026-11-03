@@ -24,6 +24,7 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
   const [sel, setSel] = useState<string[]>([])
   const [nom, setNom] = useState(''); const [rut, setRut] = useState(''); const [pegar, setPegar] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [fotos, setFotos] = useState<File[]>([])
   const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
   const elegir = (id: string) => {
     setProgId(id); const p = programas.find(x => x.id === id)
@@ -45,9 +46,17 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
       const up = await supabase.storage.from('hsec-documentos').upload(path, file, { contentType: file.type || undefined })
       if (up.error) { setGuardando(false); setMsg('No se pudo subir el papel: ' + up.error.message); return }
     }
+    const fotoPaths: string[] = []
+    for (const [i, f] of fotos.entries()) {
+      if (f.size > 15 * 1024 * 1024) { setGuardando(false); setMsg(`La foto ${f.name} supera 15 MB.`); return }
+      const p = `charlas/${usuario.id}/foto_${Date.now()}_${i}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const up = await supabase.storage.from('hsec-documentos').upload(p, f, { contentType: f.type || undefined })
+      if (up.error) { setGuardando(false); setMsg('No se pudo subir una foto: ' + up.error.message); return }
+      fotoPaths.push(p)
+    }
     const { data, error } = await supabase.from('pr_charlas').insert({
       fecha, tipo, tema: tema.trim(), ubicacion_id: ubicId, relator: relator.trim() || null, duracion_min: duracion ? Number(duracion) : null,
-      creado_por: usuario.id, programa_id: progId || null, respaldo_path: path, respaldo_nombre: file?.name || null,
+      creado_por: usuario.id, programa_id: progId || null, respaldo_path: path, respaldo_nombre: file?.name || null, fotos: fotoPaths,
     }).select().single()
     if (error || !data) { setGuardando(false); setMsg('No se pudo guardar: ' + (error?.message || '')); return }
     if (marcados.length) {
@@ -109,6 +118,21 @@ export default function FormCharla({ usuario, ubicId, ubicNombre, programas, pre
       <label style={{ ...btn(false), display: 'inline-block', cursor: 'pointer' }}>{file ? `📎 ${file.name}` : '📎 Elegir archivo'}
         <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files?.[0] || null)} /></label>
       {file && <button type="button" onClick={() => setFile(null)} style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', marginLeft: '6px' }}>× quitar</button>}
+
+      {paso(4, 'Fotos de la capacitación (opcional)')}
+      <p style={{ margin: '0 0 6px', fontSize: '11.5px', color: '#667085' }}>Toma o elige fotos de la capacitación realizada (hasta 6).</p>
+      <label style={{ ...btn(false), display: 'inline-block', cursor: 'pointer' }}>📷 {fotos.length ? 'Agregar otra foto' : 'Tomar o elegir foto'}
+        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const n = Array.from(e.target.files || []); setFotos(prev => [...prev, ...n].slice(0, 6)); e.target.value = '' }} /></label>
+      {fotos.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+          {fotos.map((f, i) => (
+            <div key={i} style={{ position: 'relative' }}>
+              <img src={URL.createObjectURL(f)} alt="" style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e6ed' }} />
+              <button type="button" onClick={() => setFotos(fotos.filter((_, j) => j !== i))} style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', border: 'none', background: '#c5221f', color: '#fff', cursor: 'pointer', fontSize: '12px', lineHeight: '20px', padding: 0 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '10px 0 0' }}>{msg}</p>}
       <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>

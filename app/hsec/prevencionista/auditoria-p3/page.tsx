@@ -40,7 +40,7 @@ export default function AuditoriaP3() {
       supabase.from('pr_auditorias_p3').select('*').order('fecha', { ascending: false }),
       supabase.from('pr_contratos').select('*').eq('activo', true).order('nombre'),
       supabase.from('pr_clientes_informe').select('id,nombre'),
-      supabase.from('usuarios').select('id,nombre'),
+      supabase.from('usuarios').select('id,nombre,es_prevencionista'),
     ])
     setLista(l.data || []); setContratos(ct.data || []); setClientes(cl.data || []); setUsuarios(us.data || []); setCargando(false)
   }, [])
@@ -307,7 +307,39 @@ export default function AuditoriaP3() {
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>{lista.filter(r => r.estado === 'cerrado' && r.revision === 'pendiente').map(r => <button key={r.id} onClick={() => abrir(r)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>{fechaCL(r.fecha)} · {nombreDe(r.creado_por)}</button>)}</div>
       </div>
     )}
-    {lista.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Aún no hay auditorías.</p>}
+    {verTodos && (() => {
+      const aprs = usuarios.filter(u => u.es_prevencionista)
+      const hoy = hoyISO()
+      return (
+        <div style={{ ...card, marginBottom: '12px' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '14px' }}>Seguimiento por APR</p>
+          <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>Última auditoría de cada prevencionista y cuándo corresponde la siguiente (entre 3 y 4 meses después). Las auditorías enviadas aparecen abajo para que las apruebes.</p>
+          {aprs.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>No hay usuarios marcados como Prevencionista.</p>}
+          {aprs.map(u => {
+            const ult = lista.find(r => r.creado_por === u.id && r.estado === 'cerrado')
+            const borr = lista.some(r => r.creado_por === u.id && r.estado === 'borrador')
+            let txt = 'Sin auditorías: falta la primera', col = '#986a00', bg = '#fef7e0'
+            if (ult) {
+              const desde = sumaMeses(ult.fecha, 3), hasta = sumaMeses(ult.fecha, 4)
+              if (hoy < desde) { txt = `Próxima entre ${fcl(desde)} y ${fcl(hasta)}`; col = AZUL; bg = '#e8f0fe' }
+              else if (hoy <= hasta) { txt = `Toca hacerla: vence el ${fcl(hasta)}`; col = '#986a00'; bg = '#fef7e0' }
+              else { txt = `Atrasada: debía hacerse antes del ${fcl(hasta)}`; col = '#9b1c1c'; bg = '#fde8e8' }
+            }
+            const cal = ult?.calificacion as keyof typeof COLOR_CAL | undefined
+            return (
+              <div key={u.id} style={{ borderTop: '1px solid #eef1f6', padding: '8px 0', display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>{u.nombre}{borr ? <span style={{ fontWeight: 400, color: '#667085' }}> · borrador en curso</span> : null}</span>
+                <span style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {ult && cal && COLOR_CAL[cal] && <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 700, background: COLOR_CAL[cal][0], color: COLOR_CAL[cal][1] }}>Última {fcl(ult.fecha).slice(0, 5)}: {Number(ult.resultado_pct).toFixed(1)}% · {cal}</span>}
+                  <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '20px', fontWeight: 600, background: bg, color: col }}>{txt}</span>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )
+    })()}
+    {lista.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>{verTodos ? 'Todavía ningún APR ha enviado una auditoría. Cuando cierre una, aparecerá aquí para que la apruebes o rechaces.' : 'Aún no hay auditorías.'}</p>}
     <div style={{ display: 'grid', gap: '8px' }}>
       {lista.map(r => {
         const ct = contratos.find(c => c.id === r.contrato_id)

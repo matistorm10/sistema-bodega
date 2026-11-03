@@ -112,7 +112,7 @@ export default function JefaturaEpp() {
             )}
 
             {(() => {
-              const prob = activos.flatMap(c => { const cs = certs.filter(x => x.item_id === c.id); if (!cs.length) return [{ k: c.id, t: `${c.nombre}: sin certificado de calidad cargado` }]; return cs.filter(x => x.vence && x.vence <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)).map(x => ({ k: x.id, t: `${c.nombre}${x.proveedor ? ' (' + x.proveedor + ')' : ''}: certificado ${x.vence < new Date().toISOString().slice(0, 10) ? 'vencido' : 'por vencer'} el ${fechaCL(x.vence)}` })) })
+              const prob = activos.filter(c => c.requiere_certificado !== false).flatMap(c => { const cs = certs.filter(x => x.item_id === c.id); if (!cs.length) return [{ k: c.id, t: `${c.nombre}: sin certificado de calidad cargado` }]; return cs.filter(x => x.vence && x.vence <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)).map(x => ({ k: x.id, t: `${c.nombre}${x.proveedor ? ' (' + x.proveedor + ')' : ''}: certificado ${x.vence < new Date().toISOString().slice(0, 10) ? 'vencido' : 'por vencer'} el ${fechaCL(x.vence)}` })) })
               return prob.length > 0 ? <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}><p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📎 Certificados de calidad por revisar</p>{prob.map(x => <p key={x.k} style={{ margin: '2px 0', fontSize: '12.5px', color: '#7a5600' }}>{x.t}</p>)}</div> : null
             })()}
 

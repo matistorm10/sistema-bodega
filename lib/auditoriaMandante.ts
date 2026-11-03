@@ -1,6 +1,6 @@
 import { hoyISO } from './estadoPlan'
 
-export type AudItem = { id: string, formato_id: string, orden: number, seccion: string, numero: string | null, texto: string, orientacion: string | null, puntaje: number, requiere_trabajador?: boolean }
+export type AudItem = { id: string, formato_id: string, orden: number, seccion: string, numero: string | null, texto: string, orientacion: string | null, puntaje: number, requiere_trabajador?: boolean, fuente?: string | null }
 export type AudResp = { id?: string, levantamiento_id: string, item_id: string, estado: 'pendiente' | 'cumple' | 'no_cumple' | 'na', obs?: string | null, accion?: string | null, responsable?: string | null, plazo?: string | null, plan_estado?: string }
 export type AudDoc = { id: string, levantamiento_id: string, item_id: string, path: string, nombre: string, vence: string | null, subido_por: string, subido_at: string, revision: 'pendiente' | 'aprobado' | 'rechazado', comentario: string | null, revisado_por: string | null, revisado_at: string | null, trabajador_id?: string | null, trab_ids?: string[] }
 
@@ -10,13 +10,14 @@ export const vigencia = (vence: string | null | undefined): Vig => { if (!vence)
 // Un documento sirve como respaldo si no fue rechazado y no está vencido
 export const docValido = (d: AudDoc) => d.revision !== 'rechazado' && vigencia(d.vence) !== 'vencido'
 
-export function resumen(items: AudItem[], resp: Record<string, AudResp>, docs: AudDoc[], usaPuntaje: boolean, trabs: AudTrab[] = []) {
+export function resumen(items: AudItem[], resp: Record<string, AudResp>, docs: AudDoc[], usaPuntaje: boolean, trabs: AudTrab[] = [], eppOk = true) {
   let cumple = 0, na = 0, total = 0, nCumple = 0, nNo = 0, nNa = 0
   for (const it of items) {
     const w = usaPuntaje ? Number(it.puntaje) || 0 : 1
     total += w
     let e = resp[it.id]?.estado
     if (e === 'cumple' && it.requiere_trabajador && !difCompleta(it.id, trabs, docs).ok) e = 'pendiente'
+    if (e === 'cumple' && it.fuente === 'epp' && !eppOk) e = 'pendiente'
     if (e === 'cumple') { cumple += w; nCumple++ } else if (e === 'na') { na += w; nNa++ } else if (e === 'no_cumple') nNo++
   }
   const base = total - na
@@ -58,4 +59,14 @@ export function resumenTrabajadores(items: AudItem[], trabs: AudTrab[], docs: Au
     return { t, est, cargados: est.filter(e => e === 'ok' || e === 'revisar').length, aprobados: est.filter(e => e === 'ok').length, completo: est.every(e => e === 'ok' || e === 'revisar') }
   })
   return { its, filas, total: act.length, completos: filas.filter(f => f.completo).length, aprobados: filas.filter(f => f.aprobados === its.length).length }
+}
+
+// ───── Certificados de calidad de EPP (módulo EPP) que respaldan el ítem «los EPP cumplen normas / ISP» ─────
+export function estadoEpp(catalogo: any[], certs: any[]) {
+  const aplican = catalogo.filter(c => c.activo !== false && c.requiere_certificado !== false)
+  const filas = aplican.map(c => {
+    const cs = certs.filter(x => x.item_id === c.id).sort((a, b) => (a.vence || '9999').localeCompare(b.vence || '9999'))
+    return { c, cs, ok: cs.some(x => vigencia(x.vence) !== 'vencido') }
+  })
+  return { filas, total: filas.length, ok: filas.length > 0 && filas.every(f => f.ok), conCert: filas.filter(f => f.ok).length }
 }

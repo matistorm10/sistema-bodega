@@ -7,13 +7,13 @@ import { AudItem, AudResp, AudDoc, AudTrab, resumen, vigencia, calificacion, res
 const fcl = (f?: string | null) => f ? f.split('-').reverse().join('-') : ''
 const EST: Record<string, string> = { pendiente: 'Pendiente', cumple: 'Cumple', no_cumple: 'No cumple', na: 'N/A' }
 
-export async function generarEstadoAuditoria(o: { formato: any, contrato: string, items: AudItem[], resp: Record<string, AudResp>, docs: AudDoc[], trabs?: AudTrab[] }, ventana: Window | null) {
+export async function generarEstadoAuditoria(o: { formato: any, contrato: string, items: AudItem[], resp: Record<string, AudResp>, docs: AudDoc[], trabs?: AudTrab[], eppOk?: boolean }, ventana: Window | null) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const W = 297, M = 10
   const AZUL: [number, number, number] = [27, 79, 156]
   const logo = await cargarLogo()
   const trabs = o.trabs || []
-  const r = resumen(o.items, o.resp, o.docs, !!o.formato.usa_puntaje, trabs)
+  const r = resumen(o.items, o.resp, o.docs, !!o.formato.usa_puntaje, trabs, o.eppOk ?? true)
   const rt = resumenTrabajadores(o.items, trabs, o.docs)
   const encabezado = () => {
     doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(M, 8, W - 2 * M, 16); doc.line(M + 38, 8, M + 38, 24)

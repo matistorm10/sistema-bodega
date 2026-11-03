@@ -7,7 +7,7 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label, Barra } from '@/components/programa/ui'
 import { etiquetaContrato } from '@/lib/contratos'
 import { hoyISO } from '@/lib/estadoPlan'
-import { AudItem, AudResp, AudDoc, AudTrab, resumen, vigencia, docValido, calificacion, estadoTrab, difCompleta, resumenTrabajadores, trabActivos } from '@/lib/auditoriaMandante'
+import { AudItem, AudResp, AudDoc, AudTrab, resumen, vigencia, docValido, calificacion, estadoTrab, difCompleta, resumenTrabajadores, trabActivos, estadoEpp } from '@/lib/auditoriaMandante'
 import { formatearRut, rutValido } from '@/lib/rut'
 import { P3_ITEMS, P3_SECCIONES, COLOR_CAL, DESC_CAL } from '@/lib/p3'
 import { generarEstadoAuditoria } from '@/lib/generarAuditoriaMandante'
@@ -31,6 +31,8 @@ export default function AuditoriaMandante() {
   const [resps, setResps] = useState<AudResp[]>([])
   const [docs, setDocs] = useState<AudDoc[]>([])
   const [trabs, setTrabs] = useState<AudTrab[]>([])
+  const [eppCat, setEppCat] = useState<any[]>([])
+  const [eppCerts, setEppCerts] = useState<any[]>([])
   const [contratos, setContratos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
@@ -38,7 +40,7 @@ export default function AuditoriaMandante() {
   const [msg, setMsg] = useState('')
 
   const cargar = useCallback(async () => {
-    const [f, it, lv, rs, dc, ct, cl, us, tr, dt] = await Promise.all([
+    const [f, it, lv, rs, dc, ct, cl, us, tr, dt, ec, ek] = await Promise.all([
       supabase.from('aud_formatos').select('*').order('nombre'),
       supabase.from('aud_items').select('*').order('orden'),
       supabase.from('aud_levantamientos').select('*').order('created_at'),
@@ -49,7 +51,10 @@ export default function AuditoriaMandante() {
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('aud_trabajadores').select('*').order('nombre'),
       supabase.from('aud_doc_trabajadores').select('documento_id,trabajador_id'),
+      supabase.from('pr_epp_catalogo').select('id,nombre,activo,requiere_certificado').order('nombre'),
+      supabase.from('pr_epp_certificados').select('*'),
     ])
+    setEppCat(ec.data || []); setEppCerts(ek.data || [])
     const links: Record<string, string[]> = {}
     ;(dt.data || []).forEach((x: any) => { (links[x.documento_id] ||= []).push(x.trabajador_id) })
     setTrabs((tr.data || []) as AudTrab[])
@@ -58,6 +63,7 @@ export default function AuditoriaMandante() {
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
+  const eppEst = estadoEpp(eppCat, eppCerts)
   const nombreDe = (id: string | null) => usuarios.find(u => u.id === id)?.nombre || '—'
   const ctEtiqueta = (id: string) => { const c = contratos.find(x => x.id === id); return c ? etiquetaContrato(c, clientes) : '—' }
   const abrirArchivo = async (path: string) => {
@@ -84,7 +90,7 @@ export default function AuditoriaMandante() {
     const fm = lev && formatos.find(f => f.id === lev.formato_id)
     if (!lev || !fm) return wrap(<p style={{ fontSize: '13px', color: '#999' }}>No se encontró el levantamiento.</p>, { txt: 'Volver', f: () => setVista({ t: 'lista' }) })
     return <Levantamiento lev={lev} fm={fm} items={items.filter(i => i.formato_id === fm.id)} resps={resps.filter(r => r.levantamiento_id === lev.id)} docs={docs.filter(d => d.levantamiento_id === lev.id)} trabs={trabs.filter(t => t.levantamiento_id === lev.id)}
-      contratoTxt={ctEtiqueta(lev.contrato_id)} esJefe={esJefe} usuarioId={usuario!.id} nombreDe={nombreDe} abrirArchivo={abrirArchivo} recargar={cargar} wrap={wrap} volver={() => { setVista({ t: 'lista' }); cargar() }} />
+      eppEst={eppEst} contratoTxt={ctEtiqueta(lev.contrato_id)} esJefe={esJefe} usuarioId={usuario!.id} nombreDe={nombreDe} abrirArchivo={abrirArchivo} recargar={cargar} wrap={wrap} volver={() => { setVista({ t: 'lista' }); cargar() }} />
   }
 
   // ═════════ Formatos (solo Jefe) ═════════
@@ -112,7 +118,7 @@ export default function AuditoriaMandante() {
         const its = items.filter(i => i.formato_id === fm.id)
         const rm: Record<string, AudResp> = {}; resps.filter(r => r.levantamiento_id === l.id).forEach(r => { rm[r.item_id] = r })
         const ds = docs.filter(d => d.levantamiento_id === l.id), tb = trabs.filter(t => t.levantamiento_id === l.id)
-        const r = resumen(its, rm, ds, !!fm.usa_puntaje, tb)
+        const r = resumen(its, rm, ds, !!fm.usa_puntaje, tb, eppEst.ok)
         const rt = resumenTrabajadores(its, tb, ds)
         const cal = calificacion(r.pct)
         return (
@@ -165,8 +171,8 @@ function NuevoLev({ formatos, contratos, levs, clientes, usuarioId, onCreado }: 
 }
 
 // ───────── Checklist de un contrato ─────────
-function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe, usuarioId, nombreDe, abrirArchivo, recargar, wrap, volver }: {
-  lev: any, fm: any, items: AudItem[], resps: AudResp[], docs: AudDoc[], trabs: AudTrab[], contratoTxt: string, esJefe: boolean, usuarioId: string,
+function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt, esJefe, usuarioId, nombreDe, abrirArchivo, recargar, wrap, volver }: {
+  lev: any, fm: any, items: AudItem[], resps: AudResp[], docs: AudDoc[], trabs: AudTrab[], eppEst: ReturnType<typeof estadoEpp>, contratoTxt: string, esJefe: boolean, usuarioId: string,
   nombreDe: (id: string | null) => string, abrirArchivo: (p: string) => void, recargar: () => Promise<void>, wrap: (c: React.ReactNode, v?: any) => React.ReactNode, volver: () => void,
 }) {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'no_cumple' | 'revisar' | 'vencidos'>('todos')
@@ -177,7 +183,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
   const [msg, setMsg] = useState('')
   const rm = useMemo(() => { const m: Record<string, AudResp> = {}; resps.forEach(r => { m[r.item_id] = r }); return m }, [resps])
   const dpor = (id: string) => docs.filter(d => d.item_id === id)
-  const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs)
+  const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs, eppEst.ok)
   const rt = resumenTrabajadores(items, trabs, docs)
   const cal = calificacion(r.pct)
   const secciones = Array.from(new Set(items.map(i => i.seccion)))
@@ -199,6 +205,9 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
       const c = difCompleta(it.id, trabs, docs)
       if (c.total === 0) { setMsg(`Ítem ${it.numero || ''}: primero agrega a los trabajadores del contrato.`); return }
       if (!c.ok) { setMsg(`Ítem ${it.numero || ''}: faltan los documentos firmados de ${c.faltan} trabajador(es).`); return }
+    } else if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'epp') {
+      if (eppEst.total === 0) { setMsg(`Ítem ${it.numero || ''}: el Jefe aún no define qué EPP aplican ni carga sus certificados en el módulo EPP.`); return }
+      if (!eppEst.ok) { setMsg(`Ítem ${it.numero || ''}: faltan certificados vigentes de ${eppEst.total - eppEst.conCert} EPP (los carga el Jefe en el módulo EPP).`); return }
     } else if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { setMsg(`Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
     await guardar(it, { estado: actual === v ? 'pendiente' : v })
   }
@@ -251,7 +260,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
   }
   const pdf = async () => {
     const v = abrirVentanaPDF()
-    try { await generarEstadoAuditoria({ formato: fm, contrato: contratoTxt, items, resp: rm, docs, trabs }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
+    try { await generarEstadoAuditoria({ formato: fm, contrato: contratoTxt, items, resp: rm, docs, trabs, eppOk: eppEst.ok }, v) } catch (e: any) { v?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
   }
   const kpi = (v: string | number, t: string, col = '#16213E') => <div style={{ ...card, padding: '10px 12px', textAlign: 'center' }}><p style={{ margin: 0, fontSize: '21px', fontWeight: 800, color: col }}>{v}</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#667085' }}>{t}</p></div>
   const chip = (k: typeof filtro, t: string, n?: number) => <button key={k} onClick={() => setFiltro(k)} style={{ ...btn(filtro === k), padding: '5px 11px', fontSize: '12px' }}>{t}{n !== undefined ? ` (${n})` : ''}</button>
@@ -300,6 +309,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
                 </div>
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
+                {it.fuente === 'epp' && <BloqueEpp est={eppEst} abrirArchivo={abrirArchivo} />}
                 {it.requiere_trabajador && <SelectorTrab it={it} trabs={trabs} docs={docs} subiendo={subiendo === it.id} subirVarios={subirVarios} />}
                 {/* Documentos */}
                 {ds.map(d => {
@@ -351,6 +361,23 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
     })}
     {items.length === 0 && <p style={{ fontSize: '13px', color: '#999' }}>Este formato todavía no tiene ítems.</p>}
   </>, { txt: 'Volver a la lista', f: volver })
+}
+
+// ───────── Certificados de EPP traídos automáticamente del módulo EPP (solo lectura) ─────────
+function BloqueEpp({ est, abrirArchivo }: { est: ReturnType<typeof estadoEpp>, abrirArchivo: (p: string) => void }) {
+  return (
+    <div style={{ background: '#f7f9fd', border: '1px solid #dfe7f5', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>
+      <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: est.ok ? '#14532d' : '#986a00' }}>🦺 Certificados de calidad de EPP (vienen del módulo EPP) · {est.conCert}/{est.total} EPP con certificado vigente</p>
+      {est.total === 0 && <p style={{ margin: 0, fontSize: '12px', color: '#98a2b3' }}>Aún no hay EPP con certificados. El Jefe los carga en Prevención de Riesgo → Stock de EPP.</p>}
+      {est.filas.map(f => (
+        <div key={f.c.id} style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', padding: '3px 0', fontSize: '12.5px' }}>
+          <span style={{ fontWeight: 600, minWidth: '110px' }}>{f.ok ? '✓' : '✗'} {f.c.nombre}</span>
+          {f.cs.length === 0 && <span style={{ color: '#9b1c1c', fontSize: '12px' }}>sin certificado</span>}
+          {f.cs.map((c: any) => { const v = vigencia(c.vence); return (
+            <button key={c.id} type="button" onClick={() => abrirArchivo(c.path)} title={c.nombre} style={{ border: 'none', borderRadius: '20px', padding: '2px 9px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, background: v === 'vencido' ? '#fde8e8' : v === 'por_vencer' ? '#fef7e0' : '#e7f6ec', color: v === 'vencido' ? '#9b1c1c' : v === 'por_vencer' ? '#986a00' : '#14532d' }}>📎 {c.proveedor || 'Certificado'}{c.vence ? ` · vence ${fcl(c.vence)}` : ''}</button>) })}
+        </div>))}
+    </div>
+  )
 }
 
 // ───────── Celda de respaldo de un trabajador en un ítem ─────────
@@ -530,7 +557,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
             setBusy(true); setMsg('')
             const { data, error } = await supabase.from('aud_formatos').insert({ nombre: 'SQM · Auditoría de Calificación P3', codigo: 'REG-PR-004 v002', descripcion: 'Reglamento de Contratistas y Subcontratistas SQM', usa_puntaje: true }).select().maybeSingle()
             if (error || !data) { setBusy(false); err(error); return }
-            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n) }))
+            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : null }))
             const r = await supabase.from('aud_items').insert(filas)
             setBusy(false); if (r.error) { err(r.error); return }
             await recargar()

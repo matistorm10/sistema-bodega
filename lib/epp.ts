@@ -20,3 +20,24 @@ export function ordenTalla(a: string, b: string): number {
   const r = PRESET.ropa, ia = r.indexOf(a), ib = r.indexOf(b)
   return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b)
 }
+
+// ---- Stock mínimo por faena + ítem + talla (talla '' para EPP sin talla) ----
+export type EvalMin = { item: any, ubic: any, talla: string, min: number, stock: number }
+export const stockDe = (stock: any[], ubId: string, itemId: string, talla: string): number =>
+  stock.find(s => s.ubicacion_id === ubId && s.item_id === itemId && (s.talla || '') === talla)?.stock || 0
+export const minimoDe = (minimos: any[], ubId: string, itemId: string, talla: string): number =>
+  minimos.find(m => m.ubicacion_id === ubId && m.item_id === itemId && (m.talla || '') === talla)?.minimo || 0
+// Compara el stock contra cada mínimo definido (mínimo > 0). Ignora mínimos huérfanos (ítem inactivo o talla que no corresponde).
+export function evaluarMinimos(minimos: any[], stock: any[], items: any[], ubics: any[]): EvalMin[] {
+  const out: EvalMin[] = []
+  minimos.forEach(m => {
+    if (!(m.minimo > 0)) return
+    const item = items.find(i => i.id === m.item_id); const ubic = ubics.find(u => u.id === m.ubicacion_id)
+    if (!item || !ubic) return
+    const talla = m.talla || ''
+    if (item.usa_talla ? !talla : !!talla) return
+    out.push({ item, ubic, talla, min: m.minimo, stock: stockDe(stock, ubic.id, item.id, talla) })
+  })
+  return out
+}
+export const etiquetaMin = (e: EvalMin) => `${e.item.nombre}${e.talla ? ' talla ' + e.talla : ''} · ${e.ubic.nombre}: ${e.stock} (mínimo ${e.min})`

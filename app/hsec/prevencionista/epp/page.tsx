@@ -6,7 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
-import { tallasDe, ordenTalla } from '@/lib/epp'
+import { tallasDe, ordenTalla, stockDe, minimoDe } from '@/lib/epp'
 import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
@@ -126,25 +126,27 @@ export default function EppPrevencionista() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Talla</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Mínimo faena</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Stock</th></tr></thead>
               <tbody>{catalogo.map(c => {
-                const min = minimos.find(m => m.item_id === c.id)?.minimo || 0
-                const filasT = stock.filter(x => x.item_id === c.id && x.stock !== 0).sort((x, y) => ordenTalla(x.talla, y.talla))
-                const tot = filasT.reduce((a, x) => a + x.stock, 0)
-                const bajo = min > 0 && tot < min, igual = min > 0 && tot === min
+                const tallas = c.usa_talla ? Array.from(new Set([...stock.filter(x => x.item_id === c.id && x.stock !== 0).map(x => x.talla as string), ...minimos.filter(m => m.item_id === c.id && m.minimo > 0 && m.talla).map(m => m.talla as string)])).sort(ordenTalla) : []
+                const tot = stock.filter(x => x.item_id === c.id).reduce((a, x) => a + x.stock, 0)
+                const ev = (t: string) => { const m = minimoDe(minimos, ubic, c.id, t), v = stockDe(stock, ubic, c.id, t); return { m, v, bajo: m > 0 && v < m, igual: m > 0 && v === m } }
+                const etq = (e: { bajo: boolean, igual: boolean }) => e.bajo ? <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo</span> : e.igual ? <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fff3cd', color: '#7a5600' }}>en el mínimo</span> : null
+                const resumen = c.usa_talla ? tallas.map(ev) : [ev('')]
+                const e0 = ev('')
                 return (
                   <Fragment key={c.id}>
                     <tr style={{ borderTop: '1px solid #eef1f6' }}>
-                      <td style={{ padding: '7px 8px', fontWeight: 600 }}>{c.nombre}{bajo && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fde8e8', color: '#9b1c1c' }}>bajo mínimo</span>}{igual && <span style={{ marginLeft: '6px', fontSize: '10.5px', padding: '2px 7px', borderRadius: '20px', background: '#fff3cd', color: '#7a5600' }}>en el mínimo</span>}</td>
+                      <td style={{ padding: '7px 8px', fontWeight: 600 }}>{c.nombre}{c.usa_talla ? etq({ bajo: resumen.some(x => x.bajo), igual: !resumen.some(x => x.bajo) && resumen.some(x => x.igual) }) : etq(e0)}</td>
                       <td style={{ padding: '7px 8px', color: '#667085' }}>{c.usa_talla ? 'total' : '—'}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'right', color: min > 0 ? '#16213E' : '#98a2b3' }}>{min > 0 ? min : 'sin definir'}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: tot === 0 ? '#c0392b' : bajo ? '#c0392b' : '#16213E' }}>{tot}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', color: '#98a2b3' }}>{c.usa_talla ? '' : e0.m > 0 ? <span style={{ color: '#16213E' }}>{e0.m}</span> : 'sin definir'}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: tot === 0 || (!c.usa_talla && e0.bajo) ? '#c0392b' : '#16213E' }}>{tot}</td>
                     </tr>
-                    {c.usa_talla && filasT.map(x => (
-                      <tr key={c.id + x.talla} style={{ background: '#fafbfd' }}>
-                        <td style={{ padding: '3px 8px 3px 24px', color: '#667085', fontSize: '12px' }}>↳ talla</td>
-                        <td style={{ padding: '3px 8px', fontWeight: 600, fontSize: '12.5px' }}>{x.talla}</td>
-                        <td></td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right', fontSize: '12.5px' }}>{x.stock}</td>
-                      </tr>))}
+                    {c.usa_talla && tallas.map(t => { const e = ev(t); return (
+                      <tr key={c.id + t} style={{ background: '#fafbfd' }}>
+                        <td style={{ padding: '3px 8px 3px 24px', color: '#667085', fontSize: '12px' }}>↳ talla {etq(e)}</td>
+                        <td style={{ padding: '3px 8px', fontWeight: 600, fontSize: '12.5px' }}>{t}</td>
+                        <td style={{ padding: '3px 8px', textAlign: 'right', fontSize: '12.5px', color: e.m > 0 ? '#16213E' : '#98a2b3' }}>{e.m > 0 ? e.m : 'sin definir'}</td>
+                        <td style={{ padding: '3px 8px', textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: e.bajo ? '#c0392b' : '#16213E' }}>{e.v}</td>
+                      </tr>) })}
                   </Fragment>)
               })}</tbody>
             </table>

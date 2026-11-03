@@ -6,7 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { fechaCL } from '@/lib/prevencion'
-import { TIPOS_TALLA, ordenTalla, type TipoTalla } from '@/lib/epp'
+import { TIPOS_TALLA, ordenTalla, tallasDe, stockDe, minimoDe, evaluarMinimos, etiquetaMin, type TipoTalla } from '@/lib/epp'
 import CertificadosEpp from '@/components/programa/CertificadosEpp'
 
 const TIPOS: Record<string, string> = { ingreso: 'Ingreso', entrega: 'Entrega', ajuste: 'Ajuste', baja: 'Baja' }
@@ -61,15 +61,17 @@ export default function JefaturaEpp() {
   const ubicEpp = useMemo(() => ubicaciones.filter(u => asigs.some(a => a.ubicacion_id === u.id) || stock.some(s => s.ubicacion_id === u.id)), [ubicaciones, asigs, stock])
   const total = (itemId: string, ubId: string) => stock.filter(s => s.item_id === itemId && s.ubicacion_id === ubId).reduce((a, s) => a + s.stock, 0)
   // mínimo efectivo: el definido por el Jefe para esa faena; si no hay, el valor por defecto del catálogo
-  const minDe = (c: any, ubId: string): number => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId); return m ? m.minimo : 0 }
-  const bajoMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) < minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (mínimo ${minDe(c, u.id)})` })))
-  const igualMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) === minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (= mínimo)` })))
-  const guardarMin = async (c: any, ubId: string, txt: string) => {
-    const actual = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId)
-    if (txt.trim() === '') { if (!actual) return; const { error } = await supabase.from('pr_epp_minimos').delete().eq('item_id', c.id).eq('ubicacion_id', ubId); if (error) { alert(error.message); return } await cargar(); return }
+  const evalMin = evaluarMinimos(minimos, stock, activos, ubicEpp)
+  const bajoMin = evalMin.filter(e => e.stock < e.min).map(e => ({ k: e.item.id + e.ubic.id + e.talla, t: etiquetaMin(e) }))
+  const igualMin = evalMin.filter(e => e.stock === e.min).map(e => ({ k: e.item.id + e.ubic.id + e.talla, t: etiquetaMin(e) }))
+  const estado = (ubId: string, itemId: string, talla: string, v: number) => { const m = minimoDe(minimos, ubId, itemId, talla); return { bajo: m > 0 && v < m, igual: m > 0 && v === m } }
+  const tallasFila = (c: any) => c.usa_talla ? Array.from(new Set([...stock.filter(x => x.item_id === c.id && x.stock !== 0).map(x => x.talla as string), ...minimos.filter(m => m.item_id === c.id && m.minimo > 0 && m.talla).map(m => m.talla as string)])).sort(ordenTalla) : []
+  const guardarMin = async (c: any, ubId: string, talla: string, txt: string) => {
+    const actual = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId && (x.talla || '') === talla)
+    if (txt.trim() === '') { if (!actual) return; const { error } = await supabase.from('pr_epp_minimos').delete().eq('item_id', c.id).eq('ubicacion_id', ubId).eq('talla', talla); if (error) { alert(error.message); return } await cargar(); return }
     const v = Math.floor(Number(txt)); if (!(v >= 0)) return
     if (actual && actual.minimo === v) return
-    const { error } = await supabase.from('pr_epp_minimos').upsert({ ubicacion_id: ubId, item_id: c.id, minimo: v }, { onConflict: 'ubicacion_id,item_id' })
+    const { error } = await supabase.from('pr_epp_minimos').upsert({ ubicacion_id: ubId, item_id: c.id, talla, minimo: v }, { onConflict: 'ubicacion_id,item_id,talla' })
     if (error) alert(error.message); else await cargar()
   }
   const movsF = movs.filter(m => !fUbic || m.ubicacion_id === fUbic).slice(0, 25)
@@ -154,20 +156,24 @@ export default function JefaturaEpp() {
                     <tbody>
                       {activos.map(c => {
                         const tot = ubicEpp.reduce((a, u) => a + total(c.id, u.id), 0)
-                        const tallas = c.usa_talla ? Array.from(new Set(stock.filter(x => x.item_id === c.id && x.stock !== 0 && ubicEpp.some(u => u.id === x.ubicacion_id)).map(x => x.talla))).sort(ordenTalla) : []
+                        const tallas = tallasFila(c)
                         return (
                           <Fragment key={c.id}>
                           <tr style={{ borderTop: '1px solid #eef1f6' }}>
                             <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
-                            {ubicEpp.map(u => { const v = total(c.id, u.id), bajo = minDe(c, u.id) > 0 && v < minDe(c, u.id), igual = minDe(c, u.id) > 0 && v === minDe(c, u.id)
+                            {ubicEpp.map(u => {
+                              const v = total(c.id, u.id)
+                              const es = c.usa_talla ? tallas.map(t => estado(u.id, c.id, t, stockDe(stock, u.id, c.id, t))) : [estado(u.id, c.id, '', v)]
+                              const bajo = es.some(e => e.bajo), igual = !bajo && es.some(e => e.igual)
                               return <td key={u.id} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: bajo ? '#c0392b' : igual ? '#b7791f' : '#16213E', background: bajo ? '#fff5f5' : igual ? '#fff8e5' : undefined }}>{v}</td> })}
                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{tot}</td>
                           </tr>
                           {tallas.map(t => (
                             <tr key={c.id + t} style={{ background: '#fafbfd' }}>
                               <td style={{ padding: '3px 8px 3px 24px', color: '#667085', fontSize: '12px' }}>Talla {t}</td>
-                              {ubicEpp.map(u => { const v = stock.find(x => x.item_id === c.id && x.ubicacion_id === u.id && x.talla === t)?.stock || 0; return <td key={u.id} style={{ padding: '3px 8px', textAlign: 'right', color: '#667085', fontSize: '12px' }}>{v}</td> })}
-                              <td style={{ padding: '3px 8px', textAlign: 'right', color: '#667085', fontSize: '12px' }}>{ubicEpp.reduce((a, u) => a + (stock.find(x => x.item_id === c.id && x.ubicacion_id === u.id && x.talla === t)?.stock || 0), 0)}</td>
+                              {ubicEpp.map(u => { const v = stockDe(stock, u.id, c.id, t), e = estado(u.id, c.id, t, v), m = minimoDe(minimos, u.id, c.id, t)
+                                return <td key={u.id} style={{ padding: '3px 8px', textAlign: 'right', fontSize: '12px', fontWeight: e.bajo || e.igual ? 700 : 400, color: e.bajo ? '#c0392b' : e.igual ? '#b7791f' : '#667085', background: e.bajo ? '#fff5f5' : e.igual ? '#fff8e5' : undefined }}>{v}{m > 0 && <span style={{ fontWeight: 400, color: '#98a2b3' }}> /{m}</span>}</td> })}
+                              <td style={{ padding: '3px 8px', textAlign: 'right', color: '#667085', fontSize: '12px' }}>{ubicEpp.reduce((a, u) => a + stockDe(stock, u.id, c.id, t), 0)}</td>
                             </tr>))}
                           </Fragment>)
                       })}
@@ -175,24 +181,36 @@ export default function JefaturaEpp() {
                   </table>
                 </div>
               )}
-              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. El número de cada EPP es el total; debajo se muestra el detalle por talla. El mínimo se compara contra el total.</p>
+              <p style={{ fontSize: '11.5px', color: '#98a2b3', margin: '8px 0 0' }}>En rojo: bajo el stock mínimo de esa faena. En amarillo: justo en el mínimo. En los EPP con talla, el número de arriba es el total y debajo va cada talla con «stock /mínimo». El mínimo se controla por talla.</p>
               </>}
             </div>
 
             <div style={{ ...card, marginBottom: '12px' }}>
               {hdr('minimos', "Stock mínimo por faena", { margin: '0 0 4px', fontWeight: 700, fontSize: '14px' })}
               {!oc('minimos') && <>
-              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Celda vacía = sin mínimo definido. El prevencionista lo ve pero no lo puede editar.</p>
+              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Cada talla tiene su propio mínimo; celda vacía = sin mínimo definido. El prevencionista lo ve pero no lo puede editar.</p>
               {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay faenas con control de EPP.</p> : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                     <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '6px 8px' }}>EPP</th>{ubicEpp.map(u => <th key={u.id} style={{ padding: '6px 8px', textAlign: 'right' }}>{u.nombre}</th>)}</tr></thead>
-                    <tbody>{activos.map(c => (
-                      <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
-                        {ubicEpp.map(u => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === u.id)
-                          return <td key={u.id} style={{ padding: '4px 8px', textAlign: 'right' }}><input type="number" min="0" key={c.id + u.id + (m ? m.minimo : 'x')} defaultValue={m ? m.minimo : ''} placeholder="—" onBlur={e => guardarMin(c, u.id, e.target.value)} style={{ ...input, width: '64px', padding: '4px 6px', textAlign: 'right' }} /></td> })}
-                      </tr>))}</tbody>
+                    <tbody>{activos.map(c => {
+                      const celda = (u: any, talla: string) => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === u.id && (x.talla || '') === talla)
+                        return <td key={u.id} style={{ padding: '4px 8px', textAlign: 'right' }}><input type="number" min="0" key={c.id + u.id + talla + (m ? m.minimo : 'x')} defaultValue={m ? m.minimo : ''} placeholder="—" onBlur={e => guardarMin(c, u.id, talla, e.target.value)} style={{ ...input, width: '64px', padding: '4px 6px', textAlign: 'right' }} /></td> }
+                      if (!c.usa_talla) return (
+                        <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                          <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
+                          {ubicEpp.map(u => celda(u, ''))}
+                        </tr>)
+                      return (
+                        <Fragment key={c.id}>
+                          <tr style={{ borderTop: '1px solid #eef1f6' }}><td colSpan={ubicEpp.length + 1} style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre} <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '11.5px' }}>· un mínimo por talla</span></td></tr>
+                          {tallasDe(c).map(t => (
+                            <tr key={c.id + t} style={{ background: '#fafbfd' }}>
+                              <td style={{ padding: '2px 8px 2px 24px', color: '#667085', fontSize: '12px' }}>Talla {t}</td>
+                              {ubicEpp.map(u => celda(u, t))}
+                            </tr>))}
+                        </Fragment>)
+                    })}</tbody>
                   </table>
                 </div>
               )}

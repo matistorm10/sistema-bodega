@@ -125,7 +125,7 @@ export default function EppPrevencionista() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>EPP</th><th style={{ padding: '6px 8px' }}>Talla</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Stock</th></tr></thead>
               <tbody>{filas.map(r => {
-                const min = (minimos.find(m => m.item_id === r.item.id)?.minimo ?? r.item.stock_minimo) || 0
+                const min = minimos.find(m => m.item_id === r.item.id)?.minimo || 0
                 const tot = r.item.usa_talla ? r.stock : stock.filter(s => s.item_id === r.item.id).reduce((a, s) => a + s.stock, 0)
                 const bajo = min > 0 && tot < min, igual = min > 0 && tot === min
                 return (

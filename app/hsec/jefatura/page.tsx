@@ -109,7 +109,7 @@ export default function Jefatura() {
       const activosEpp = (ec.data || []).filter((x: any) => x.activo !== false)
       const ubicEpp = (f.data || []).filter((x: any) => (eu.data || []).some((e: any) => e.ubicacion_id === x.id) || (st.data || []).some((s: any) => s.ubicacion_id === x.id))
       const tot = (itemId: string, ub: string) => (st.data || []).filter((s: any) => s.item_id === itemId && s.ubicacion_id === ub).reduce((a: number, s: any) => a + s.stock, 0)
-      const minDe = (x: any, ub: string) => { const m = (mn.data || []).find((r: any) => r.item_id === x.id && r.ubicacion_id === ub); return m ? m.minimo : (x.stock_minimo || 0) }
+      const minDe = (x: any, ub: string) => { const m = (mn.data || []).find((r: any) => r.item_id === x.id && r.ubicacion_id === ub); return m ? m.minimo : 0 }
       const pares = activosEpp.flatMap((x: any) => ubicEpp.map((ub: any) => ({ x, ub, t: tot(x.id, ub.id), m: minDe(x, ub.id) }))).filter((p: any) => p.m > 0)
       const bajo = pares.filter((p: any) => p.t < p.m).map((p: any) => `${p.x.nombre} · ${p.ub.nombre}: ${p.t} (mínimo ${p.m})`)
       const igual = pares.filter((p: any) => p.t === p.m).map((p: any) => `${p.x.nombre} · ${p.ub.nombre}: ${p.t} (mínimo ${p.m})`)

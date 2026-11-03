@@ -23,7 +23,7 @@ export default function JefaturaEpp() {
   const [certs, setCerts] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
-  const [nuevo, setNuevo] = useState({ nombre: '', talla: false, min: '0' })
+  const [nuevo, setNuevo] = useState({ nombre: '', talla: false })
   const [asigSel, setAsigSel] = useState({ u: '', ub: '' })
   const [fUbic, setFUbic] = useState('')
   const [msg, setMsg] = useState('')
@@ -55,7 +55,7 @@ export default function JefaturaEpp() {
   const ubicEpp = useMemo(() => ubicaciones.filter(u => asigs.some(a => a.ubicacion_id === u.id) || stock.some(s => s.ubicacion_id === u.id)), [ubicaciones, asigs, stock])
   const total = (itemId: string, ubId: string) => stock.filter(s => s.item_id === itemId && s.ubicacion_id === ubId).reduce((a, s) => a + s.stock, 0)
   // mínimo efectivo: el definido por el Jefe para esa faena; si no hay, el valor por defecto del catálogo
-  const minDe = (c: any, ubId: string): number => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId); return m ? m.minimo : (c.stock_minimo || 0) }
+  const minDe = (c: any, ubId: string): number => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === ubId); return m ? m.minimo : 0 }
   const bajoMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) < minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (mínimo ${minDe(c, u.id)})` })))
   const igualMin = activos.flatMap(c => ubicEpp.filter(u => minDe(c, u.id) > 0 && total(c.id, u.id) === minDe(c, u.id)).map(u => ({ k: c.id + u.id, t: `${c.nombre} en ${u.nombre}: ${total(c.id, u.id)} (= mínimo)` })))
   const guardarMin = async (c: any, ubId: string, txt: string) => {
@@ -70,9 +70,9 @@ export default function JefaturaEpp() {
 
   const agregar = async () => {
     if (!nuevo.nombre.trim()) { setMsg('Escribe el nombre del EPP.'); return }
-    const { error } = await supabase.from('pr_epp_catalogo').insert({ nombre: nuevo.nombre.trim(), usa_talla: nuevo.talla, stock_minimo: Number(nuevo.min) || 0 })
+    const { error } = await supabase.from('pr_epp_catalogo').insert({ nombre: nuevo.nombre.trim(), usa_talla: nuevo.talla })
     if (error) { setMsg(error.code === '23505' ? 'Ese EPP ya existe.' : error.message); return }
-    setNuevo({ nombre: '', talla: false, min: '0' }); setMsg(''); await cargar()
+    setNuevo({ nombre: '', talla: false }); setMsg(''); await cargar()
   }
   const act = async (id: string, campos: any) => { const { error } = await supabase.from('pr_epp_catalogo').update(campos).eq('id', id); if (error) alert(error.message); else await cargar() }
   const stockTotal = (id: string) => stock.filter(x => x.item_id === id).reduce((a, x) => a + x.stock, 0)
@@ -159,7 +159,7 @@ export default function JefaturaEpp() {
 
             <div style={{ ...card, marginBottom: '12px' }}>
               <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '14px' }}>Stock mínimo por faena</p>
-              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Si dejas la celda vacía se usa el mínimo general del catálogo (gris). El prevencionista lo ve pero no lo puede editar.</p>
+              <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Lo define el Jefe y puedes cambiarlo cuando quieras (queda historial). Celda vacía = sin mínimo definido. El prevencionista lo ve pero no lo puede editar.</p>
               {ubicEpp.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Aún no hay faenas con control de EPP.</p> : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
@@ -168,7 +168,7 @@ export default function JefaturaEpp() {
                       <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
                         <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.nombre}</td>
                         {ubicEpp.map(u => { const m = minimos.find(x => x.item_id === c.id && x.ubicacion_id === u.id)
-                          return <td key={u.id} style={{ padding: '4px 8px', textAlign: 'right' }}><input type="number" min="0" key={c.id + u.id + (m ? m.minimo : 'x') + c.stock_minimo} defaultValue={m ? m.minimo : ''} placeholder={String(c.stock_minimo || 0)} onBlur={e => guardarMin(c, u.id, e.target.value)} style={{ ...input, width: '64px', padding: '4px 6px', textAlign: 'right' }} /></td> })}
+                          return <td key={u.id} style={{ padding: '4px 8px', textAlign: 'right' }}><input type="number" min="0" key={c.id + u.id + (m ? m.minimo : 'x')} defaultValue={m ? m.minimo : ''} placeholder="—" onBlur={e => guardarMin(c, u.id, e.target.value)} style={{ ...input, width: '64px', padding: '4px 6px', textAlign: 'right' }} /></td> })}
                       </tr>))}</tbody>
                   </table>
                 </div>
@@ -194,8 +194,6 @@ export default function JefaturaEpp() {
                         <button onClick={() => setEdit(null)} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>✕</button>
                       </span>
                     ) : <span style={{ flex: 1 }}>{c.nombre}{c.usa_talla ? ' · talla' : ''} <button onClick={() => setEdit({ id: c.id, nombre: c.nombre })} title="Editar nombre" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>}
-                    <span style={{ color: '#667085' }}>mín.</span>
-                    <input type="number" min="0" defaultValue={c.stock_minimo} onBlur={e => { const v = Number(e.target.value); if (v !== c.stock_minimo && v >= 0) act(c.id, { stock_minimo: v }) }} style={{ ...input, width: '60px', padding: '4px 6px' }} />
                     <button onClick={() => act(c.id, { activo: !c.activo })} style={{ ...btn(false), padding: '3px 8px', fontSize: '11px' }}>{c.activo ? 'Ocultar' : 'Activar'}</button>
                     <button onClick={() => eliminar(c)} title={stockTotal(c.id) !== 0 ? 'Solo se puede eliminar con stock en cero' : 'Eliminar'} style={{ ...btn(false, true), padding: '3px 8px', fontSize: '11px', opacity: stockTotal(c.id) !== 0 ? 0.4 : 1 }}>🗑</button>
                   </div>

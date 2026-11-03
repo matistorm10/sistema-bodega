@@ -242,6 +242,25 @@ export default function Usuarios() {
   const inputStyle: React.CSSProperties = {width:'100%',padding:'8px',borderRadius:'8px',border:'0.5px solid #ddd',fontSize:'13px',boxSizing:'border-box'}
   const checkboxLabel: React.CSSProperties = {display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'#333',cursor:'pointer',background:'#f8f9fa',padding:'10px 12px',borderRadius:'8px'}
 
+  const bloqueHsec = (v: {cargo:string,setCargo:(x:string)=>void,jefe:boolean,setJefe:(x:boolean)=>void,prev:boolean,setPrev:(x:boolean)=>void,ve:boolean,setVe:(x:boolean)=>void}) => (
+    <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5',display:'grid',gap:'10px'}}>
+      <div>
+        <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
+        <div style={{display:'grid',gap:'8px'}}>
+          <label style={checkboxLabel}><input type="checkbox" checked={v.jefe} onChange={e=>{v.setJefe(e.target.checked); if(e.target.checked) v.setPrev(false)}}/>📊 Jefatura del departamento (panel de control con los números)</label>
+          <label style={checkboxLabel}><input type="checkbox" checked={v.prev} onChange={e=>{v.setPrev(e.target.checked); if(e.target.checked) v.setJefe(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
+          <label style={checkboxLabel}><input type="checkbox" checked={v.ve} onChange={e=>v.setVe(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
+        </div>
+      </div>
+      <div>
+        <label style={{fontSize:'12px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido y firmas</label>
+        <select value={v.cargo} onChange={e=>v.setCargo(e.target.value)} style={inputStyle}>
+          <option value="">No participa</option>
+          {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+    </div>
+  )
   const tablaPermisos = (valores: Record<string, {origen:boolean, destino:boolean}>, onToggle: (id: string, campo: 'origen'|'destino') => void) => (
     <div style={{border:'0.5px solid #eee',borderRadius:'8px',overflow:'hidden'}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 70px 70px',background:'#f8f9fa',padding:'6px 10px',fontSize:'11px',color:'#666',fontWeight:'600'}}>
@@ -373,9 +392,12 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoHsec} onChange={e=>setAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
+              {accesoHsec && bloqueHsec({cargo:cargoPrograma,setCargo:setCargoPrograma,jefe:esJefeHsec,setJefe:setEsJefeHsec,prev:esPrevencionista,setPrev:setEsPrevencionista,ve:veDocs,setVe:setVeDocs})}
             </div>
           </div>
         )}
+
+        {rol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:cargoPrograma,setCargo:setCargoPrograma,jefe:esJefeHsec,setJefe:setEsJefeHsec,prev:esPrevencionista,setPrev:setEsPrevencionista,ve:veDocs,setVe:setVeDocs})}</div>}
 
         {(rol === 'admin' || accesoContabilidad) && (
           <div style={{marginBottom:'10px'}}>
@@ -387,24 +409,6 @@ export default function Usuarios() {
           </div>
         )}
 
-        <div style={{marginBottom:'10px'}}>
-          <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido y firmas (Prevención de Riesgo)</label>
-          <select value={cargoPrograma} onChange={e=>setCargoPrograma(e.target.value)} style={inputStyle}>
-            <option value="">No participa</option>
-            {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-
-        {(rol === 'admin' || accesoHsec) && (
-          <div style={{marginBottom:'10px'}}>
-            <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
-            <div style={{display:'grid',gap:'8px'}}>
-              <label style={checkboxLabel}><input type="checkbox" checked={esJefeHsec} onChange={e=>{setEsJefeHsec(e.target.checked); if(e.target.checked) setEsPrevencionista(false)}}/>📊 Jefatura del departamento (panel de control con los números)</label>
-              <label style={checkboxLabel}><input type="checkbox" checked={esPrevencionista} onChange={e=>{setEsPrevencionista(e.target.checked); if(e.target.checked) setEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
-              <label style={checkboxLabel}><input type="checkbox" checked={veDocs} onChange={e=>setVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
-            </div>
-          </div>
-        )}
 
         {error && <p style={{fontSize:'13px',color:'#c5221f',margin:'0 0 10px'}}>{error}</p>}
         {exito && <p style={{fontSize:'13px',color:'#137333',margin:'0 0 10px'}}>{exito}</p>}
@@ -458,32 +462,17 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoHsec} onChange={e=>setEditAccesoHsec(e.target.checked)}/>🦺 Departamento Prevención de Riesgo</label>
+                        {editAccesoHsec && bloqueHsec({cargo:editCargoPrograma,setCargo:setEditCargoPrograma,jefe:editEsJefeHsec,setJefe:setEditEsJefeHsec,prev:editEsPrevencionista,setPrev:setEditEsPrevencionista,ve:editVeDocs,setVe:setEditVeDocs})}
                       </div>
                     </div>
                   )}
+                  {editRol === 'admin' && <div style={{marginBottom:'10px'}}><label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>🦺 Prevención de Riesgo</label>{bloqueHsec({cargo:editCargoPrograma,setCargo:setEditCargoPrograma,jefe:editEsJefeHsec,setJefe:setEditEsJefeHsec,prev:editEsPrevencionista,setPrev:setEditEsPrevencionista,ve:editVeDocs,setVe:setEditVeDocs})}</div>}
                   {(editRol === 'admin' || editAccesoContabilidad) && (
                     <div style={{marginBottom:'10px'}}>
                       <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Contabilidad</label>
                       <div style={{display:'grid',gap:'8px'}}>
                         <label style={checkboxLabel}><input type="checkbox" checked={editPuedeAprobar} onChange={e=>setEditPuedeAprobar(e.target.checked)}/>✅ Puede aprobar rendiciones y guías de traslado</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editEsRevisor} onChange={e=>setEditEsRevisor(e.target.checked)}/>🔎 Revisor contable (cruza con KAME y marca como pagadas)</label>
-                      </div>
-                    </div>
-                  )}
-                  <div style={{marginBottom:'10px'}}>
-                    <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'4px'}}>Programa de liderazgo percibido y firmas (Prevención de Riesgo)</label>
-                    <select value={editCargoPrograma} onChange={e=>setEditCargoPrograma(e.target.value)} style={inputStyle}>
-                      <option value="">No participa</option>
-                      {Object.entries(CARGOS_PROGRAMA).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                  </div>
-                  {(editRol === 'admin' || editAccesoHsec) && (
-                    <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'13px',color:'#555',display:'block',marginBottom:'6px'}}>Facultades en Prevención de Riesgo</label>
-                      <div style={{display:'grid',gap:'8px'}}>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editEsJefeHsec} onChange={e=>{setEditEsJefeHsec(e.target.checked); if(e.target.checked) setEditEsPrevencionista(false)}}/>📊 Jefatura del departamento (panel de control con los números)</label>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editEsPrevencionista} onChange={e=>{setEditEsPrevencionista(e.target.checked); if(e.target.checked) setEditEsJefeHsec(false)}}/>🦺 Prevencionista (carga información de su faena)</label>
-                        <label style={checkboxLabel}><input type="checkbox" checked={editVeDocs} onChange={e=>setEditVeDocs(e.target.checked)}/>📁 Solo ver documentos de contratos aprobados (PTS, matrices, planes de emergencia)</label>
                       </div>
                     </div>
                   )}

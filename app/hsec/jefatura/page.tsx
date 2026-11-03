@@ -211,7 +211,7 @@ export default function Jefatura() {
             <Link href="/hsec/prevencionista/auditoria-p3" style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>🧾</div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Auditorías de Calificación P3 de los APR {p3Pend > 0 && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', marginLeft: '6px' }}>⏳ {p3Pend} por aprobar</span>}</p>
+                <p style={{ fontWeight: 700, fontSize: '14.5px', margin: '0 0 2px', color: '#16213E' }}>Auditorías Mandante de los APR {p3Pend > 0 && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#efe7fd', color: '#5b3aa6', marginLeft: '6px' }}>⏳ {p3Pend} por aprobar</span>}</p>
                 <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>Aprueba o rechaza las auditorías REG-PR-004 (SQM) con su % de cumplimiento y plan de acción</p>
               </div>
             </Link>

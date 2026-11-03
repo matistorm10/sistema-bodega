@@ -117,7 +117,7 @@ export default function AuditoriaP3() {
   const cab = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', background: '#fff', borderRadius: '16px', padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
       <Link href="/hsec/prevencionista/sso" style={{ fontSize: '13px', color: AZUL, textDecoration: 'none' }}>← SSO Faena</Link>
-      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Auditoría de Calificación P3</h1>
+      <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Auditoría Mandante</h1>
     </div>
   )
   const wrap = (c: React.ReactNode) => <main style={fondoPagina}><div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '820px', margin: '0 auto' }}>{cab}{c}</div></main>
@@ -297,8 +297,8 @@ export default function AuditoriaP3() {
   }
   return wrap(<>
     <div style={{ ...card, marginBottom: '12px' }}>
-      <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#667085' }}>{verTodos ? 'Aprueba o rechaza con comentarios las auditorías P3 que envían los APR. Solo su autor las modifica.' : 'Auditoría de calificación REG-PR-004 (SQM): responde los 56 ítems, el sistema calcula el % y la calificación, y genera el plan de acción de lo que no cumple. Al cerrarla se envía al Jefe para su aprobación.'}</p>
-      {!!usuario?.esPrevencionista && <button onClick={nuevo} style={btn()}>+ Nueva auditoría P3</button>}
+      <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#667085' }}>{verTodos ? 'Aprueba o rechaza con comentarios las auditorías mandante que envían los APR. Solo su autor las modifica.' : 'Auditoría del mandante (REG-PR-004, SQM): responde los 56 ítems, el sistema calcula el % y la calificación, y genera el plan de acción de lo que no cumple. Al cerrarla se envía al Jefe para su aprobación.'}</p>
+      {!!usuario?.esPrevencionista && <button onClick={nuevo} style={btn()}>+ Nueva auditoría mandante</button>}
     </div>
     {aviso}
     {verTodos && lista.some(r => r.estado === 'cerrado' && r.revision === 'pendiente') && (

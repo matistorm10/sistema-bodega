@@ -474,7 +474,7 @@ function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, abrirArchi
   const bajas = trabs.filter(t => !t.activo)
   const agregar = async (filas: { nombre: string, rut: string, fecha_ingreso?: string | null }[]) => {
     const { error } = await supabase.from('aud_trabajadores').insert(filas.map(f => ({ levantamiento_id: lev.id, nombre: f.nombre, rut: f.rut, fecha_ingreso: f.fecha_ingreso || null, creado_por: usuarioId })))
-    if (error) { setErr(error.code === '23505' ? 'Alguno de esos RUT ya está en la nómina.' : error.message); return false }
+    if (error) { setErr(error.code === '23505' ? 'Alguno de esos RUT ya está en la nómina.' : error.code === '42501' ? 'No se pudo agregar: este levantamiento ya no existe o no tienes asignado el contrato. Actualizo la lista; si sigue igual, pídele al Jefe que te asigne el contrato.' : error.message); if (error.code === '42501') await recargar(); return false }
     setErr(''); await recargar(); return true
   }
   const filas = soloInc ? rt.filas.filter(f => !f.completo) : rt.filas

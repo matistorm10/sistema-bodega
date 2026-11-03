@@ -38,7 +38,7 @@ export default function AuditoriaMandante() {
   const [msg, setMsg] = useState('')
 
   const cargar = useCallback(async () => {
-    const [f, it, lv, rs, dc, ct, cl, us, tr] = await Promise.all([
+    const [f, it, lv, rs, dc, ct, cl, us, tr, dt] = await Promise.all([
       supabase.from('aud_formatos').select('*').order('nombre'),
       supabase.from('aud_items').select('*').order('orden'),
       supabase.from('aud_levantamientos').select('*').order('created_at'),
@@ -48,9 +48,12 @@ export default function AuditoriaMandante() {
       supabase.from('pr_clientes_informe').select('id,nombre'),
       supabase.from('usuarios').select('id,nombre'),
       supabase.from('aud_trabajadores').select('*').order('nombre'),
+      supabase.from('aud_doc_trabajadores').select('documento_id,trabajador_id'),
     ])
+    const links: Record<string, string[]> = {}
+    ;(dt.data || []).forEach((x: any) => { (links[x.documento_id] ||= []).push(x.trabajador_id) })
     setTrabs((tr.data || []) as AudTrab[])
-    setFormatos(f.data || []); setItems((it.data || []) as AudItem[]); setLevs(lv.data || []); setResps((rs.data || []) as AudResp[]); setDocs((dc.data || []) as AudDoc[])
+    setFormatos(f.data || []); setItems((it.data || []) as AudItem[]); setLevs(lv.data || []); setResps((rs.data || []) as AudResp[]); setDocs(((dc.data || []) as AudDoc[]).map(d => ({ ...d, trab_ids: links[d.id] || [] })))
     setContratos(ct.data || []); setClientes(cl.data || []); setUsuarios(us.data || []); setCargando(false)
   }, [])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
@@ -173,7 +176,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
   const rm = useMemo(() => { const m: Record<string, AudResp> = {}; resps.forEach(r => { m[r.item_id] = r }); return m }, [resps])
-  const dpor = (id: string) => docs.filter(d => d.item_id === id && !d.trabajador_id)
+  const dpor = (id: string) => docs.filter(d => d.item_id === id)
   const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs)
   const rt = resumenTrabajadores(items, trabs, docs)
   const cal = calificacion(r.pct)
@@ -210,15 +213,27 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
     if (error) { setMsg('No se pudo registrar: ' + error.message); return }
     setVenceNuevo({ ...venceNuevo, [it.id]: '' }); await recargar()
   }
-  const subirTrab = async (it: AudItem, t: AudTrab, f: File) => {
-    if (f.size > 15 * 1024 * 1024) { setMsg('El archivo supera 15 MB.'); return }
-    setSubiendo(it.id + t.id); setMsg('')
-    const path = `auditoria/${lev.id}/${it.id}/${t.id}_${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+  // Un solo documento puede respaldar a varios trabajadores: se suben N vínculos
+  const subirVarios = async (it: AudItem, ids: string[], f: File): Promise<boolean> => {
+    if (!ids.length) { setMsg('Marca al menos un trabajador.'); return false }
+    if (f.size > 15 * 1024 * 1024) { setMsg('El archivo supera 15 MB.'); return false }
+    setSubiendo(it.id); setMsg('')
+    const path = `auditoria/${lev.id}/${it.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
     const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
-    if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return }
-    const { error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, trabajador_id: t.id, path, nombre: f.name, subido_por: usuarioId })
+    if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return false }
+    const { data, error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, path, nombre: f.name, subido_por: usuarioId }).select('id').maybeSingle()
+    if (error || !data) { setSubiendo(''); setMsg('No se pudo registrar: ' + (error?.message || '')); return false }
+    const { error: e2 } = await supabase.from('aud_doc_trabajadores').insert(ids.map(t => ({ documento_id: data.id, trabajador_id: t, levantamiento_id: lev.id })))
     setSubiendo('')
-    if (error) { setMsg('No se pudo registrar: ' + error.message); return }
+    if (e2) { setMsg('Se subió el archivo pero no se asignaron los trabajadores: ' + e2.message); await recargar(); return false }
+    await recargar(); return true
+  }
+  const cambiarTrab = async (d: AudDoc, tid: string, poner: boolean) => {
+    const q = poner
+      ? supabase.from('aud_doc_trabajadores').insert({ documento_id: d.id, trabajador_id: tid, levantamiento_id: lev.id })
+      : supabase.from('aud_doc_trabajadores').delete().eq('documento_id', d.id).eq('trabajador_id', tid)
+    const { error } = await q
+    if (error) { setMsg(error.message); return }
     await recargar()
   }
   const revisarDoc = async (d: AudDoc, revision: 'aprobado' | 'rechazado') => {
@@ -254,7 +269,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
       {kpi(r.porRevisar, 'Docs por revisar', r.porRevisar ? '#5b3aa6' : '#1e8e4e')}
     </div>
     {fm.usa_puntaje && <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: '#667085' }}>{DESC_CAL[cal].desc} <b>Escala:</b> Preferente 95–100% · Condicional 80–94% · Restringido bajo 80%.</p>}
-    {rt.its.length > 0 && <PanelTrabajadores lev={lev} trabs={trabs} docs={docs} rt={rt} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo} subirTrab={subirTrab} abrirArchivo={abrirArchivo} recargar={recargar} setMsg={setMsg} borrarDoc={borrarDoc} />}
+    {rt.its.length > 0 && <PanelTrabajadores lev={lev} trabs={trabs} docs={docs} rt={rt} esJefe={esJefe} usuarioId={usuarioId} abrirArchivo={abrirArchivo} recargar={recargar} setMsg={setMsg} />}
     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px', alignItems: 'center' }}>
       {chip('todos', 'Todos')}{chip('pendientes', 'Pendientes', r.pend)}{chip('no_cumple', 'No cumple', r.nNo)}{chip('revisar', 'Docs por revisar', r.porRevisar)}{chip('vencidos', 'Docs vencidos', r.vencidos)}
       <button onClick={pdf} style={{ ...btn(false), padding: '5px 11px', fontSize: '12px', marginLeft: 'auto' }}>📄 Informe de estado (PDF)</button>
@@ -285,20 +300,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
                 </div>
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
-                {it.requiere_trabajador && (() => {
-                  const c = difCompleta(it.id, trabs, docs)
-                  return (
-                    <div style={{ background: '#f7f9fd', border: '1px solid #dfe7f5', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>
-                      <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: c.ok ? '#14532d' : '#986a00' }}>👷 Documento firmado por cada trabajador · {c.total - c.faltan}/{c.total} cargados{c.total === 0 ? ' (agrega los trabajadores en el panel de arriba)' : ''}</p>
-                      {trabActivos(trabs).map(t => (
-                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', padding: '3px 0', fontSize: '12.5px' }}>
-                          <span>{t.nombre} <span style={{ color: '#98a2b3' }}>{t.rut}</span></span>
-                          <CeldaDif docs={docs} t={t} it={it} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo === it.id + t.id} subirTrab={subirTrab} abrirArchivo={abrirArchivo} borrarDoc={borrarDoc} />
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })()}
+                {it.requiere_trabajador && <SelectorTrab it={it} trabs={trabs} docs={docs} subiendo={subiendo === it.id} subirVarios={subirVarios} />}
                 {/* Documentos */}
                 {ds.map(d => {
                   const [vb, vf, vt] = VIG_COL[vigencia(d.vence)], [rb, rf, rt] = REV_COL[d.revision]
@@ -315,18 +317,19 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
                           {(esJefe || (d.subido_por === usuarioId && d.revision === 'pendiente')) && <button type="button" onClick={() => borrarDoc(d)} title="Eliminar" style={{ ...btn(false, true), padding: '3px 8px', fontSize: '11.5px' }}>🗑</button>}
                         </span>
                       </div>
+                      {it.requiere_trabajador && <TrabsDoc d={d} trabs={trabs} puedeEditar={esJefe || (d.subido_por === usuarioId && d.revision === 'pendiente')} cambiar={cambiarTrab} />}
                       {d.revision === 'rechazado' && d.comentario && <p style={{ margin: '4px 0 0', color: '#9b1c1c' }}>💬 {d.comentario}</p>}
                     </div>
                   )
                 })}
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' }}>
+                {!it.requiere_trabajador && <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' }}>
                   <label style={{ ...btn(false), padding: '5px 12px', fontSize: '12px', display: 'inline-block', cursor: 'pointer' }}>
                     {subiendo === it.id ? 'Subiendo...' : '📎 Subir documento'}
                     <input type="file" style={{ display: 'none' }} disabled={subiendo === it.id} onChange={ev => { const f = ev.target.files?.[0]; if (f) subir(it, f); ev.target.value = '' }} />
                   </label>
                   <span style={{ fontSize: '11.5px', color: '#667085' }}>Vence (si aplica):</span>
                   <input type="date" value={venceNuevo[it.id] || ''} onChange={ev => setVenceNuevo({ ...venceNuevo, [it.id]: ev.target.value })} style={{ ...input, width: 'auto', padding: '5px 8px', fontSize: '12px' }} />
-                </div>
+                </div>}
 
                 {e === 'no_cumple' && (
                   <div style={{ background: '#fff5f5', borderRadius: '8px', padding: '8px', margin: '6px 0', display: 'grid', gap: '6px' }}>
@@ -352,26 +355,69 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, contratoTxt, esJefe
 
 // ───────── Celda de respaldo de un trabajador en un ítem ─────────
 const CEL: Record<string, [string, string, string]> = { falta: ['#fff', '#9b1c1c', 'Falta'], revisar: ['#efe7fd', '#5b3aa6', '⏳'], ok: ['#d7efe0', '#14532d', '✓'], rechazado: ['#fde8e8', '#9b1c1c', '✗'] }
-function CeldaDif({ docs, t, it, esJefe, usuarioId, subiendo, subirTrab, abrirArchivo, borrarDoc, compacta }: { docs: AudDoc[], t: AudTrab, it: AudItem, esJefe: boolean, usuarioId: string, subiendo: boolean, subirTrab: (it: AudItem, t: AudTrab, f: File) => void, abrirArchivo: (p: string) => void, borrarDoc: (d: AudDoc) => void, compacta?: boolean }) {
+function CeldaDif({ docs, t, it, abrirArchivo }: { docs: AudDoc[], t: AudTrab, it: AudItem, abrirArchivo: (p: string) => void }) {
   const { e, doc } = estadoTrab(docs, t.id, it.id)
   const [bg, fg, tx] = CEL[e]
+  if (!doc) return <span style={{ fontSize: '11px', fontWeight: 700, color: fg }}>{tx}</span>
+  return <button type="button" onClick={() => abrirArchivo(doc.path)} title={`${doc.nombre} · ${e === 'ok' ? 'aprobado' : e === 'revisar' ? 'por revisar' : 'rechazado'}${doc.comentario ? ' · ' + doc.comentario : ''}`} style={{ border: 'none', background: bg, color: fg, borderRadius: '6px', padding: '2px 8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📎 {tx}</button>
+}
+
+// ───────── Selector por clicks: un documento → varios trabajadores ─────────
+function SelectorTrab({ it, trabs, docs, subiendo, subirVarios }: { it: AudItem, trabs: AudTrab[], docs: AudDoc[], subiendo: boolean, subirVarios: (it: AudItem, ids: string[], f: File) => Promise<boolean> }) {
+  const [sel, setSel] = useState<string[]>([])
+  const act = trabActivos(trabs)
+  const c = difCompleta(it.id, trabs, docs)
+  const falta = (t: AudTrab) => { const e = estadoTrab(docs, t.id, it.id).e; return e === 'falta' || e === 'rechazado' }
+  const ordenados = [...act.filter(falta), ...act.filter(t => !falta(t))]
+  const alt = (id: string) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   return (
-    <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
-      {doc && <button type="button" onClick={() => abrirArchivo(doc.path)} title={`${doc.nombre} · ${e === 'ok' ? 'aprobado' : e === 'revisar' ? 'por revisar' : 'rechazado'}${doc.comentario ? ' · ' + doc.comentario : ''}`} style={{ border: 'none', background: bg, color: fg, borderRadius: '6px', padding: '2px 8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📎 {tx}</button>}
-      {!doc && <span style={{ fontSize: '11px', fontWeight: 700, color: fg }}>{tx}</span>}
-      <label title="Subir el documento firmado y escaneado" style={{ border: '1px dashed #9db8e0', borderRadius: '6px', padding: compacta ? '1px 7px' : '2px 9px', fontSize: '11.5px', color: AZUL, cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}>
-        {subiendo ? '...' : e === 'falta' ? '＋ Subir' : '↻'}
-        <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={subiendo} onChange={ev => { const f = ev.target.files?.[0]; if (f) subirTrab(it, t, f); ev.target.value = '' }} />
-      </label>
-      {doc && (esJefe || (doc.subido_por === usuarioId && doc.revision === 'pendiente')) && <button type="button" onClick={() => borrarDoc(doc)} title="Eliminar" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', padding: 0 }}>🗑</button>}
-    </span>
+    <div style={{ background: '#f7f9fd', border: '1px solid #dfe7f5', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }}>
+      <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: c.ok ? '#14532d' : '#986a00' }}>👷 Documento firmado por trabajador · {c.total - c.faltan}/{c.total} con respaldo{c.total === 0 ? ' (agrega los trabajadores en el panel de arriba)' : ''}</p>
+      {act.length > 0 && <>
+        <p style={{ margin: '0 0 6px', fontSize: '11.5px', color: '#667085' }}>Marca con un click a quienes firmaron el documento que vas a subir (puede ser 1 o varios) y luego sube el archivo.</p>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '6px' }}>
+          {ordenados.map(t => {
+            const f = falta(t), on = sel.includes(t.id)
+            return <button key={t.id} type="button" onClick={() => alt(t.id)} title={t.rut} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', border: `1.5px solid ${on ? AZUL : f ? '#e0b4b4' : '#bfe3cb'}`, background: on ? AZUL : f ? '#fff' : '#eefaf2', color: on ? '#fff' : f ? '#9b1c1c' : '#14532d', fontWeight: on ? 700 : 500 }}>{on ? '☑' : f ? '☐' : '✓'} {t.nombre}</button>
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" onClick={() => setSel(act.filter(falta).map(t => t.id))} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>Los que faltan ({c.faltan})</button>
+          <button type="button" onClick={() => setSel(act.map(t => t.id))} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>Todos</button>
+          <button type="button" onClick={() => setSel([])} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>Ninguno</button>
+          <label style={{ ...btn(sel.length > 0), padding: '5px 12px', fontSize: '12px', display: 'inline-block', cursor: sel.length && !subiendo ? 'pointer' : 'not-allowed', opacity: sel.length ? 1 : 0.5, marginLeft: 'auto' }}>
+            {subiendo ? 'Subiendo...' : `📎 Subir documento (${sel.length} seleccionado${sel.length === 1 ? '' : 's'})`}
+            <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} disabled={!sel.length || subiendo} onChange={async ev => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f && await subirVarios(it, sel, f)) setSel([]) }} />
+          </label>
+        </div>
+      </>}
+    </div>
+  )
+}
+
+// ───────── Trabajadores cubiertos por un documento ─────────
+function TrabsDoc({ d, trabs, puedeEditar, cambiar }: { d: AudDoc, trabs: AudTrab[], puedeEditar: boolean, cambiar: (d: AudDoc, tid: string, poner: boolean) => void }) {
+  const [edit, setEdit] = useState(false)
+  const ids = d.trab_ids || []
+  const cubiertos = trabs.filter(t => ids.includes(t.id))
+  return (
+    <div style={{ marginTop: '5px', display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <span style={{ fontSize: '11px', color: '#667085' }}>👷 {cubiertos.length} trabajador(es):</span>
+      {(edit ? trabs.filter(t => t.activo || ids.includes(t.id)) : cubiertos).map(t => {
+        const on = ids.includes(t.id)
+        return edit
+          ? <button key={t.id} type="button" onClick={() => cambiar(d, t.id, !on)} style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', cursor: 'pointer', border: `1px solid ${on ? AZUL : '#d0d5dd'}`, background: on ? AZUL : '#fff', color: on ? '#fff' : '#667085' }}>{on ? '☑' : '☐'} {t.nombre}</button>
+          : <span key={t.id} style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', background: '#eef3fb', color: '#344054' }}>{t.nombre}</span>
+      })}
+      {puedeEditar && <button type="button" onClick={() => setEdit(e => !e)} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', fontSize: '11px', textDecoration: 'underline' }}>{edit ? 'Listo' : 'editar trabajadores'}</button>}
+    </div>
   )
 }
 
 // ───────── Panel: trabajadores del contrato y su respaldo ─────────
-function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, subiendo, subirTrab, abrirArchivo, recargar, setMsg, borrarDoc }: {
-  lev: any, trabs: AudTrab[], docs: AudDoc[], rt: ReturnType<typeof resumenTrabajadores>, esJefe: boolean, usuarioId: string, subiendo: string,
-  subirTrab: (it: AudItem, t: AudTrab, f: File) => void, abrirArchivo: (p: string) => void, recargar: () => Promise<void>, setMsg: (m: string) => void, borrarDoc: (d: AudDoc) => void,
+function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, abrirArchivo, recargar, setMsg }: {
+  lev: any, trabs: AudTrab[], docs: AudDoc[], rt: ReturnType<typeof resumenTrabajadores>, esJefe: boolean, usuarioId: string,
+  abrirArchivo: (p: string) => void, recargar: () => Promise<void>, setMsg: (m: string) => void,
 }) {
   const [abierto, setAbierto] = useState(true)
   const [soloInc, setSoloInc] = useState(false)
@@ -392,7 +438,7 @@ function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, subiendo, 
         <span style={{ fontSize: '12px', color: rt.total > 0 && rt.completos === rt.total ? '#14532d' : '#986a00', fontWeight: 700 }}>{rt.completos}/{rt.total} con respaldo completo {abierto ? '▲' : '▼'}</span>
       </button>
       {abierto && <>
-        <p style={{ margin: '6px 0 8px', fontSize: '12px', color: '#667085' }}>Cada vez que se contrata a alguien, agrégalo aquí. Imprime en terreno el documento de difusión, haz que el trabajador lo firme, escanéalo y súbelo en su fila, bajo el ítem que corresponde (ítems {rt.its.map(i => i.numero).join(' · ')}).</p>
+        <p style={{ margin: '6px 0 8px', fontSize: '12px', color: '#667085' }}>Cada vez que se contrata a alguien, agrégalo aquí. Imprime en terreno el documento de difusión, haz que el trabajador lo firme, escanéalo y súbelo dentro de cada ítem, marcando con un click a los trabajadores que firmaron ese documento (un mismo archivo puede cubrir a varios; ítems {rt.its.map(i => i.numero).join(' · ')}).</p>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <div style={{ flex: '2 1 200px' }}><label style={label}>Nombre completo</label><input value={nom} onChange={e => setNom(e.target.value)} style={input} /></div>
           <div style={{ flex: '1 1 140px' }}><label style={label}>RUT</label><input value={rut} maxLength={12} onChange={e => setRut(formatearRut(e.target.value))} placeholder="12.345.678-9" style={input} /></div>
@@ -434,7 +480,7 @@ function PanelTrabajadores({ lev, trabs, docs, rt, esJefe, usuarioId, subiendo, 
                     <span style={{ fontWeight: 600 }}>{f.t.nombre}</span> {f.completo && <span title="Respaldo completo" style={{ color: '#14532d' }}>✅</span>}
                     <br /><span style={{ color: '#98a2b3', fontSize: '11px' }}>{f.t.rut}{f.t.fecha_ingreso ? ` · ingreso ${fcl(f.t.fecha_ingreso)}` : ''}</span>
                   </td>
-                  {rt.its.map(i => <td key={i.id} style={{ padding: '6px' }}><CeldaDif compacta docs={docs} t={f.t} it={i} esJefe={esJefe} usuarioId={usuarioId} subiendo={subiendo === i.id + f.t.id} subirTrab={subirTrab} abrirArchivo={abrirArchivo} borrarDoc={borrarDoc} /></td>)}
+                  {rt.its.map(i => <td key={i.id} style={{ padding: '6px' }}><CeldaDif docs={docs} t={f.t} it={i} abrirArchivo={abrirArchivo} /></td>)}
                   <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
                     <button type="button" title="Dar de baja (ya no se le exige respaldo)" onClick={async () => { if (!confirm(`¿Dar de baja a ${f.t.nombre}? Sus documentos se conservan.`)) return; const { error } = await supabase.from('aud_trabajadores').update({ activo: false }).eq('id', f.t.id); if (error) { setMsg(error.message); return } await recargar() }} style={{ ...btn(false), padding: '2px 8px', fontSize: '11px' }}>Baja</button>
                     {esJefe && <button type="button" title="Eliminar de la nómina (borra también sus documentos)" onClick={async () => { if (!confirm(`¿Eliminar a ${f.t.nombre} y todos sus documentos?`)) return; const { error } = await supabase.from('aud_trabajadores').delete().eq('id', f.t.id); if (error) { setMsg(error.message); return } await recargar() }} style={{ ...btn(false, true), padding: '2px 8px', fontSize: '11px', marginLeft: '4px' }}>🗑</button>}

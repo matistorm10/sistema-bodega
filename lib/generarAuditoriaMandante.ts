@@ -37,7 +37,7 @@ export async function generarEstadoAuditoria(o: { formato: any, contrato: string
   for (const it of o.items) {
     if (it.seccion !== sec) { sec = it.seccion; body.push([{ content: sec, colSpan: 5, styles: { fontStyle: 'bold', fillColor: [226, 232, 242] } }]) }
     const rs = o.resp[it.id]
-    const ds = o.docs.filter(d => d.item_id === it.id && !d.trabajador_id)
+    const ds = o.docs.filter(d => d.item_id === it.id)
     const k = rt.its.findIndex(x => x.id === it.id)
     const nTrab = it.requiere_trabajador && k >= 0 ? `\nTrabajadores con respaldo: ${rt.filas.filter(f => f.est[k] === 'ok' || f.est[k] === 'revisar').length}/${rt.total}` : ''
     const dtxt = ds.length ? ds.map(d => `• ${d.nombre}${d.vence ? ` (vence ${fcl(d.vence)}${vigencia(d.vence) === 'vencido' ? ' VENCIDO' : ''})` : ''} – ${d.revision === 'aprobado' ? 'aprobado' : d.revision === 'rechazado' ? 'rechazado' : 'por revisar'}`).join('\n') : '—'

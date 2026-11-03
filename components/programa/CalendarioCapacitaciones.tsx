@@ -13,8 +13,8 @@ const fechaLarga = (f: string) => { const d = new Date(f + 'T12:00'); return `${
 export type FilaProg = { p: any, celdas: { m: number, k: string, e: 'ok' | 'parcial' | 'atraso' | 'futuro' | 'actual', hechas: number }[] }
 const EST: Record<string, [string, string, string]> = { ok: ['#d7efe0', '#14532d', '✓ Hecha'], parcial: ['#fef7e0', '#986a00', 'Parcial'], atraso: ['#fde8e8', '#9b1c1c', '! Atrasada'], actual: ['#e8f0fb', '#1B4F9C', '● Toca este mes'], futuro: ['#f1f3f7', '#667085', '○ Próximamente'] }
 
-export default function CalendarioCapacitaciones({ anio, charlas, asistCount, filas, puedeEditar, onRegistrar, onVer, onSubirPapel, subiendo }: {
-  anio: number, charlas: any[], asistCount: Record<string, number>, filas: FilaProg[], puedeEditar: boolean,
+export default function CalendarioCapacitaciones({ charlas, asistCount, filas, puedeEditar, onRegistrar, onVer, onSubirPapel, subiendo }: {
+  charlas: any[], asistCount: Record<string, number>, filas: FilaProg[], puedeEditar: boolean,
   onRegistrar: (fecha: string, progId?: string) => void, onVer: (path: string) => void, onSubirPapel: (c: any, f: File) => void, subiendo: string,
 }) {
   const hoy = hoyISO()
@@ -29,7 +29,8 @@ export default function CalendarioCapacitaciones({ anio, charlas, asistCount, fi
   const celdas: (string | null)[] = [...Array(offset).fill(null), ...Array.from({ length: diasMes }, (_, i) => iso(mes.y, mes.m, i + 1))]
   while (celdas.length % 7) celdas.push(null)
   const mover = (n: number) => setMes(({ y, m }) => { const t = new Date(y, m + n, 1); return { y: t.getFullYear(), m: t.getMonth() } })
-  const tocan = mes.y === anio ? filas.flatMap(f => f.celdas.filter(c => c.m === mes.m + 1).map(c => ({ ...c, p: f.p }))) : []
+  const kMes = `${mes.y}-${String(mes.m + 1).padStart(2, '0')}`
+  const tocan = filas.flatMap(f => f.celdas.filter(c => c.k === kMes).map(c => ({ ...c, p: f.p })))
   const delDia = sel ? porDia[sel] || [] : []
 
   return (
@@ -100,7 +101,7 @@ export default function CalendarioCapacitaciones({ anio, charlas, asistCount, fi
 
       <div style={{ ...card, marginTop: '8px' }}>
         <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '13.5px', color: '#16213E' }}>🗓️ Capacitaciones del programa en {MESES[mes.m].toLowerCase()}</p>
-        {tocan.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>{mes.y === anio ? 'No hay capacitaciones programadas este mes.' : `El programa es del ${anio}.`}</p>}
+        {tocan.length === 0 && <p style={{ margin: 0, fontSize: '12.5px', color: '#98a2b3' }}>No hay capacitaciones programadas este mes.</p>}
         {tocan.map(x => {
           const [bg, fg, tx] = EST[x.e]
           return (

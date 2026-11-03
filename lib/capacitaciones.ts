@@ -16,3 +16,16 @@ export function estadoCelda(mes: string, hechas: number, requeridas: number, hoy
 export const COLOR_CELDA = {
   ok: ['#d7efe0', '#14532d'], parcial: ['#fef7e0', '#986a00'], atraso: ['#fde8e8', '#9b1c1c'], actual: ['#e8f0fb', '#1B4F9C'], futuro: ['#f1f3f7', '#667085'],
 } as const
+
+// ───── Calendario de 12 meses corridos (claves 'AAAA-MM') ─────
+export const sumaMes = (k: string, n: number) => { const [y, m] = k.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); return mesKey(t.getFullYear(), t.getMonth() + 1) }
+export const ventana12 = (desde: string) => Array.from({ length: 12 }, (_, i) => sumaMes(desde, i))
+export const etiquetaMes = (k: string) => `${MESES_C[Number(k.slice(5)) - 1]} ${k.slice(2, 4)}`
+
+// Inicio del ciclo de 12 meses: el que fijó el Jefe o, si no hay, el primer mes con capacitaciones
+export const desdeCiclo = (config: any[] | null | undefined, prog: any[]) => {
+  const v = config?.find(c => c.clave === 'ciclo_desde')?.valor
+  if (v) return v as string
+  const ks = prog.flatMap(p => Object.keys(p.meses || {})).sort()
+  return ks[0] || mesHoy()
+}

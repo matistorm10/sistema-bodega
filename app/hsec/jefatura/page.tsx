@@ -57,10 +57,6 @@ export default function Jefatura() {
   const [periodo, setPeriodo] = useState('mes')
   const [fFaena, setFFaena] = useState('')
   const [fPrev, setFPrev] = useState('')
-  const [ocultos, setOcultos] = useState<string[]>([])
-  useEffect(() => { try { const v = localStorage.getItem('jefe_ocultos'); if (v) setOcultos(JSON.parse(v)) } catch {} }, [])
-  const oc = (k: string) => ocultos.includes(k)
-  const alternar = (k: string) => setOcultos(prev => { const n = prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]; try { localStorage.setItem('jefe_ocultos', JSON.stringify(n)) } catch {} return n })
 
   useEffect(() => {
     if (!usuario || !puede) return
@@ -219,7 +215,6 @@ export default function Jefatura() {
     </div>
   )
   const grid = (min: number, ch: React.ReactNode) => <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit,minmax(${min}px,1fr))`, gap: '10px', marginBottom: '10px' }}>{ch}</div>
-  const modKey: Record<string, string> = { '/hsec/jefatura/programa': 'prog', '/hsec/prevencionista/informe-diario': 'diarios', '/hsec/jefatura/semanales': 'semanales', '/hsec/prevencionista/auditoria-mandante': 'aud', '/hsec/jefatura/capacitaciones': 'cap', '/hsec/jefatura/epp': 'epp' }
   const mod = (href: string, icon: string, titulo: string, desc: string, badge?: React.ReactNode) => (
     <Link href={href} style={{ textDecoration: 'none', color: 'inherit', ...card, display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px', borderColor: AZUL }}>
       <div style={{ width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0, background: 'rgba(27,79,156,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '19px' }}>{icon}</div>
@@ -228,7 +223,6 @@ export default function Jefatura() {
         <p style={{ fontSize: '12px', color: '#667085', margin: 0 }}>{desc}</p>
       </div>
       {badge}
-      {modKey[href] && <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); alternar(modKey[href]) }} title={oc(modKey[href]) ? 'Mostrar resumen' : 'Ocultar resumen'} style={{ border: '1px solid #d5dbe6', background: '#fff', borderRadius: '8px', padding: '4px 10px', fontSize: '11.5px', color: '#667085', cursor: 'pointer', whiteSpace: 'nowrap' }}>{oc(modKey[href]) ? '▸ Mostrar' : '▾ Ocultar'}</button>}
     </Link>
   )
   const pill = (n: number, txt: string, rojo = false) => n > 0 ? <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: rojo ? '#fde8e8' : '#fef7e0', color: rojo ? '#9b1c1c' : '#986a00', whiteSpace: 'nowrap' }}>{rojo ? '🔴' : '⏳'} {n} {txt}</span> : null
@@ -261,7 +255,6 @@ export default function Jefatura() {
 
             {/* 1 · Programa de liderazgo percibido */}
             {mod('/hsec/jefatura/programa', '📈', 'Programa de liderazgo percibido', 'Cumplimiento de cada persona, revisión de sus actividades y aprobación del mes', pill(progPorAprobar, 'por aprobar'))}
-            {!oc('prog') && <>
             {grid(150, <>
               {kpiC(`${progProm}%`, `Cumplimiento promedio · ${nombreMes(mesAct)}`, verde(progProm))}
               {kpiC(`${progEnviados}/${progFilas.length}`, 'Programas enviados del mes')}
@@ -281,12 +274,9 @@ export default function Jefatura() {
               </div>
             )}
             {progFilas.length === 0 && <div style={{ marginBottom: '26px' }} />}
-            </>}
-            {oc('prog') && <div style={{ marginBottom: '16px' }} />}
 
             {/* 2 · Informes diarios */}
             {mod('/hsec/prevencionista/informe-diario', '📝', 'Informes diarios', 'Aprueba o rechaza cada día los informes de los prevencionistas y configura la lista de actividades', pill(infPorAprobar, 'por aprobar'))}
-            {!oc('diarios') && <>
             {grid(150, <>
               {kpiC(infEnviados, 'Informes enviados en el período')}
               {kpiC(infPorAprobar, 'Esperan tu aprobación', infPorAprobar ? '#b7791f' : '#1e8e4e')}
@@ -294,12 +284,9 @@ export default function Jefatura() {
               {kpiC(infBorr, 'Borradores sin enviar', '#667085')}
             </>)}
             <div style={{ marginBottom: '26px' }}><Barras titulo="Informes diarios por prevencionista" filas={infPorPrev} vacio="Sin informes en el período." /></div>
-            </>}
-            {oc('diarios') && <div style={{ marginBottom: '16px' }} />}
 
             {/* 3 · Informes semanales */}
             {mod('/hsec/jefatura/semanales', '🗓️', 'Informes semanales', 'Formato y calendario de cada cliente, asignación de prevencionistas y semáforo de entregas', <>{pill(semAtrasados.length, `atrasado${semAtrasados.length === 1 ? '' : 's'}`, true)}{pill(semPorAprobar, 'por aprobar')}</>)}
-            {!oc('semanales') && <>
             {grid(150, <>
               {kpiC(semAtrasados.length, 'Atrasados', semAtrasados.length ? '#c0392b' : '#1e8e4e')}
               {kpiC(semPorAprobar, 'Por aprobar', semPorAprobar ? '#b7791f' : '#1e8e4e')}
@@ -312,12 +299,9 @@ export default function Jefatura() {
               </div>
             )}
             <div style={{ marginBottom: '26px' }} />
-            </>}
-            {oc('semanales') && <div style={{ marginBottom: '16px' }} />}
 
             {/* 4 · Auditoría mandante */}
             {mod('/hsec/prevencionista/auditoria-mandante', '🧾', 'Auditoría mandante', 'Formatos de SQM, Engie, Eurohinca y otros por contrato: documentos de respaldo, vencimientos y revisión', pill(aud?.porRevisar || 0, 'por revisar'))}
-            {!oc('aud') && <>
             {aud && grid(150, <>
               {kpiC(audProm === null ? '—' : `${audProm}%`, 'Cumplimiento promedio', verde(audProm))}
               {kpiC(aud.levs.length, 'Contratos auditados')}
@@ -336,12 +320,9 @@ export default function Jefatura() {
               </div>
             )}
             {(!aud || aud.levs.length === 0) && <div style={{ marginBottom: '26px' }} />}
-            </>}
-            {oc('aud') && <div style={{ marginBottom: '16px' }} />}
 
             {/* 5 · Capacitaciones */}
             {mod('/hsec/jefatura/capacitaciones', '🎓', 'Capacitaciones', 'Programa anual: calendario, cumplimiento por mes y por faena (ENGIE, SQM, SACYR - EUROHINCA, oficina central)')}
-            {!oc('cap') && <>
             {grid(150, <>
               {kpiC(capPct === null ? '—' : `${capPct}%`, 'Calendario cumplido a la fecha', verde(capPct))}
               {kpiC(capAtrasadas, 'Capacitaciones sin registrar', capAtrasadas ? '#c0392b' : '#1e8e4e')}
@@ -387,12 +368,9 @@ export default function Jefatura() {
                 </div>
               )}
             </div>
-            </>}
-            {oc('cap') && <div style={{ marginBottom: '16px' }} />}
 
             {/* 6 · Stock de EPP */}
             {mod('/hsec/jefatura/epp', '🦺', 'Stock de EPP', 'Resumen de stock por faena, mínimos, catálogo, certificados y movimientos', pill((epp?.bajo.length || 0) + (epp?.igual.length || 0), 'en/bajo mínimo', true))}
-            {!oc('epp') && <>
             {epp && grid(150, <>
               {kpiC(epp.igual.length, 'Ítems justo en el stock mínimo', epp.igual.length ? '#b7791f' : '#1e8e4e')}
               {kpiC(epp.bajo.length, 'Ítems bajo el stock mínimo', epp.bajo.length ? '#c0392b' : '#1e8e4e')}
@@ -415,8 +393,6 @@ export default function Jefatura() {
               </div>
             )}
             <div style={{ marginBottom: '26px' }} />
-            </>}
-            {oc('epp') && <div style={{ marginBottom: '16px' }} />}
 
             {/* Configuración (módulo fusionado, sin resumen) */}
             <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>⚙️ Configuración</p>

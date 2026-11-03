@@ -116,7 +116,7 @@ export default function EppPrevencionista() {
         {tabBtn('stock', 'Stock')}{tabBtn('registrar', '+ Registrar movimiento')}{tabBtn('historial', 'Historial')}{tabBtn('certificados', '📎 Certificados')}
       </div>
 
-      {tab === 'certificados' && <CertificadosEpp items={catalogo} certs={certs} usuarioId={usuario!.id} esJefe={esJefe} nombreDe={id => usuarios.find(u => u.id === id)?.nombre || '—'} onCambio={cargarBase} />}
+      {tab === 'certificados' && <CertificadosEpp items={catalogo} certs={certs} usuarioId={usuario!.id} esJefe={false} nombreDe={id => usuarios.find(u => u.id === id)?.nombre || '—'} onCambio={cargarBase} />}
       {tab === 'stock' && (
         <div style={card}>
           <div style={{ overflowX: 'auto' }}>

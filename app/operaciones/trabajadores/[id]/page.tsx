@@ -167,8 +167,8 @@ export default function Ficha() {
       </div>
 
       <div style={{ ...card, marginBottom: '12px' }}>
-        <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Calendario de turnos y vuelos</p>
-        <CalendarioTurnos trabId={id} turnos={turnos} asigs={asigs} vuelos={vuelos} onCambio={cargar} />
+        <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Calendario de turnos y vuelos <span style={{ fontWeight: 400, fontSize: '12px', color: '#98a2b3' }}>· solo visualización; se configura en <a href="/operaciones/turnos" style={{ color: '#1B4F9C' }}>Turnos</a></span></p>
+        <CalendarioTurnos trabId={id} turnos={turnos} asigs={asigs} vuelos={vuelos} onCambio={cargar} soloLectura />
       </div>
 
       <div style={card}>

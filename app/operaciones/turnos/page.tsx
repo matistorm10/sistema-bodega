@@ -7,7 +7,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { resumenVuelo, marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function GrillaTurnos() {
   const hoy = hoyISO()
@@ -126,7 +126,7 @@ export default function GrillaTurnos() {
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
                   <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px', whiteSpace: 'nowrap', zIndex: 1 }}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link><span style={{ color: '#98a2b3', marginLeft: '6px', fontSize: '10.5px' }}>{f.t.cargo || ''}</span></td>
                   <td style={{ padding: '2px 6px', whiteSpace: 'nowrap' }}>{(() => { const v = venc(f.vista); return <button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col }}>{v.t}</button> })()}</td>
-                  {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const tip = vs?.map(v => `${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.hora || ''}`.trim()).join(' / ')
+                  {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const tip = vs?.map(resumenVuelo).join(' / ')
                     return <td key={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? '#f59e0b' : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : dias[i] === hoy ? '#fff8e5' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
               <tr style={{ borderTop: '2px solid #d0d5dd' }}>

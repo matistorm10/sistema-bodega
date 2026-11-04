@@ -83,9 +83,9 @@ export default function Ficha() {
     const c = libro.addWorksheet('Contratos'); const cc = c.addRow(['Contrato', 'Desde', 'Hasta', 'Tipo', 'Vence', 'Régimen']); cc.font = { bold: true }
     ;[...asigs].sort((a, b) => a.desde.localeCompare(b.desde)).forEach(a => c.addRow([nCont(a.contrato_id), fechaCorta(a.desde), a.hasta ? fechaCorta(a.hasta) : 'vigente', a.tipo_contrato ? TIPOS_CONTRATO[a.tipo_contrato] : '', a.vence ? fechaCorta(a.vence) : '', a.regimen || '']))
     c.columns = [{ width: 38 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 14 }]
-    const vh = libro.addWorksheet('Vuelos'); vh.addRow(['Fecha', 'Tipo', 'Medio', 'Aerolínea', 'Hora', 'Reserva', 'Notas']).font = { bold: true }
-    vuelos.forEach(v => vh.addRow([fechaCorta(v.fecha), v.tipo || '', v.medio, v.aerolinea || '', v.hora || '', v.reserva || '', v.notas || '']))
-    vh.columns = [{ width: 12 }, { width: 10 }, { width: 8 }, { width: 12 }, { width: 18 }, { width: 10 }, { width: 24 }]
+    const vh = libro.addWorksheet('Vuelos'); vh.addRow(['Fecha', 'Tipo', 'Medio', 'Aerolínea', 'Origen', 'Destino', 'Salida', 'Llegada', 'Reserva', 'Notas']).font = { bold: true }
+    vuelos.forEach(v => vh.addRow([fechaCorta(v.fecha), v.tipo || '', v.medio, v.aerolinea || '', v.origen || '', v.destino || '', v.hora_salida || '', v.hora_llegada || '', v.reserva || '', v.notas || '']))
+    vh.columns = [{ width: 12 }, { width: 10 }, { width: 8 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 9 }, { width: 9 }, { width: 10 }, { width: 24 }]
     return libro
   })
 

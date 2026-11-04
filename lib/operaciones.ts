@@ -14,7 +14,9 @@ export function etiquetaContrato(c?: { nombre?: string, empresa?: string | null,
   const ref = (c.referencia || '').trim(); const refC = ref.length > largo ? ref.slice(0, largo - 1).trimEnd() + '…' : ref
   return [c.empresa, refC, c.nombre && c.nombre !== ref ? 'N° ' + c.nombre : ''].filter(Boolean).join(' · ')
 }
-export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: string | null, medio: string, aerolinea: string | null, hora: string | null, reserva: string | null, notas: string | null }
+export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: string | null, medio: string, aerolinea: string | null, hora: string | null, origen: string | null, destino: string | null, hora_salida: string | null, hora_llegada: string | null, reserva: string | null, notas: string | null }
+export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepción', 'La Serena']
+export const resumenVuelo = (v: Vuelo) => `${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.origen && v.destino ? v.origen + '→' + v.destino : ''} ${v.hora_salida ? v.hora_salida + (v.hora_llegada ? '-' + v.hora_llegada : '') : v.hora || ''}`.replace(/\s+/g, ' ').trim()
 export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']
 export const DIAS_SEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 

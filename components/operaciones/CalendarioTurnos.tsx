@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { AZUL } from '@/lib/theme'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import { btn } from '@/components/programa/ui'
-import { hoyISO, sumarDias, marcarDia, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { resumenVuelo, hoyISO, sumarDias, marcarDia, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const CAB = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -44,7 +44,7 @@ export default function CalendarioTurnos({ trabId, turnos, asigs, vuelos, onCamb
             const bg = vs.length ? '#f59e0b' : en ? '#1e8e4e' : cc ? '#fff' : '#eef1f6'
             const col = vs.length || en ? '#fff' : '#475467'
             return (
-              <button key={i} onClick={() => clic(d)} title={vs.map(v => `${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.hora || ''}`.trim()).join(' / ') || (en ? 'En faena' : cc ? 'Descanso' : 'Sin contrato')}
+              <button key={i} onClick={() => clic(d)} title={vs?.map(resumenVuelo).join(' / ') || (en ? 'En faena' : cc ? 'Descanso' : 'Sin contrato')}
                 style={{ position: 'relative', height: '38px', borderRadius: '6px', border: sel ? `2px solid ${AZUL}` : d === hoy ? '2px solid #16213E' : vs.length && en ? '3px solid #14532d' : '1px solid #e2e6ed', boxShadow: vs.length && en ? '0 0 0 2px #86efac' : undefined, background: bg, color: col, cursor: soloLectura ? 'default' : 'pointer', fontSize: '12px', fontWeight: 600, padding: 0, lineHeight: 1.1 }}>
                 {Number(d.slice(8))}
                 {vs.length > 0 && <div style={{ fontSize: '10px' }}>{vs[0].medio === 'bus' ? '🚌' : '✈'}{vs[0].tipo === 'subida' ? '↑' : vs[0].tipo === 'bajada' ? '↓' : ''}</div>}

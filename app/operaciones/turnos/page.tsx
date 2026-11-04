@@ -96,6 +96,8 @@ export default function GrillaTurnos() {
     return { t: `${pref} ${fechaCorta(a.vence).slice(0, 5)} (${n}d)`, bg: '#e6f4ea', col: '#1e8e4e' }
   }
   const W = 26
+  const CH = { textAlign: 'left' as const, padding: '4px 6px', color: '#667085', fontWeight: 500 }
+  const CC = { padding: '3px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
   return (
     <Marco titulo="Turnos" ancho={1400}>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
@@ -113,24 +115,26 @@ export default function GrillaTurnos() {
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
         <div style={{ ...card, padding: '10px', overflowX: 'auto' }}>
           <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda para marcar/desmarcar en faena. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
-          <table style={{ borderCollapse: 'collapse', fontSize: '11.5px' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 552 + dias.length * W }}>
             <thead>
-              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', minWidth: '190px', textAlign: 'left', padding: '4px 6px', zIndex: 1 }}>Trabajador</th><th style={{ minWidth: '120px', textAlign: 'left', padding: '4px 6px', color: '#667085', fontWeight: 500 }}>Contrato / plazo</th>
+              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '190px', minWidth: '190px', maxWidth: '190px', textAlign: 'left', padding: '4px 6px', zIndex: 1 }}>Trabajador</th><th style={{ ...CH, width: '130px', minWidth: '130px' }}>Cargo</th><th style={{ ...CH, width: '92px', minWidth: '92px' }}>Origen</th><th style={{ ...CH, width: '140px', minWidth: '140px' }}>Contrato / plazo</th>
                 {dias.map(d => { const dt = new Date(d + 'T12:00:00'); const esHoy = d === hoy; return <th key={d} style={{ minWidth: W, width: W, padding: '2px 0', textAlign: 'center', background: esHoy ? '#fff3cd' : dt.getDay() === 0 || dt.getDay() === 6 ? '#f8fafc' : '#fff', fontWeight: esHoy ? 700 : 500, color: '#667085', lineHeight: 1.15 }}>{dt.getDate() === 1 || d === desde ? <div style={{ fontSize: '9px', color: AZUL }}>{dt.toLocaleDateString('es-CL', { month: 'short' })}</div> : <div style={{ fontSize: '9px' }}>&nbsp;</div>}<div>{dt.getDate()}</div><div style={{ fontSize: '9px' }}>{DIAS_SEM[dt.getDay()]}</div></th> })}
               </tr>
             </thead>
             <tbody>
               {filas.map((f, ix) => (
                 <Fragment key={f.t.id}>
-                {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 2} style={{ position: 'sticky', left: 0, background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: '3px 6px', color: '#475467' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</td></tr>}
+                {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ position: 'sticky', left: 0, background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: '3px 6px', color: '#475467' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</td></tr>}
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
-                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px', whiteSpace: 'nowrap', zIndex: 1 }}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link><span style={{ color: '#98a2b3', marginLeft: '6px', fontSize: '10.5px' }}>{f.t.cargo || ''}</span>{f.t.aeropuerto_origen && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '0 6px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 600 }} title="Aeropuerto de origen">{f.t.aeropuerto_origen}</span>}</td>
-                  <td style={{ padding: '2px 6px', whiteSpace: 'nowrap' }}>{(() => { const v = venc(f.vista); return <button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col }}>{v.t}</button> })()}</td>
+                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px', width: '190px', minWidth: '190px', maxWidth: '190px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
+                  <td style={{ ...CC, width: '130px', minWidth: '130px', maxWidth: '130px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
+                  <td style={{ ...CC, width: '92px', minWidth: '92px', maxWidth: '92px' }}>{f.t.aeropuerto_origen ? <span style={{ fontSize: '10.5px', padding: '1px 8px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 600 }} title="Aeropuerto de origen">{f.t.aeropuerto_origen}</span> : <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span>}</td>
+                  <td style={{ ...CC, width: '140px', minWidth: '140px', maxWidth: '140px' }}>{(() => { const v = venc(f.vista); return <button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.t}</button> })()}</td>
                   {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const tip = vs?.map(resumenVuelo).join(' / ')
                     return <td key={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : dias[i] === hoy ? '#fff8e5' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
               <tr style={{ borderTop: '2px solid #d0d5dd' }}>
-                <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px', fontWeight: 700 }}>Total en faena</td>
+                <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px', fontWeight: 700 }}>Total en faena</td><td colSpan={3} />
                 {totales.map((n, i) => <td key={i} style={{ textAlign: 'center', fontWeight: 700, color: '#16213E' }}>{n}</td>)}
               </tr>
             </tbody>

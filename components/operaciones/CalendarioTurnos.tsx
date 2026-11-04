@@ -41,13 +41,13 @@ export default function CalendarioTurnos({ trabId, turnos, asigs, vuelos, onCamb
           {celdas.map((d, i) => {
             if (!d) return <div key={i} />
             const vs = vuelosDe(d), en = enTurno(d), cc = conContrato(d), sel = dia === d && modo === 'vuelo'
-            const bg = vs.length ? '#f59e0b' : en ? '#1e8e4e' : cc ? '#fff' : '#eef1f6'
+            const pc = vs.some(v => v.estado === 'por_comprar'); const bg = vs.length ? (pc ? '#dc2626' : '#f59e0b') : en ? '#1e8e4e' : cc ? '#fff' : '#eef1f6'
             const col = vs.length || en ? '#fff' : '#475467'
             return (
               <button key={i} onClick={() => clic(d)} title={vs?.map(resumenVuelo).join(' / ') || (en ? 'En faena' : cc ? 'Descanso' : 'Sin contrato')}
                 style={{ position: 'relative', height: '38px', borderRadius: '6px', border: sel ? `2px solid ${AZUL}` : d === hoy ? '2px solid #16213E' : vs.length && en ? '3px solid #14532d' : '1px solid #e2e6ed', boxShadow: vs.length && en ? '0 0 0 2px #86efac' : undefined, background: bg, color: col, cursor: soloLectura ? 'default' : 'pointer', fontSize: '12px', fontWeight: 600, padding: 0, lineHeight: 1.1 }}>
                 {Number(d.slice(8))}
-                {vs.length > 0 && <div style={{ fontSize: '10px' }}>{vs[0].medio === 'bus' ? '🚌' : '✈'}{vs[0].tipo === 'subida' ? '↑' : vs[0].tipo === 'bajada' ? '↓' : ''}</div>}
+                {vs.length > 0 && <div style={{ fontSize: '10px' }}>{pc ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈'}{vs[0].tipo === 'subida' ? '↑' : vs[0].tipo === 'bajada' ? '↓' : ''}</div>}
                 {vs.length > 0 && en && <span style={{ position: 'absolute', left: 2, right: 2, bottom: 1, height: '3px', borderRadius: '2px', background: '#1e8e4e' }} />}
               </button>)
           })}
@@ -69,7 +69,7 @@ export default function CalendarioTurnos({ trabId, turnos, asigs, vuelos, onCamb
       </div>
       <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>
         {soloLectura ? 'Solo visualización: los turnos y vuelos se configuran en Operaciones → Turnos. ' : modo === 'turno' ? 'Haz clic en un día para marcarlo o desmarcarlo como «en faena». ' : 'Haz clic en un día para agregar o ver su vuelo/bus. '}
-        <span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>verde</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>naranja ✈</span> día con vuelo/bus · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato
+        <span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>verde</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>naranja ✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>rojo ⏳</span> por comprar · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato
       </p>
       <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>{mes(ini)}{mes(sig.toISOString().slice(0, 7) + '-01')}</div>
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}

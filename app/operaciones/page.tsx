@@ -63,6 +63,7 @@ export default function Operaciones() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '10px', marginBottom: '14px' }}>
             {acceso('/operaciones/trabajadores', '👷', 'Trabajadores', 'Ficha, contratos, plazos y turnos de cada persona')}
             {acceso('/operaciones/turnos', '🗓️', 'Turnos', 'Grilla de quién está en faena cada día, por contrato, con descarga a Excel')}
+            {acceso('/operaciones/vuelos', '✈️', 'Vuelos y pasajes', 'Qué pasajes están por comprar y cuáles ya se compraron, con el aeropuerto de origen de cada trabajador')}
           </div>
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>Dónde está el personal hoy ({fechaCorta(hoy)})</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>

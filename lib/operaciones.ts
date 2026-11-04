@@ -4,6 +4,18 @@ export const sumarDias = (iso: string, n: number) => { const d = new Date(iso + 
 export const fechaCorta = (iso?: string | null) => { if (!iso) return '—'; const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}-${m}-${y}` }
 export const diasEntre = (a: string, b: string) => Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000)
 export const TIPOS_CONTRATO: Record<string, string> = { pf1: 'Plazo fijo 1', pf2: 'Plazo fijo 2', indefinido: 'Indefinido' }
+export const TIPOS_PERSONAL: Record<string, string> = { indirecto: 'Indirecto', directo: 'Directo' }
+export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 : 1)
+// Indirectos primero, luego directos; dentro de cada grupo por nombre
+export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || String(a.nombre).localeCompare(String(b.nombre), 'es')
+// Etiqueta de contrato: Cliente · Nombre del contrato · N°
+export function etiquetaContrato(c?: { nombre?: string, empresa?: string | null, referencia?: string | null } | null, largo = 60): string {
+  if (!c) return '—'
+  const ref = (c.referencia || '').trim(); const refC = ref.length > largo ? ref.slice(0, largo - 1).trimEnd() + '…' : ref
+  return [c.empresa, refC, c.nombre && c.nombre !== ref ? 'N° ' + c.nombre : ''].filter(Boolean).join(' · ')
+}
+export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: string | null, medio: string, aerolinea: string | null, hora: string | null, reserva: string | null, notas: string | null }
+export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']
 export const DIAS_SEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 
 export type Turno = { id: string, trabajador_id: string, sube: string, baja: string | null, notas?: string | null }
@@ -46,4 +58,29 @@ export async function traerTodo(tabla: string, columnas = '*', orden = 'id'): Pr
     if (!data || data.length < 1000) break
   }
   return out
+}
+
+// Cambia un día de un trabajador a "en turno" (on=true) o "descanso" (on=false) ajustando los tramos de turno
+export async function marcarDia(turnos: Turno[], trabId: string, dia: string, on: boolean): Promise<string | null> {
+  const ts = [...turnos].sort((a, b) => a.sube.localeCompare(b.sube))
+  const cont = ts.find(x => x.sube <= dia && (!x.baja || x.baja >= dia))
+  const run = async (q: any) => { const { error } = await q; if (error) throw error }
+  try {
+    if (!on) {
+      if (!cont) return null
+      const ant = sumarDias(dia, -1), sig = sumarDias(dia, 1)
+      if (cont.sube === dia && cont.baja === dia) await run(supabase.from('op_turnos').delete().eq('id', cont.id))
+      else if (cont.sube === dia) await run(supabase.from('op_turnos').update({ sube: sig }).eq('id', cont.id))
+      else if (cont.baja === dia) await run(supabase.from('op_turnos').update({ baja: ant }).eq('id', cont.id))
+      else { await run(supabase.from('op_turnos').update({ baja: ant }).eq('id', cont.id)); await run(supabase.from('op_turnos').insert({ trabajador_id: trabId, sube: sig, baja: cont.baja })) }
+    } else {
+      if (cont) return null
+      const prev = ts.find(x => x.baja === sumarDias(dia, -1)), next = ts.find(x => x.sube === sumarDias(dia, 1))
+      if (prev && next) { await run(supabase.from('op_turnos').delete().eq('id', next.id)); await run(supabase.from('op_turnos').update({ baja: next.baja }).eq('id', prev.id)) }
+      else if (prev) await run(supabase.from('op_turnos').update({ baja: dia }).eq('id', prev.id))
+      else if (next) await run(supabase.from('op_turnos').update({ sube: dia }).eq('id', next.id))
+      else await run(supabase.from('op_turnos').insert({ trabajador_id: trabId, sube: dia, baja: dia }))
+    }
+    return null
+  } catch (e) { return msgError(e) }
 }

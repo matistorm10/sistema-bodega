@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
-import { hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno } from '@/lib/operaciones'
+import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
+import { etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 const vacio = { contrato_id: '', desde: hoyISO(), regimen: '', tipo_contrato: '', vence: '', sueldo: '', condiciones: '' }
 export default function Ficha() {
@@ -14,6 +15,7 @@ export default function Ficha() {
   const [d, setD] = useState<any>({})
   const [asigs, setAsigs] = useState<Asig[]>([])
   const [turnos, setTurnos] = useState<Turno[]>([])
+  const [vuelos, setVuelos] = useState<Vuelo[]>([])
   const [contratos, setContratos] = useState<any[]>([])
   const [msg, setMsg] = useState(''); const [msgA, setMsgA] = useState(''); const [msgT, setMsgT] = useState('')
   const [fa, setFa] = useState({ ...vacio }); const [verFormA, setVerFormA] = useState(false)
@@ -22,19 +24,21 @@ export default function Ficha() {
   const hoy = hoyISO()
 
   const cargar = useCallback(async () => {
-    const [a, b, c, ct] = await Promise.all([
+    const [a, b, c, ct, vu] = await Promise.all([
       supabase.from('op_trabajadores').select('*').eq('id', id).single(),
       supabase.from('op_asignaciones').select('*').eq('trabajador_id', id).order('desde', { ascending: false }),
       supabase.from('op_turnos').select('*').eq('trabajador_id', id).order('sube', { ascending: false }),
       supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'),
+      supabase.from('op_vuelos').select('*').eq('trabajador_id', id).order('fecha'),
     ])
+    setVuelos((vu.data || []) as Vuelo[])
     setT(a.data); setD(a.data || {}); setAsigs((b.data || []) as Asig[]); setTurnos((c.data || []) as Turno[]); setContratos(ct.data || [])
   }, [id])
   useEffect(() => { cargar() }, [cargar])
-  const nCont = (cid?: string) => { const c = contratos.find(x => x.id === cid); return c ? (c.empresa ? `${c.empresa} · ${c.nombre}` : c.nombre) : '—' }
+  const nCont = (cid?: string) => etiquetaContrato(contratos.find(x => x.id === cid))
 
   const guardarDatos = async () => {
-    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, ciudad: d.ciudad || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
+    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
     setMsg(error ? msgError(error) : 'Guardado ✓'); if (!error) cargar()
   }
   const asignar = async () => {
@@ -79,6 +83,9 @@ export default function Ficha() {
     const c = libro.addWorksheet('Contratos'); const cc = c.addRow(['Contrato', 'Desde', 'Hasta', 'Tipo', 'Vence', 'Régimen']); cc.font = { bold: true }
     ;[...asigs].sort((a, b) => a.desde.localeCompare(b.desde)).forEach(a => c.addRow([nCont(a.contrato_id), fechaCorta(a.desde), a.hasta ? fechaCorta(a.hasta) : 'vigente', a.tipo_contrato ? TIPOS_CONTRATO[a.tipo_contrato] : '', a.vence ? fechaCorta(a.vence) : '', a.regimen || '']))
     c.columns = [{ width: 38 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 14 }]
+    const vh = libro.addWorksheet('Vuelos'); vh.addRow(['Fecha', 'Tipo', 'Medio', 'Aerolínea', 'Hora', 'Reserva', 'Notas']).font = { bold: true }
+    vuelos.forEach(v => vh.addRow([fechaCorta(v.fecha), v.tipo || '', v.medio, v.aerolinea || '', v.hora || '', v.reserva || '', v.notas || '']))
+    vh.columns = [{ width: 12 }, { width: 10 }, { width: 8 }, { width: 12 }, { width: 18 }, { width: 10 }, { width: 24 }]
     return libro
   })
 
@@ -90,7 +97,7 @@ export default function Ficha() {
   const enTurno = turnos.find(x => x.sube <= hoy && (!x.baja || x.baja >= hoy))
 
   return (
-    <Marco titulo={t.nombre} volver="/operaciones/trabajadores" volverTxt="← Trabajadores" ancho={900}>
+    <Marco titulo={t.nombre} volver="/operaciones/trabajadores" volverTxt="← Trabajadores" ancho={960}>
       <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
 
       <div style={{ ...card, marginBottom: '12px' }}>
@@ -99,6 +106,7 @@ export default function Ficha() {
           <div style={{ flex: '1 1 220px' }}><label style={label}>Nombre</label><input value={d.nombre || ''} onChange={e => set('nombre', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
+          <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
           <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><input value={d.cargo || ''} onChange={e => set('cargo', e.target.value)} style={input} /></div>
           <div style={{ flex: '1 1 150px' }}><label style={label}>Ciudad</label><input value={d.ciudad || ''} onChange={e => set('ciudad', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 110px' }}><label style={label}>Talla calzado</label>{sel(d.talla_calzado, v => set('talla_calzado', v), tallasC)}</div>
@@ -156,6 +164,11 @@ export default function Ficha() {
               </div>
             )}
           </div>))}
+      </div>
+
+      <div style={{ ...card, marginBottom: '12px' }}>
+        <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>Calendario de turnos y vuelos</p>
+        <CalendarioTurnos trabId={id} turnos={turnos} asigs={asigs} vuelos={vuelos} onCambio={cargar} />
       </div>
 
       <div style={card}>

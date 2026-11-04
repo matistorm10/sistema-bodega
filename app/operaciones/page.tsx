@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
-import { traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, TIPOS_CONTRATO, type Asig, type Turno } from '@/lib/operaciones'
+import { etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, TIPOS_CONTRATO, type Asig, type Turno } from '@/lib/operaciones'
 
 export default function Operaciones() {
   const [trab, setTrab] = useState<any[]>([])
@@ -27,7 +27,7 @@ export default function Operaciones() {
   }, [])
 
   const nTrab = (id: string) => trab.find(t => t.id === id)?.nombre || '—'
-  const nCont = (id?: string) => { const c = contratos.find(x => x.id === id); return c ? (c.empresa ? `${c.empresa} · ${c.nombre}` : c.nombre) : '—' }
+  const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
   const activos = trab.filter(t => t.activo)
   const filas = contratos.map(c => {
     const ids = asigs.filter(a => a.contrato_id === c.id && a.desde <= hoy && (!a.hasta || a.hasta >= hoy)).map(a => a.trabajador_id)
@@ -73,7 +73,7 @@ export default function Operaciones() {
               <thead><tr style={{ textAlign: 'left', color: '#667085', fontSize: '12px' }}><th style={{ padding: '6px 8px' }}>Contrato</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>En faena</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Descanso</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Total</th></tr></thead>
               <tbody>{filas.map(f => (
                 <tr key={f.c.id} style={{ borderTop: '1px solid #eef1f6' }}>
-                  <td style={{ padding: '7px 8px', fontWeight: 600 }}><Link href={`/operaciones/turnos?contrato=${f.c.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{nCont(f.c.id)}</Link><span style={{ display: 'block', fontWeight: 400, fontSize: '11.5px', color: '#98a2b3' }}>{(f.c.referencia || '').slice(0, 70)}</span></td>
+                  <td style={{ padding: '7px 8px', fontWeight: 600 }}><Link href={`/operaciones/turnos?contrato=${f.c.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{nCont(f.c.id)}</Link></td>
                   <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: '#1e8e4e' }}>{f.enFaena}</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right' }}>{f.descanso}</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700 }}>{f.total}</td>

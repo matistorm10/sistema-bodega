@@ -18,8 +18,12 @@ export default function GrillaTurnos() {
   const [cargando, setCargando] = useState(true)
   const [contrato, setContrato] = useState<string[]>([])
   const [vuelos, setVuelos] = useState<Vuelo[]>([])
-  const [desde, setDesde] = useState(sumarDias(hoy, -3))
-  const [ndias, setNdias] = useState(28)
+  const mesIni = hoy.slice(0, 7) + '-01'
+  const [desde, setDesde] = useState(mesIni)
+  // Hasta el último día del mes 12 (el mes actual + 11 meses)
+  const finVentana = (() => { const d = new Date(mesIni + 'T12:00:00'); d.setMonth(d.getMonth() + 12); d.setDate(0); return d.toISOString().slice(0, 10) })()
+  const ndias = diasEntre(desde, finVentana) + 1
+  const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
   const [modo, setModo] = useState<'turno' | 'vuelo'>('turno')
   const [msg, setMsg] = useState('')
@@ -96,11 +100,9 @@ export default function GrillaTurnos() {
     <Marco titulo="Turnos" ancho={1400}>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <FiltroContratos contratos={contratos} sel={contrato} onChange={setContrato} />
-        <button onClick={() => setDesde(sumarDias(desde, -ndias))} style={{ ...btn(false), padding: '8px 12px' }}>←</button>
-        <input type="date" value={desde} onChange={e => e.target.value && setDesde(e.target.value)} style={{ ...input, width: '150px' }} />
-        <button onClick={() => setDesde(sumarDias(desde, ndias))} style={{ ...btn(false), padding: '8px 12px' }}>→</button>
-        <button onClick={() => setDesde(sumarDias(hoy, -3))} style={{ ...btn(false), padding: '8px 12px' }}>Hoy</button>
-        <select value={ndias} onChange={e => setNdias(Number(e.target.value))} style={{ ...input, width: 'auto' }}>{[14, 28, 42, 60].map(n => <option key={n} value={n}>{n} días</option>)}</select>
+        <button onClick={mesAnterior} style={{ ...btn(false), padding: '8px 12px' }}>← Mes anterior</button>
+        {desde !== mesIni && <button onClick={() => setDesde(mesIni)} style={{ ...btn(false), padding: '8px 12px' }}>Volver al mes actual</button>}
+        <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} · desplázate a la derecha</span>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={soloActivos} onChange={e => setSoloActivos(e.target.checked)} />Solo activos</label>
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
           {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos']] as const).map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
@@ -125,7 +127,7 @@ export default function GrillaTurnos() {
                   <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px', whiteSpace: 'nowrap', zIndex: 1 }}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link><span style={{ color: '#98a2b3', marginLeft: '6px', fontSize: '10.5px' }}>{f.t.cargo || ''}</span></td>
                   <td style={{ padding: '2px 6px', whiteSpace: 'nowrap' }}>{(() => { const v = venc(f.vista); return <button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col }}>{v.t}</button> })()}</td>
                   {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const tip = vs?.map(v => `${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.hora || ''}`.trim()).join(' / ')
-                    return <td key={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? '#f59e0b' : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : dias[i] === hoy ? '#fff8e5' : undefined, color: '#fff', borderLeft: '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
+                    return <td key={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? '#f59e0b' : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : dias[i] === hoy ? '#fff8e5' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
               <tr style={{ borderTop: '2px solid #d0d5dd' }}>
                 <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px', fontWeight: 700 }}>Total en faena</td>

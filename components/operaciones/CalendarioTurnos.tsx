@@ -53,7 +53,7 @@ export default function CalendarioTurnos({ trabId, turnos, asigs, vuelos, onCamb
             const col = vs.length || en ? '#fff' : '#475467'
             return (
               <button key={i} onClick={() => clic(d)} title={vs.map(v => `${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.hora || ''}`.trim()).join(' / ') || (en ? 'En faena' : cc ? 'Descanso' : 'Sin contrato')}
-                style={{ position: 'relative', height: '38px', borderRadius: '6px', border: sel ? `2px solid ${AZUL}` : d === hoy ? '2px solid #16213E' : '1px solid #e2e6ed', background: bg, color: col, cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: 0, lineHeight: 1.1 }}>
+                style={{ position: 'relative', height: '38px', borderRadius: '6px', border: sel ? `2px solid ${AZUL}` : d === hoy ? '2px solid #16213E' : vs.length && en ? '3px solid #14532d' : '1px solid #e2e6ed', boxShadow: vs.length && en ? '0 0 0 2px #86efac' : undefined, background: bg, color: col, cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: 0, lineHeight: 1.1 }}>
                 {Number(d.slice(8))}
                 {vs.length > 0 && <div style={{ fontSize: '10px' }}>{vs[0].medio === 'bus' ? '🚌' : '✈'}{vs[0].tipo === 'subida' ? '↑' : vs[0].tipo === 'bajada' ? '↓' : ''}</div>}
                 {vs.length > 0 && en && <span style={{ position: 'absolute', left: 2, right: 2, bottom: 1, height: '3px', borderRadius: '2px', background: '#1e8e4e' }} />}

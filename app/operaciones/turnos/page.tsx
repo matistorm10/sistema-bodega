@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
@@ -7,7 +7,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { resumenVuelo, marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { ESTATUS_CONTRATO, resumenVuelo, marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function GrillaTurnos() {
   const hoy = hoyISO()
@@ -28,7 +28,7 @@ export default function GrillaTurnos() {
   const [modo, setModo] = useState<'turno' | 'vuelo'>('turno')
   const [msg, setMsg] = useState('')
   const [pv, setPv] = useState<{ t: any, dia: string } | null>(null)
-  const [ec, setEc] = useState<{ id: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string } | null>(null)
+  const [ec, setEc] = useState<{ id: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string } | null>(null)
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
@@ -78,10 +78,10 @@ export default function GrillaTurnos() {
     if (e) setMsg(e)
     cargar()
   }
-  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '' }) }
+  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' }) }
   const guardarContrato = async () => {
     if (!ec) return
-    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ec.tipo_contrato || null, vence: ec.vence || null, hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null }).eq('id', ec.id)
+    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ec.tipo_contrato || null, vence: ec.vence || null, hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
     if (error) { setMsgEc(msgError(error)); return }
     setEc(null); cargar()
   }
@@ -95,6 +95,18 @@ export default function GrillaTurnos() {
     if (n <= 30) return { t: `${pref} ${fechaCorta(a.vence).slice(0, 5)} (${n}d)`, bg: '#fff3cd', col: '#8a5a00' }
     return { t: `${pref} ${fechaCorta(a.vence).slice(0, 5)} (${n}d)`, bg: '#e6f4ea', col: '#1e8e4e' }
   }
+  const estiloRef = useRef<HTMLStyleElement>(null); const hoverRef = useRef<string | null>(null)
+  const idxHoy = dias.indexOf(hoy)
+  const LINEA_HOY = 'inset 2px 0 0 #1B4F9C, inset -2px 0 0 #1B4F9C'
+  const pintar = (h: string | null) => {
+    if (!estiloRef.current) return
+    let css = idxHoy >= 0 ? `[data-c="${idxHoy}"]{box-shadow:${LINEA_HOY}}` : ''
+    if (h !== null) css += `[data-c="${h}"]{box-shadow:inset 0 0 0 200px rgba(71,84,103,.18)${Number(h) === idxHoy ? ',' + LINEA_HOY : ''}}`
+    estiloRef.current.textContent = css
+  }
+  useEffect(() => { pintar(hoverRef.current) }) // eslint-disable-line react-hooks/exhaustive-deps
+  const alPasar = (e: React.MouseEvent) => { const el = (e.target as HTMLElement).closest('[data-c]'); const c = el ? el.getAttribute('data-c') : null; if (c !== hoverRef.current) { hoverRef.current = c; pintar(c) } }
+  const alSalir = () => { hoverRef.current = null; pintar(null) }
   const W = 28
   const CH = { textAlign: 'left' as const, padding: '4px 4px', color: '#667085', fontWeight: 500 }
   const ST = (left: number) => ({ position: 'sticky' as const, left, background: '#fff', zIndex: 1 })
@@ -114,12 +126,13 @@ export default function GrillaTurnos() {
       </div>
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msg}</p>}
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
-        <div style={{ ...card, padding: '10px 0', overflowX: 'auto' }}>
+        <div style={{ ...card, padding: '10px 0', overflow: 'auto', maxHeight: 'calc(100vh - 170px)' }}>
+          <style ref={estiloRef} />
           <p style={{ margin: '0 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda para marcar/desmarcar en faena. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
-          <table style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 464 + dias.length * W }}>
+          <table onMouseOver={alPasar} onMouseLeave={alSalir} style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 464 + dias.length * W }}>
             <thead>
-              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '150px', minWidth: '150px', maxWidth: '150px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 1 }}>Trabajador</th><th style={{ ...CH, ...ST(150), width: '100px', minWidth: '100px' }}>Cargo</th><th style={{ ...CH, ...ST(250), width: '96px', minWidth: '96px' }}>Origen</th><th style={{ ...CH, ...ST(346), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd' }}>Contrato / plazo</th>
-                {dias.map(d => { const dt = new Date(d + 'T12:00:00'); const esHoy = d === hoy; return <th key={d} style={{ minWidth: W, width: W, padding: '2px 0', textAlign: 'center', background: esHoy ? '#fff3cd' : dt.getDay() === 0 || dt.getDay() === 6 ? '#f8fafc' : '#fff', fontWeight: esHoy ? 700 : 500, color: '#667085', lineHeight: 1.15 }}>{dt.getDate() === 1 || d === desde ? <div style={{ fontSize: '9px', color: AZUL }}>{dt.toLocaleDateString('es-CL', { month: 'short' })}</div> : <div style={{ fontSize: '9px' }}>&nbsp;</div>}<div>{dt.getDate()}</div><div style={{ fontSize: '9px' }}>{DIAS_SEM[dt.getDay()]}</div></th> })}
+              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '150px', minWidth: '150px', maxWidth: '150px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 4, top: 0 }}>Trabajador</th><th style={{ ...CH, ...ST(150), width: '100px', minWidth: '100px', top: 0, zIndex: 4 }}>Cargo</th><th style={{ ...CH, ...ST(250), width: '96px', minWidth: '96px', top: 0, zIndex: 4 }}>Origen</th><th style={{ ...CH, ...ST(346), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd', top: 0, zIndex: 4 }}>Contrato / plazo</th>
+                {dias.map((d, ci) => { const dt = new Date(d + 'T12:00:00'); const esHoy = d === hoy; return <th key={d} data-c={ci} style={{ position: 'sticky', top: 0, zIndex: 3, minWidth: W, width: W, padding: '2px 0', textAlign: 'center', background: esHoy ? '#fff3cd' : dt.getDay() === 0 || dt.getDay() === 6 ? '#f8fafc' : '#fff', fontWeight: esHoy ? 700 : 500, color: '#667085', lineHeight: 1.15 }}>{dt.getDate() === 1 || d === desde ? <div style={{ fontSize: '9px', color: AZUL }}>{dt.toLocaleDateString('es-CL', { month: 'short' })}</div> : <div style={{ fontSize: '9px' }}>&nbsp;</div>}<div>{dt.getDate()}</div><div style={{ fontSize: '9px' }}>{DIAS_SEM[dt.getDay()]}</div></th> })}
               </tr>
             </thead>
             <tbody>
@@ -130,13 +143,13 @@ export default function GrillaTurnos() {
                   <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
                   <td style={{ ...CC, ...ST(150), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
                   <td style={{ ...CC, ...ST(250), width: '96px', minWidth: '96px', maxWidth: '96px' }}>{!f.t.ciudad ? <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span> : f.t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '10.5px', padding: '1px 7px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700, whiteSpace: 'nowrap' }} title={f.t.ciudad}>{f.t.ciudad}</span> : <span style={{ fontSize: '11px', color: '#667085' }} title={f.t.ciudad}>{f.t.ciudad}</span>}</td>
-                  <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = venc(f.vista); return <button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.t}</button> })()}</td>
+                  <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = venc(f.vista); return <><button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>
                   {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const fin = !!c.a && !!c.a.vence && c.a.vence === dias[i] && c.a.tipo_contrato !== 'indefinido'; const tip = [fin ? `Fin de contrato (${c.a?.tipo_contrato === 'pf1' ? 'PF1' : c.a?.tipo_contrato === 'pf2' ? 'PF2' : 'plazo'}) ${fechaCorta(c.a?.vence)}` : '', vs?.map(resumenVuelo).join(' / ')].filter(Boolean).join(' · ')
-                    return <td key={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
+                    return <td key={i} data-c={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
-              <tr style={{ borderTop: '2px solid #d0d5dd' }}>
-                <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px 4px 12px', fontWeight: 700, zIndex: 1 }}>Total en faena</td><td colSpan={3} style={{ ...ST(150), borderRight: '1px solid #d0d5dd' }} />
-                {totales.map((n, i) => <td key={i} style={{ textAlign: 'center', fontWeight: 700, color: '#16213E' }}>{n}</td>)}
+              <tr>
+                <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px 4px 12px', fontWeight: 700, zIndex: 4, bottom: 0, borderTop: '2px solid #d0d5dd' }}>Total en faena</td><td colSpan={3} style={{ ...ST(150), bottom: 0, zIndex: 4, borderTop: '2px solid #d0d5dd', borderRight: '1px solid #d0d5dd' }} />
+                {totales.map((n, i) => <td key={i} data-c={i} style={{ position: 'sticky', bottom: 0, zIndex: 2, background: '#fff', borderTop: '2px solid #d0d5dd', textAlign: 'center', fontWeight: 700, color: '#16213E' }}>{n}</td>)}
               </tr>
             </tbody>
           </table>
@@ -153,6 +166,10 @@ export default function GrillaTurnos() {
               <div style={{ flex: '1 1 150px' }}><label style={label}>Término en este contrato</label><input type="date" value={ec.hasta} onChange={e => setEc({ ...ec, hasta: e.target.value })} style={input} /></div>
               <div style={{ flex: '1 1 100px' }}><label style={label}>Régimen</label><input value={ec.regimen} onChange={e => setEc({ ...ec, regimen: e.target.value })} placeholder="14x14" style={input} /></div>
               <div style={{ flex: '1 1 140px' }}><label style={label}>Sueldo</label><input type="number" value={ec.sueldo} onChange={e => setEc({ ...ec, sueldo: e.target.value })} style={input} /></div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              <div style={{ flex: '2 1 190px' }}><label style={label}>Estatus del contrato</label><select value={ec.estatus} onChange={e => setEc({ ...ec, estatus: e.target.value, estatus_fecha: e.target.value ? (ec.estatus_fecha || hoy) : '' })} style={input}><option value="">Normal (sin aviso)</option>{Object.entries(ESTATUS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              {ec.estatus && <div style={{ flex: '1 1 140px' }}><label style={label}>Fecha</label><input type="date" value={ec.estatus_fecha} onChange={e => setEc({ ...ec, estatus_fecha: e.target.value })} style={input} /></div>}
             </div>
             <div style={{ marginTop: '8px' }}><label style={label}>Condiciones / trato</label><input value={ec.condiciones} onChange={e => setEc({ ...ec, condiciones: e.target.value })} style={input} /></div>
             {msgEc && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msgEc}</p>}

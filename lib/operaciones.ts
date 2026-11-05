@@ -18,12 +18,14 @@ export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: st
 export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepción', 'La Serena']
 export const ESTADOS_VUELO: Record<string, string> = { por_comprar: 'Por comprar', comprado: 'Comprado' }
 export const resumenVuelo = (v: Vuelo) => `${v.estado === 'por_comprar' ? 'POR COMPRAR · ' : ''}${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.origen && v.destino ? v.origen + '→' + v.destino : ''} ${v.hora_salida ? v.hora_salida + (v.hora_llegada ? '-' + v.hora_llegada : '') : v.hora || ''}`.replace(/\s+/g, ' ').trim()
+export const ESTATUS_CONTRATO: Record<string, string> = { carta_aviso: 'Carta de aviso enviada', proceso_finiquito: 'Proceso de finiquito' }
+export const EXAMENES: Record<string, string> = { pendiente: 'Pendiente', aprobado: 'Aprobado', rechazado: 'Rechazado' }
 export const MODALIDADES: Record<string, string> = { vuelo: 'Vuelo', local: 'Local' }
 export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']
 export const DIAS_SEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 
 export type Turno = { id: string, trabajador_id: string, sube: string, baja: string | null, notas?: string | null }
-export type Asig = { id: string, trabajador_id: string, contrato_id: string, desde: string, hasta: string | null, regimen: string | null, tipo_contrato: string | null, vence: string | null, sueldo: number | null, condiciones: string | null }
+export type Asig = { id: string, trabajador_id: string, contrato_id: string, desde: string, hasta: string | null, regimen: string | null, tipo_contrato: string | null, vence: string | null, sueldo: number | null, condiciones: string | null, estatus_contrato?: string | null, estatus_fecha?: string | null }
 
 export const asigEn = (asigs: Asig[], trabId: string, fecha: string) =>
   asigs.find(a => a.trabajador_id === trabId && a.desde <= fecha && (!a.hasta || a.hasta >= fecha))

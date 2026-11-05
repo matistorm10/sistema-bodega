@@ -9,7 +9,7 @@ import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
 import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
 import CiudadSelect from '@/components/operaciones/CiudadSelect'
 import { useCiudades } from '@/components/operaciones/useCiudades'
-import { MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { ESTATUS_CONTRATO, EXAMENES, MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 const vacio = { contrato_id: '', desde: hoyISO(), regimen: '', tipo_contrato: '', vence: '', sueldo: '', condiciones: '' }
 export default function Ficha() {
@@ -22,7 +22,8 @@ export default function Ficha() {
   const [contratos, setContratos] = useState<any[]>([])
   const [msg, setMsg] = useState(''); const [msgA, setMsgA] = useState(''); const [msgT, setMsgT] = useState('')
   const [fa, setFa] = useState({ ...vacio }); const [verFormA, setVerFormA] = useState(false)
-  const [ed, setEd] = useState<{ id: string, tipo_contrato: string, vence: string, regimen: string, sueldo: string, condiciones: string, hasta: string } | null>(null)
+  const [ed, setEd] = useState<{ id: string, tipo_contrato: string, vence: string, regimen: string, sueldo: string, condiciones: string, hasta: string, estatus: string, estatus_fecha: string } | null>(null)
+  const [verRet, setVerRet] = useState(false); const [ret, setRet] = useState({ fecha: hoyISO(), motivo: 'Término de contrato', nota: '' }); const [msgR, setMsgR] = useState('')
   const [ft, setFt] = useState({ sube: hoyISO(), baja: '' })
   const hoy = hoyISO()
 
@@ -41,7 +42,7 @@ export default function Ficha() {
   const nCont = (cid?: string) => etiquetaContrato(contratos.find(x => x.id === cid))
 
   const guardarDatos = async () => {
-    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, modalidad_viaje: d.modalidad_viaje || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
+    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, modalidad_viaje: d.modalidad_viaje || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null }).eq('id', id)
     setMsg(error ? msgError(error) : 'Guardado ✓'); if (!error) cargar()
   }
   // Al abrir el formulario se carga el contrato actual del trabajador para partir con su información
@@ -62,9 +63,32 @@ export default function Ficha() {
     if (error) { if (abierta) await supabase.from('op_asignaciones').update({ hasta: abierta.hasta }).eq('id', abierta.id); setMsgA(msgError(error)); return }
     setFa({ ...vacio }); setVerFormA(false); cargar()
   }
+  const cambiarExamenes = async (v: string) => {
+    const { error } = await supabase.from('op_trabajadores').update({ examenes: v, examenes_fecha: hoyISO() }).eq('id', id)
+    if (error) setMsg(msgError(error)); else cargar()
+  }
+  // Retiro del control de personal: no se borra nada; se cierra el contrato y el turno abiertos a la fecha de retiro
+  const retirar = async () => {
+    setMsgR('')
+    if (!ret.fecha) { setMsgR('Indica la fecha de retiro.'); return }
+    const futuros = vuelos.filter(v => v.fecha > ret.fecha).length
+    if (!confirm(`Retirar a ${t.nombre} del control de personal desde el ${fechaCorta(ret.fecha)}.\nSe conserva toda su información e historial. Sus contratos y turnos abiertos terminan esa fecha${futuros ? ` y quedan ${futuros} vuelo(s) posterior(es) sin gestionar` : ''}. ¿Confirmas?`)) return
+    try {
+      for (const a of asigs) if (a.desde <= ret.fecha && (!a.hasta || a.hasta > ret.fecha)) { const { error } = await supabase.from('op_asignaciones').update({ hasta: ret.fecha }).eq('id', a.id); if (error) throw error }
+      for (const x of turnos) if (x.sube <= ret.fecha && (!x.baja || x.baja > ret.fecha)) { const { error } = await supabase.from('op_turnos').update({ baja: ret.fecha }).eq('id', x.id); if (error) throw error }
+      const { error } = await supabase.from('op_trabajadores').update({ activo: false, fecha_retiro: ret.fecha, motivo_retiro: [ret.motivo, ret.nota.trim()].filter(Boolean).join(' · ') }).eq('id', id)
+      if (error) throw error
+    } catch (e) { setMsgR(msgError(e)); return }
+    setVerRet(false); cargar()
+  }
+  const reintegrar = async () => {
+    if (!confirm(`¿Reintegrar a ${t.nombre} al control de personal? Sus contratos anteriores no se reabren: asigna uno nuevo.`)) return
+    const { error } = await supabase.from('op_trabajadores').update({ activo: true, fecha_retiro: null, motivo_retiro: null }).eq('id', id)
+    if (error) setMsg(msgError(error)); else cargar()
+  }
   const guardarEd = async () => {
     if (!ed) return
-    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ed.tipo_contrato || null, vence: ed.vence || null, regimen: ed.regimen || null, sueldo: ed.sueldo ? Number(ed.sueldo) : null, condiciones: ed.condiciones || null, hasta: ed.hasta || null }).eq('id', ed.id)
+    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ed.tipo_contrato || null, vence: ed.vence || null, regimen: ed.regimen || null, sueldo: ed.sueldo ? Number(ed.sueldo) : null, condiciones: ed.condiciones || null, hasta: ed.hasta || null, estatus_contrato: ed.estatus || null, estatus_fecha: ed.estatus ? (ed.estatus_fecha || hoy) : null }).eq('id', ed.id)
     if (error) { setMsgA(msgError(error)); return } setEd(null); setMsgA(''); cargar()
   }
   const borrarAsig = async (a: Asig) => { if (!confirm('¿Eliminar esta asignación de contrato?')) return; const { error } = await supabase.from('op_asignaciones').delete().eq('id', a.id); if (error) setMsgA(msgError(error)); else cargar() }
@@ -112,6 +136,27 @@ export default function Ficha() {
     <Marco titulo={t.nombre} volver="/operaciones/trabajadores" volverTxt="← Trabajadores" ancho={960}>
       <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{t.ciudad ? <>Origen: <strong>{t.ciudad}</strong> </> : <span style={{ color: '#b7791f' }}>Sin ciudad de origen </span>}{t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#e8f0fe', color: '#1B4F9C' }}>✈ Vuelo</span> : t.modalidad_viaje === 'local' ? <span style={{ fontSize: '11.5px', color: '#667085' }}>(Local)</span> : <span style={{ color: '#b7791f' }}>(modalidad sin definir)</span>} · Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
 
+      {!t.activo && <div style={{ background: '#fde2e1', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '13px', color: '#7a1212', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span><strong>RETIRADO DEL CONTROL DE PERSONAL</strong>{t.fecha_retiro ? ` desde el ${fechaCorta(t.fecha_retiro)}` : ''}{t.motivo_retiro ? ` · ${t.motivo_retiro}` : ''}. Su información e historial se conservan.</span>
+        <button onClick={reintegrar} style={{ ...btn(false), padding: '4px 12px', fontSize: '12px', marginLeft: 'auto' }}>Reintegrar</button>
+      </div>}
+      <div style={{ ...card, marginBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: '0 1 200px' }}><label style={label}>Exámenes (reclutamiento)</label>
+            <select value={t.examenes || 'pendiente'} onChange={e => cambiarExamenes(e.target.value)} style={{ ...input, fontWeight: 700, background: t.examenes === 'aprobado' ? '#e6f4ea' : t.examenes === 'rechazado' ? '#fde2e1' : '#fff3cd', color: t.examenes === 'aprobado' ? '#1e8e4e' : t.examenes === 'rechazado' ? '#b42318' : '#8a5a00' }}>{Object.entries(EXAMENES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <p style={{ margin: 0, flex: '1 1 260px', fontSize: '12.5px', color: '#667085' }}>{t.examenes === 'aprobado' ? <>✅ <strong>Habilitado</strong> para asignar contrato y comprar pasajes. Los datos del contrato y los vuelos se pueden cargar en cualquier momento.</> : t.examenes === 'rechazado' ? <>⛔ Exámenes rechazados: no se puede asignar contrato ni comprar pasajes.</> : <>⏳ Exámenes pendientes: el contrato y los pasajes se habilitan cuando se aprueben.</>}{t.examenes_fecha ? ` (actualizado ${fechaCorta(t.examenes_fecha)})` : ''}</p>
+          {t.activo && <button onClick={() => { setVerRet(!verRet); setMsgR('') }} style={{ ...btn(false, true), padding: '6px 12px', fontSize: '12px' }}>{verRet ? 'Cancelar retiro' : 'Retirar del control de personal'}</button>}
+        </div>
+        {verRet && (
+          <div style={{ marginTop: '10px', background: '#fff5f5', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: '0 1 150px' }}><label style={label}>Fecha de retiro *</label><input type="date" value={ret.fecha} onChange={e => setRet({ ...ret, fecha: e.target.value })} style={input} /></div>
+            <div style={{ flex: '1 1 180px' }}><label style={label}>Motivo</label><select value={ret.motivo} onChange={e => setRet({ ...ret, motivo: e.target.value })} style={input}>{['Término de contrato', 'Renuncia', 'Despido', 'No continúa en el proyecto', 'Exámenes rechazados', 'Otro'].map(m => <option key={m}>{m}</option>)}</select></div>
+            <div style={{ flex: '2 1 220px' }}><label style={label}>Observación</label><input value={ret.nota} onChange={e => setRet({ ...ret, nota: e.target.value })} style={input} /></div>
+            <button onClick={retirar} style={btn(false, true)}>Confirmar retiro</button>
+            {msgR && <p style={{ width: '100%', margin: 0, fontSize: '12.5px', color: '#c5221f' }}>{msgR}</p>}
+          </div>)}
+      </div>
+
       <div style={{ ...card, marginBottom: '12px' }}>
         <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Datos</p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -126,14 +171,13 @@ export default function Ficha() {
           <div style={{ flex: '0 1 110px' }}><label style={label}>Talla ropa</label>{sel(d.talla_ropa, v => set('talla_ropa', v), tallasR)}</div>
         </div>
         <div style={{ marginTop: '10px' }}><label style={label}>Notas</label><input value={d.notas || ''} onChange={e => set('notas', e.target.value)} style={input} /></div>
-        <label style={{ fontSize: '12.5px', display: 'flex', gap: '6px', alignItems: 'center', margin: '10px 0' }}><input type="checkbox" checked={d.activo !== false} onChange={e => set('activo', e.target.checked)} />Trabajador activo (desmarcar si fue finiquitado)</label>
         <button onClick={guardarDatos} style={btn()}>Guardar datos</button>{msg && <span style={{ marginLeft: '10px', fontSize: '12.5px', color: msg.endsWith('✓') ? '#1e8e4e' : '#c5221f' }}>{msg}</span>}
       </div>
 
       <div style={{ ...card, marginBottom: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Contratos <span style={{ fontWeight: 400, fontSize: '12px', color: '#98a2b3' }}>· un trabajador solo puede estar en un contrato por día</span></p>
-          <button onClick={abrirFormA} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>{verFormA ? 'Cancelar' : '+ Asignar / mover de contrato'}</button>
+          {t.examenes === 'aprobado' ? <button onClick={abrirFormA} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>{verFormA ? 'Cancelar' : '+ Asignar / mover de contrato'}</button> : <span style={{ fontSize: '12px', color: '#b7791f' }}>Disponible cuando los exámenes estén aprobados</span>}
         </div>
         {verFormA && (
           <div style={{ background: '#f8fafc', border: '1px solid #e2e6ed', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
@@ -168,17 +212,19 @@ export default function Ficha() {
                 <div style={{ flex: '0 1 100px' }}><label style={label}>Régimen</label><input value={ed.regimen} onChange={e => setEd({ ...ed, regimen: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 120px' }}><label style={label}>Sueldo</label><input type="number" value={ed.sueldo} onChange={e => setEd({ ...ed, sueldo: e.target.value })} style={input} /></div>
                 <div style={{ flex: '2 1 220px' }}><label style={label}>Condiciones</label><input value={ed.condiciones} onChange={e => setEd({ ...ed, condiciones: e.target.value })} style={input} /></div>
+                <div style={{ flex: '1 1 190px' }}><label style={label}>Estatus del contrato</label><select value={ed.estatus} onChange={e => setEd({ ...ed, estatus: e.target.value, estatus_fecha: e.target.value ? (ed.estatus_fecha || hoy) : '' })} style={input}><option value="">Normal (sin aviso)</option>{Object.entries(ESTATUS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                {ed.estatus && <div style={{ flex: '0 1 140px' }}><label style={label}>Fecha</label><input type="date" value={ed.estatus_fecha} onChange={e => setEd({ ...ed, estatus_fecha: e.target.value })} style={input} /></div>}
                 <button onClick={guardarEd} style={{ ...btn(), padding: '8px 14px' }}>Guardar</button><button onClick={() => setEd(null)} style={{ ...btn(false), padding: '8px 14px' }}>Cancelar</button>
               </div>
             ) : (
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 300px' }}>
-                  <strong>{nCont(a.contrato_id)}</strong> {a === actual && <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '20px', background: '#e6f4ea', color: '#1e8e4e', fontWeight: 700 }}>vigente hoy</span>}
+                  <strong>{nCont(a.contrato_id)}</strong> {a === actual && <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '20px', background: '#e6f4ea', color: '#1e8e4e', fontWeight: 700 }}>vigente hoy</span>} {a.estatus_contrato && <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '20px', background: a.estatus_contrato === 'proceso_finiquito' ? '#fde2e1' : '#fff3cd', color: a.estatus_contrato === 'proceso_finiquito' ? '#b42318' : '#8a5a00', fontWeight: 700 }}>{a.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'} {ESTATUS_CONTRATO[a.estatus_contrato]}{a.estatus_fecha ? ` · ${fechaCorta(a.estatus_fecha)}` : ''}</span>}
                   <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#667085' }}>{fechaCorta(a.desde)} → {a.hasta ? fechaCorta(a.hasta) : 'sin término'}{a.regimen ? ` · ${a.regimen}` : ''}{a.tipo_contrato ? ` · ${TIPOS_CONTRATO[a.tipo_contrato]}${a.vence ? ' hasta ' + fechaCorta(a.vence) : ''}` : ''}{a.sueldo ? ` · sueldo $${Number(a.sueldo).toLocaleString('es-CL')}` : ''}</p>
                   {a.condiciones && <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#667085' }}>{a.condiciones}</p>}
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button onClick={() => setEd({ id: a.id, tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', hasta: a.hasta || '' })} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>Editar</button>
+                  <button onClick={() => setEd({ id: a.id, tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', hasta: a.hasta || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' })} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>Editar</button>
                   <button onClick={() => borrarAsig(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Eliminar</button>
                 </div>
               </div>

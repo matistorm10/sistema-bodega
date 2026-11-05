@@ -9,7 +9,7 @@ const vacioV = { estado: 'por_comprar', tipo: '', medio: 'vuelo', aerolinea: '',
 const desde = (v: Vuelo) => ({ estado: v.estado || 'comprado', tipo: v.tipo || '', medio: v.medio || 'vuelo', aerolinea: v.aerolinea || '', origen: v.origen || '', destino: v.destino || '', hora_salida: v.hora_salida || '', hora_llegada: v.hora_llegada || '', reserva: v.reserva || '', notas: v.notas || '' })
 
 // Vuelo/bus de un trabajador en un día: solo uno por día. Si existe se edita; si no, se crea. «Por comprar» solo pide el tipo; «Comprado» exige todos los datos (salvo notas).
-export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { ciudad?: string | null } }) {
+export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { ciudad?: string | null, examenes?: string | null } }) {
   const { aeropuertoDe } = useCiudades()
   const existente = vuelos[0] || null
   const [f, setF] = useState(existente ? desde(existente) : { ...vacioV })
@@ -41,6 +41,7 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
   }
   const borrar = async () => { if (!existente || !confirm('¿Eliminar este vuelo/bus?')) return; const { error } = await supabase.from('op_vuelos').delete().eq('id', existente.id); if (error) setMsg(msgError(error)); else onCambio() }
   const lugar = (v: string, k: 'origen' | 'destino') => <select value={v} onChange={e => setF({ ...f, [k]: e.target.value })} style={input}><option value="">— elegir —</option>{v && !LUGARES.includes(v) && <option>{v}</option>}{LUGARES.map(l => <option key={l}>{l}</option>)}</select>
+  if (trabajador && trabajador.examenes && trabajador.examenes !== 'aprobado') return <p style={{ margin: 0, fontSize: '13px', color: '#b7791f' }}>Los pasajes se habilitan cuando los exámenes del trabajador estén aprobados (hoy: {trabajador.examenes}). Cámbialo en su ficha.</p>
   return (
     <div>
       <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13px' }}>{existente ? 'Editar' : 'Agregar'} vuelo / bus del {fechaCorta(dia)}</p>

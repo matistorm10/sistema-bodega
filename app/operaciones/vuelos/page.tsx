@@ -18,7 +18,7 @@ export default function VuelosPasajes() {
   const cargar = async () => { const [v, t] = await Promise.all([traerTodo('op_vuelos', '*', 'fecha'), traerTodo('op_trabajadores', '*', 'nombre')]); setVuelos(v as Vuelo[]); setTrab(t); setCargando(false) }
   useEffect(() => { cargar() }, [])
   const tr = (id: string) => trab.find(t => t.id === id)
-  const filas = useMemo(() => vuelos.filter(v => (pasados || v.fecha >= hoy) && (!fEstado || v.estado === fEstado) && (!fTipo || v.tipo === fTipo) && (!fOrigen || (fOrigen === '_sin' ? !tr(v.trabajador_id)?.ciudad : tr(v.trabajador_id)?.ciudad === fOrigen)) &&
+  const filas = useMemo(() => vuelos.filter(v => (pasados || v.fecha >= hoy) && (tr(v.trabajador_id)?.activo !== false || v.estado !== 'por_comprar') && (!fEstado || v.estado === fEstado) && (!fTipo || v.tipo === fTipo) && (!fOrigen || (fOrigen === '_sin' ? !tr(v.trabajador_id)?.ciudad : tr(v.trabajador_id)?.ciudad === fOrigen)) &&
     (!q.trim() || (tr(v.trabajador_id)?.nombre || '').toLowerCase().includes(q.trim().toLowerCase()))).sort((a, b) => a.fecha.localeCompare(b.fecha) || (tr(a.trabajador_id)?.nombre || '').localeCompare(tr(b.trabajador_id)?.nombre || '')),
     [vuelos, trab, fEstado, fOrigen, fTipo, q, pasados, hoy]) // eslint-disable-line react-hooks/exhaustive-deps
   const nPorComprar = vuelos.filter(v => v.estado === 'por_comprar' && v.fecha >= hoy).length

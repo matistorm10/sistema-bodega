@@ -67,7 +67,7 @@ export default function Operaciones() {
           </div>
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>Dónde está el personal hoy ({fechaCorta(hoy)})</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>
-            {kpi(totEn, 'En faena', '#1e8e4e')}{kpi(totDesc, 'En descanso', '#1B4F9C')}{kpi(activos.length, 'Trabajadores activos')}{kpi(sinContratoHoy, 'Activos sin contrato hoy', sinContratoHoy ? '#b7791f' : '#1e8e4e')}
+            {kpi(totEn, 'En faena', '#1e8e4e')}{kpi(totDesc, 'En descanso', '#1B4F9C')}{kpi(activos.length, 'Trabajadores activos')}{kpi(sinContratoHoy, 'Activos sin contrato hoy', sinContratoHoy ? '#b7791f' : '#1e8e4e')}{kpi(activos.filter(t => t.examenes === 'pendiente').length, 'Exámenes pendientes', '#b7791f')}
           </div>
           <div style={{ ...card, marginBottom: '14px', overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

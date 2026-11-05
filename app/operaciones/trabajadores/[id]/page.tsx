@@ -6,6 +6,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
 import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
+import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
 import CiudadSelect from '@/components/operaciones/CiudadSelect'
 import { useCiudades } from '@/components/operaciones/useCiudades'
 import { MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
@@ -94,6 +95,7 @@ export default function Ficha() {
   const set = (k: string, v: any) => setD({ ...d, [k]: v })
   const tallasC = tallasDe({ usa_talla: true, tipo_talla: 'calzado' }), tallasR = tallasDe({ usa_talla: true, tipo_talla: 'ropa' })
   const ciu = useCiudades()
+  const car = useCargos()
   if (!t) return <Marco titulo="Ficha del trabajador" volver="/operaciones/trabajadores" volverTxt="← Trabajadores"><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></Marco>
   const sel = (v: string, f: (x: string) => void, opts: string[]) => <select value={v || ''} onChange={e => f(e.target.value)} style={input}><option value="">—</option>{v && !opts.includes(v) && <option>{v}</option>}{opts.map(o => <option key={o}>{o}</option>)}</select>
   const actual = asigs.find(a => a.desde <= hoy && (!a.hasta || a.hasta >= hoy))
@@ -110,7 +112,7 @@ export default function Ficha() {
           <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
-          <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><input value={d.cargo || ''} onChange={e => set('cargo', e.target.value)} style={input} /></div>
+          <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><CargoSelect value={d.cargo || ''} onChange={v => set('cargo', v)} cargos={car.cargos} recargar={car.recargar} /></div>
           <div style={{ flex: '1 1 160px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={d.ciudad || ''} onChange={v => set('ciudad', v)} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Viaja</label><select value={d.modalidad_viaje || ''} onChange={e => set('modalidad_viaje', e.target.value)} style={{ ...input, ...(d.modalidad_viaje === 'vuelo' ? { background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700 } : {}) }}><option value="">—</option>{Object.entries(MODALIDADES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div style={{ flex: '0 1 110px' }}><label style={label}>Talla calzado</label>{sel(d.talla_calzado, v => set('talla_calzado', v), tallasC)}</div>

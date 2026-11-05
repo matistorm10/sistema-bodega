@@ -8,6 +8,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
+import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
 import CiudadSelect from '@/components/operaciones/CiudadSelect'
 import { useCiudades } from '@/components/operaciones/useCiudades'
 import { etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, estadoEn, asigEn, fechaCorta, TIPOS_CONTRATO, msgError, type Asig, type Turno } from '@/lib/operaciones'
@@ -25,6 +26,7 @@ export default function Trabajadores() {
   const [q, setQ] = useState(''); const [fContrato, setFContrato] = useState<string[]>([]); const [fTipo, setFTipo] = useState(''); const [fEstado, setFEstado] = useState(''); const [verInactivos, setVerInactivos] = useState(false)
   const [nuevo, setNuevo] = useState(false)
   const ciu = useCiudades()
+  const car = useCargos()
   const [f, setF] = useState({ nombre: '', rut: '', cargo: '', ciudad: '', modalidad: '', tipo: 'directo', calzado: '', ropa: '' })
   const [msg, setMsg] = useState('')
   const hoy = hoyISO()
@@ -44,7 +46,7 @@ export default function Trabajadores() {
 
   const crear = async () => {
     if (!f.nombre.trim()) { setMsg('Escribe el nombre.'); return }
-    const { data, error } = await supabase.from('op_trabajadores').insert({ nombre: f.nombre.trim(), rut: f.rut.trim() || null, cargo: f.cargo.trim() || null, ciudad: f.ciudad || null, modalidad_viaje: f.modalidad || null, tipo_personal: f.tipo, talla_calzado: f.calzado || null, talla_ropa: f.ropa || null }).select('id').single()
+    const { data, error } = await supabase.from('op_trabajadores').insert({ nombre: f.nombre.trim(), rut: f.rut.trim() || null, cargo: f.cargo || null, ciudad: f.ciudad || null, modalidad_viaje: f.modalidad || null, tipo_personal: f.tipo, talla_calzado: f.calzado || null, talla_ropa: f.ropa || null }).select('id').single()
     if (error) { setMsg(msgError(error)); return }
     router.push(`/operaciones/trabajadores/${data.id}`)
   }
@@ -63,7 +65,7 @@ export default function Trabajadores() {
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 200px' }}><label style={label}>Nombre *</label><input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} style={input} /></div>
             <div style={{ flex: '0 1 140px' }}><label style={label}>RUT</label><input value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} placeholder="12.345.678-9" style={input} /></div>
-            <div style={{ flex: '1 1 160px' }}><label style={label}>Cargo</label><input value={f.cargo} onChange={e => setF({ ...f, cargo: e.target.value })} style={input} /></div>
+            <div style={{ flex: '1 1 160px' }}><label style={label}>Cargo</label><CargoSelect value={f.cargo} onChange={v => setF({ ...f, cargo: v })} cargos={car.cargos} recargar={car.recargar} /></div>
             <div style={{ flex: '1 1 140px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={f.ciudad} onChange={v => setF({ ...f, ciudad: v })} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
             <div style={{ flex: '0 1 110px' }}><label style={label}>Viaja</label><select value={f.modalidad} onChange={e => setF({ ...f, modalidad: e.target.value })} style={input}><option value="">—</option><option value="vuelo">Vuelo</option><option value="local">Local</option></select></div>
             <div style={{ flex: '0 1 130px' }}><label style={label}>Tipo de personal</label><select value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>

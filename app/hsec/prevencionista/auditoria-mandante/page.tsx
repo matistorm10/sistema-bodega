@@ -182,6 +182,10 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
   const [auto, setAuto] = useState<any>(null)
+  // MIPER (matrices) cargadas por el Jefe en Contratos y documentos para este contrato
+  const [matrices, setMatrices] = useState<any[] | null>(null)
+  useEffect(() => { supabase.from('pr_contrato_documentos').select('id,nombre,estado,rev,path,archivo_nombre').eq('contrato_id', lev.contrato_id).eq('categoria', 'Matriz').order('nombre').then(({ data }) => setMatrices((data || []).filter((m: any) => !!m.path))) }, [lev.contrato_id])
+  const miperOk = (matrices || []).some(m => m.estado === 'Aprobado')
   const rm = useMemo(() => { const m: Record<string, AudResp> = {}; resps.forEach(r => { m[r.item_id] = r }); return m }, [resps])
   const dpor = (id: string) => docs.filter(d => d.item_id === id)
   const r = resumen(items, rm, docs, !!fm.usa_puntaje, trabs, eppEst.ok)
@@ -218,6 +222,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
   }, [auto]) // eslint-disable-line react-hooks/exhaustive-deps
   const marcar = async (it: AudItem, v: AudResp['estado']) => {
     const actual = rm[it.id]?.estado
+    if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'miper' && !miperOk) { setMsg(`Ítem ${it.numero || ''}: la MIPER debe estar cargada y aprobada en Contratos y documentos.`); return }
     if (v === 'cumple' && actual !== 'cumple' && it.requiere_trabajador) {
       const c = difCompleta(it.id, trabs, docs)
       if (c.total === 0) { setMsg(`Ítem ${it.numero || ''}: primero agrega a los trabajadores del contrato.`); return }
@@ -329,6 +334,15 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
                 {(() => { const ev = evaluarAuto(it); return ev ? <p style={{ margin: '0 0 6px', fontSize: '12px', padding: '7px 10px', borderRadius: '8px', background: ev.ok ? '#f3fbf6' : '#fff8e5', border: `1px solid ${ev.ok ? '#b9e2c8' : '#f0d98a'}`, color: ev.ok ? '#14532d' : '#7a5600' }}>{ev.ok ? '✓ Se completa solo con datos del sistema: ' : '⏳ Se completará solo cuando se cumpla: '}{ev.txt}</p> : null })()}
+                {it.fuente === 'miper' && matrices && (matrices.length === 0
+                  ? <p style={{ margin: '0 0 6px', fontSize: '12px', padding: '8px 10px', borderRadius: '8px', background: '#fff8e5', border: '1px solid #f0d98a', color: '#7a5600' }}>⏳ <strong>Pendiente por cargar la MIPER.</strong> Solo se puede cargar desde <strong>Contratos y documentos</strong> (categoría Matriz) para respetar el proceso. {esJefe ? <Link href="/hsec/jefatura/contratos" style={{ color: AZUL, fontWeight: 600 }}>Ir a Contratos y documentos →</Link> : 'Avisa al Jefe para que la cargue.'}</p>
+                  : <div style={{ margin: '0 0 6px', padding: '8px 10px', borderRadius: '8px', background: miperOk ? '#f3fbf6' : '#fff8e5', border: `1px solid ${miperOk ? '#b9e2c8' : '#f0d98a'}` }}>
+                    <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, color: miperOk ? '#14532d' : '#7a5600' }}>{miperOk ? '✓ MIPER cargada y aprobada en Contratos y documentos' : '⏳ MIPER cargada, pendiente de aprobación del Jefe en Contratos y documentos'}</p>
+                    {matrices.map(m => <div key={m.id} style={{ fontSize: '12.5px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button type="button" onClick={() => abrirArchivo(m.path)} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: '12.5px', textAlign: 'left' }}>📎 {m.nombre}</button>
+                      <span style={{ fontSize: '10.5px', color: '#667085' }}>Rev. {m.rev} · {m.estado}</span>
+                    </div>)}
+                  </div>)}
                 {it.fuente === 'epp' && <BloqueEpp est={eppEst} abrirArchivo={abrirArchivo} />}
                 {it.requiere_trabajador && <SelectorTrab it={it} trabs={trabs} docs={docs} subiendo={subiendo === it.id} subirVarios={subirVarios} />}
                 {/* Documentos */}
@@ -352,7 +366,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                     </div>
                   )
                 })}
-                {!it.requiere_trabajador && <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' }}>
+                {!it.requiere_trabajador && it.fuente !== 'miper' && <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' }}>
                   <label style={{ ...btn(false), padding: '5px 12px', fontSize: '12px', display: 'inline-block', cursor: 'pointer' }}>
                     {subiendo === it.id ? 'Subiendo...' : '📎 Subir documento'}
                     <input type="file" style={{ display: 'none' }} disabled={subiendo === it.id} onChange={ev => { const f = ev.target.files?.[0]; if (f) subir(it, f); ev.target.value = '' }} />
@@ -577,7 +591,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
             setBusy(true); setMsg('')
             const { data, error } = await supabase.from('aud_formatos').insert({ nombre: 'SQM · Auditoría de Calificación P3', codigo: 'REG-PR-004 v002', descripcion: 'Reglamento de Contratistas y Subcontratistas SQM', usa_puntaje: true }).select().maybeSingle()
             if (error || !data) { setBusy(false); err(error); return }
-            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : i.n === 1 ? 'trabajadores' : i.n === 7 ? 'liderazgo' : i.n === 19 ? 'epp_entrega' : null }))
+            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : i.n === 1 ? 'trabajadores' : i.n === 7 ? 'liderazgo' : i.n === 19 ? 'epp_entrega' : i.n === 9 ? 'miper' : null }))
             const r = await supabase.from('aud_items').insert(filas)
             setBusy(false); if (r.error) { err(r.error); return }
             await recargar()

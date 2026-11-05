@@ -2,13 +2,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { btn, input, label } from '@/components/programa/ui'
-import { fechaCorta, msgError, AEROLINEAS, LUGARES, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
+import { aeropuertoDe, fechaCorta, msgError, AEROLINEAS, LUGARES, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
 
 const vacioV = { estado: 'por_comprar', tipo: '', medio: 'vuelo', aerolinea: '', origen: '', destino: '', hora_salida: '', hora_llegada: '', reserva: '', notas: '' }
 const desde = (v: Vuelo) => ({ estado: v.estado || 'comprado', tipo: v.tipo || '', medio: v.medio || 'vuelo', aerolinea: v.aerolinea || '', origen: v.origen || '', destino: v.destino || '', hora_salida: v.hora_salida || '', hora_llegada: v.hora_llegada || '', reserva: v.reserva || '', notas: v.notas || '' })
 
 // Vuelo/bus de un trabajador en un día: solo uno por día. Si existe se edita; si no, se crea. «Por comprar» solo pide el tipo; «Comprado» exige todos los datos (salvo notas).
-export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { ciudad?: string | null, aeropuerto_origen?: string | null } }) {
+export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { ciudad?: string | null } }) {
   const existente = vuelos[0] || null
   const [f, setF] = useState(existente ? desde(existente) : { ...vacioV })
   const [msg, setMsg] = useState(''); const [ok, setOk] = useState(false)
@@ -19,7 +19,7 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
     !f.tipo && 'tipo', !f.origen && 'origen', !f.destino && 'destino', !f.hora_salida && 'hora de salida', !f.hora_llegada && 'hora de llegada',
     esVuelo && !f.aerolinea && 'aerolínea', esVuelo && !f.reserva.trim() && 'reserva',
   ].filter(Boolean) as string[]
-  const aeropuerto = trabajador?.aeropuerto_origen || ''
+  const aeropuerto = aeropuertoDe(trabajador?.ciudad)
   // Al elegir subida/bajada, propone el aeropuerto de origen del trabajador en el lado que corresponde (si ese campo está vacío)
   const cambiarTipo = (tipo: string) => {
     const n = { ...f, tipo }
@@ -43,7 +43,7 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
     <div>
       <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13px' }}>{existente ? 'Editar' : 'Agregar'} vuelo / bus del {fechaCorta(dia)}</p>
       {vuelos.length > 1 && <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#b7791f' }}>Este día tiene {vuelos.length} registros (de la carga inicial). Se edita el primero; deja solo uno.</p>}
-      <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475467' }}>Viaja desde: <strong>{aeropuerto || 'sin aeropuerto definido'}</strong>{trabajador?.ciudad ? ` (ciudad: ${trabajador.ciudad})` : ''}</p>
+      <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475467' }}>Origen: <strong>{trabajador?.ciudad || 'sin ciudad definida'}</strong>{aeropuerto ? ` · aeropuerto ${aeropuerto}` : ''}</p>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 130px' }}><label style={label}>Estado *</label><select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} style={{ ...input, fontWeight: 700, background: porComprar ? '#fde2e1' : '#e6f4ea' }}>{Object.entries(ESTADOS_VUELO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div style={{ flex: '1 1 110px' }}><label style={label}>Tipo *</label><select value={f.tipo} onChange={e => cambiarTipo(e.target.value)} style={input}><option value="">—</option><option value="subida">Subida</option><option value="bajada">Bajada</option></select></div>

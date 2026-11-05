@@ -6,7 +6,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
 import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
-import { LUGARES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { CIUDADES, MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 const vacio = { contrato_id: '', desde: hoyISO(), regimen: '', tipo_contrato: '', vence: '', sueldo: '', condiciones: '' }
 export default function Ficha() {
@@ -38,7 +38,7 @@ export default function Ficha() {
   const nCont = (cid?: string) => etiquetaContrato(contratos.find(x => x.id === cid))
 
   const guardarDatos = async () => {
-    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, aeropuerto_origen: d.aeropuerto_origen || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
+    const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, modalidad_viaje: d.modalidad_viaje || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
     setMsg(error ? msgError(error) : 'Guardado ✓'); if (!error) cargar()
   }
   const asignar = async () => {
@@ -98,7 +98,7 @@ export default function Ficha() {
 
   return (
     <Marco titulo={t.nombre} volver="/operaciones/trabajadores" volverTxt="← Trabajadores" ancho={960}>
-      <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{t.aeropuerto_origen ? <>Viaja desde: <strong>{t.aeropuerto_origen}</strong> · </> : <span style={{ color: '#b7791f' }}>Sin aeropuerto de origen · </span>}Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
+      <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{t.ciudad ? <>Origen: <strong>{t.ciudad}</strong> </> : <span style={{ color: '#b7791f' }}>Sin ciudad de origen </span>}{t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#e8f0fe', color: '#1B4F9C' }}>✈ Vuelo</span> : t.modalidad_viaje === 'local' ? <span style={{ fontSize: '11.5px', color: '#667085' }}>(Local)</span> : <span style={{ color: '#b7791f' }}>(modalidad sin definir)</span>} · Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
 
       <div style={{ ...card, marginBottom: '12px' }}>
         <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Datos</p>
@@ -108,8 +108,8 @@ export default function Ficha() {
           <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
           <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><input value={d.cargo || ''} onChange={e => set('cargo', e.target.value)} style={input} /></div>
-          <div style={{ flex: '1 1 150px' }}><label style={label}>Ciudad donde vive</label><input value={d.ciudad || ''} onChange={e => set('ciudad', e.target.value)} style={input} /></div>
-          <div style={{ flex: '0 1 170px' }}><label style={label}>Aeropuerto de origen (pasajes)</label>{sel(d.aeropuerto_origen, v => set('aeropuerto_origen', v), LUGARES)}</div>
+          <div style={{ flex: '1 1 160px' }}><label style={label}>Ciudad de origen</label>{sel(d.ciudad, v => set('ciudad', v), CIUDADES)}</div>
+          <div style={{ flex: '0 1 140px' }}><label style={label}>Viaja</label><select value={d.modalidad_viaje || ''} onChange={e => set('modalidad_viaje', e.target.value)} style={{ ...input, ...(d.modalidad_viaje === 'vuelo' ? { background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700 } : {}) }}><option value="">—</option>{Object.entries(MODALIDADES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div style={{ flex: '0 1 110px' }}><label style={label}>Talla calzado</label>{sel(d.talla_calzado, v => set('talla_calzado', v), tallasC)}</div>
           <div style={{ flex: '0 1 110px' }}><label style={label}>Talla ropa</label>{sel(d.talla_ropa, v => set('talla_ropa', v), tallasR)}</div>
         </div>

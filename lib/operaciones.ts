@@ -95,3 +95,43 @@ export async function marcarDia(turnos: Turno[], trabId: string, dia: string, on
     return null
   } catch (e) { return msgError(e) }
 }
+
+// ---- Turnos por rango de días (varias celdas a la vez) ----
+export type PlanTurnos = { borrar: string[], actualizar: { id: string, sube?: string, baja?: string | null }[], insertar: Turno[] }
+const INF = '9999-12-31'
+// Calcula (sin tocar la base) cómo quedan los turnos de un trabajador al poner los días a..b en turno (on) o descanso (!on)
+export function planRango(ts: Turno[], trabId: string, a: string, b: string, on: boolean): PlanTurnos {
+  const plan: PlanTurnos = { borrar: [], actualizar: [], insertar: [] }
+  if (!on) {
+    for (const t of ts) {
+      const fin = t.baja || INF
+      if (fin < a || t.sube > b) continue
+      const izq = t.sube < a, der = fin > b
+      if (!izq && !der) plan.borrar.push(t.id)
+      else if (izq && !der) plan.actualizar.push({ id: t.id, baja: sumarDias(a, -1) })
+      else if (!izq && der) plan.actualizar.push({ id: t.id, sube: sumarDias(b, 1) })
+      else { plan.actualizar.push({ id: t.id, baja: sumarDias(a, -1) }); plan.insertar.push({ id: crypto.randomUUID(), trabajador_id: trabId, sube: sumarDias(b, 1), baja: t.baja }) }
+    }
+    return plan
+  }
+  const toc = ts.filter(t => t.sube <= sumarDias(b, 1) && (t.baja || INF) >= sumarDias(a, -1)).sort((x, y) => x.sube.localeCompare(y.sube))
+  if (toc.length === 0) { plan.insertar.push({ id: crypto.randomUUID(), trabajador_id: trabId, sube: a, baja: b }); return plan }
+  const sube = toc[0].sube < a ? toc[0].sube : a
+  const baja = toc.some(t => !t.baja) ? null : toc.reduce((m, t) => ((t.baja as string) > m ? (t.baja as string) : m), b)
+  plan.borrar.push(...toc.slice(1).map(t => t.id))
+  if (sube !== toc[0].sube || baja !== toc[0].baja) plan.actualizar.push({ id: toc[0].id, sube, baja })
+  return plan
+}
+// Aplica el plan a una lista local de turnos (para actualizar la pantalla al instante)
+export function aplicarPlanLocal(ts: Turno[], plan: PlanTurnos): Turno[] {
+  return [...ts.filter(t => !plan.borrar.includes(t.id)).map(t => { const u = plan.actualizar.find(x => x.id === t.id); return u ? { ...t, ...u } as Turno : t }), ...plan.insertar]
+}
+// Guarda el plan en la base (primero borra, luego actualiza, luego inserta, para no chocar con las restricciones)
+export async function guardarPlan(plan: PlanTurnos): Promise<string | null> {
+  try {
+    for (const id of plan.borrar) { const { error } = await supabase.from('op_turnos').delete().eq('id', id); if (error) throw error }
+    for (const u of plan.actualizar) { const { id, ...campos } = u; const { error } = await supabase.from('op_turnos').update(campos).eq('id', id); if (error) throw error }
+    if (plan.insertar.length) { const { error } = await supabase.from('op_turnos').insert(plan.insertar.map(t => ({ id: t.id, trabajador_id: t.trabajador_id, sube: t.sube, baja: t.baja }))); if (error) throw error }
+    return null
+  } catch (e) { return msgError(e) }
+}

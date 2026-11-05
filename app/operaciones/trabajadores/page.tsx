@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
+import PuntoExamen from '@/components/operaciones/PuntoExamen'
 import Marco from '@/components/operaciones/Marco'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
 import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
@@ -86,7 +87,7 @@ export default function Trabajadores() {
             <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '6px 8px' }}>Nombre</th><th style={{ padding: '6px 8px' }}>Tipo</th><th style={{ padding: '6px 8px' }}>Exámenes</th><th style={{ padding: '6px 8px' }}>Cargo</th><th style={{ padding: '6px 8px' }}>Contrato hoy</th><th style={{ padding: '6px 8px' }}>Plazo</th><th style={{ padding: '6px 8px' }}>Hoy</th><th style={{ padding: '6px 8px' }}>Tallas</th></tr></thead>
             <tbody>{filas.map(({ t, a, est }) => (
               <tr key={t.id} style={{ borderTop: '1px solid #eef1f6', opacity: t.activo ? 1 : 0.55 }}>
-                <td style={{ padding: '7px 8px', fontWeight: 600 }}><Link href={`/operaciones/trabajadores/${t.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{t.nombre}</Link><span style={{ display: 'block', fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}>{t.rut || 'sin RUT'}</span></td>
+                <td style={{ padding: '7px 8px', fontWeight: 600 }}><PuntoExamen estado={t.examenes} /><Link href={`/operaciones/trabajadores/${t.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{t.nombre}</Link><span style={{ display: 'block', fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}>{t.rut || 'sin RUT'}</span></td>
                 <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', color: t.tipo_personal === 'indirecto' ? '#8a5a00' : '#667085' }}>{TIPOS_PERSONAL[t.tipo_personal] || 'Directo'}</span></td>
                 <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.examenes === 'aprobado' ? '#e6f4ea' : t.examenes === 'rechazado' ? '#fde2e1' : '#fff3cd', color: t.examenes === 'aprobado' ? '#1e8e4e' : t.examenes === 'rechazado' ? '#b42318' : '#8a5a00' }}>{EXAMENES[t.examenes] || 'Pendiente'}</span></td>
                 <td style={{ padding: '7px 8px' }}>{t.cargo || '—'}</td>

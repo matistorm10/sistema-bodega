@@ -19,6 +19,7 @@ export default function Ficha() {
   const [asigs, setAsigs] = useState<Asig[]>([])
   const [turnos, setTurnos] = useState<Turno[]>([])
   const [vuelos, setVuelos] = useState<Vuelo[]>([])
+  const [cupo, setCupo] = useState<any | null>(null)
   const [contratos, setContratos] = useState<any[]>([])
   const [msg, setMsg] = useState(''); const [msgA, setMsgA] = useState(''); const [msgT, setMsgT] = useState('')
   const [fa, setFa] = useState({ ...vacio }); const [verFormA, setVerFormA] = useState(false)
@@ -28,13 +29,15 @@ export default function Ficha() {
   const hoy = hoyISO()
 
   const cargar = useCallback(async () => {
-    const [a, b, c, ct, vu] = await Promise.all([
+    const [a, b, c, ct, vu, cp] = await Promise.all([
       supabase.from('op_trabajadores').select('*').eq('id', id).single(),
       supabase.from('op_asignaciones').select('*').eq('trabajador_id', id).order('desde', { ascending: false }),
       supabase.from('op_turnos').select('*').eq('trabajador_id', id).order('sube', { ascending: false }),
       supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'),
       supabase.from('op_vuelos').select('*').eq('trabajador_id', id).order('fecha'),
+      supabase.from('op_cupos').select('*').eq('trabajador_id', id).limit(1),
     ])
+    setCupo((cp.data || [])[0] || null)
     setVuelos((vu.data || []) as Vuelo[])
     setT(a.data); setD(a.data || {}); setAsigs((b.data || []) as Asig[]); setTurnos((c.data || []) as Turno[]); setContratos(ct.data || [])
   }, [id])
@@ -54,7 +57,7 @@ export default function Ficha() {
   const abrirFormA = () => {
     if (verFormA) { setVerFormA(false); return }
     setMsgA('')
-    setFa(actual ? { ...vacio, contrato_id: actual.contrato_id, desde: hoyISO() > actual.desde ? hoyISO() : actual.desde, regimen: actual.regimen || '', tipo_contrato: actual.tipo_contrato || '', vence: '', sueldo: actual.sueldo ? String(actual.sueldo) : '', condiciones: actual.condiciones || '' } : { ...vacio })
+    setFa(actual ? { ...vacio, contrato_id: actual.contrato_id, desde: hoyISO() > actual.desde ? hoyISO() : actual.desde, regimen: actual.regimen || '', tipo_contrato: actual.tipo_contrato || '', vence: '', sueldo: actual.sueldo ? String(actual.sueldo) : '', condiciones: actual.condiciones || '' } : { ...vacio, contrato_id: cupo?.contrato_id || '' })
     setVerFormA(true)
   }
   const asignar = async () => {
@@ -81,6 +84,15 @@ export default function Ficha() {
     try {
       for (const a of asigs) if (a.desde <= ret.fecha && (!a.hasta || a.hasta > ret.fecha)) { const { error } = await supabase.from('op_asignaciones').update({ hasta: ret.fecha }).eq('id', a.id); if (error) throw error }
       for (const x of turnos) if (x.sube <= ret.fecha && (!x.baja || x.baja > ret.fecha)) { const { error } = await supabase.from('op_turnos').update({ baja: ret.fecha }).eq('id', x.id); if (error) throw error }
+      if (cupo) {
+        // Si ya hay un cupo de reemplazo para este trabajador, el reemplazo pasa a ser el cupo base; si no, el cupo queda vacante
+        const rep = await supabase.from('op_cupos').select('id').eq('reemplaza_trabajador_id', id).limit(1)
+        if (rep.data && rep.data[0]) {
+          const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error
+          const e2 = await supabase.from('op_cupos').update({ es_reemplazo: false, reemplaza_trabajador_id: null }).eq('id', rep.data[0].id); if (e2.error) throw e2.error
+          const e3 = await supabase.from('op_cupos').delete().eq('id', cupo.id); if (e3.error) throw e3.error
+        } else { const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error }
+      }
       const { error } = await supabase.from('op_trabajadores').update({ activo: false, fecha_retiro: ret.fecha, motivo_retiro: [ret.motivo, ret.nota.trim()].filter(Boolean).join(' · ') }).eq('id', id)
       if (error) throw error
     } catch (e) { setMsgR(msgError(e)); return }

@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card, btn, input, label } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
+import PuntoExamen from '@/components/operaciones/PuntoExamen'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { ESTATUS_CONTRATO, resumenVuelo, marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { type Cupo, ESTATUS_CONTRATO, resumenVuelo, marcarDia, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function GrillaTurnos() {
   const hoy = hoyISO()
@@ -18,6 +19,8 @@ export default function GrillaTurnos() {
   const [cargando, setCargando] = useState(true)
   const [contrato, setContrato] = useState<string[]>([])
   const [vuelos, setVuelos] = useState<Vuelo[]>([])
+  const [cupos, setCupos] = useState<Cupo[]>([])
+  const [cu, setCu] = useState<Cupo | null>(null); const [fcu, setFcu] = useState({ nombre: '', rut: '', tipo: 'directo', existente: '' }); const [msgCu, setMsgCu] = useState('')
   const mesIni = hoy.slice(0, 7) + '-01'
   const [desde, setDesde] = useState(mesIni)
   // Hasta el último día del mes 12 (el mes actual + 11 meses)
@@ -32,7 +35,8 @@ export default function GrillaTurnos() {
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
-    const [t, a, tu, c, v] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'), traerTodo('op_vuelos')])
+    const [t, a, tu, c, v, cp] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos')])
+    setCupos(cp as Cupo[])
     setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
   }
   // Recuerda filtros, mes y modo para que al volver desde una ficha la grilla quede como estaba
@@ -67,6 +71,28 @@ export default function GrillaTurnos() {
     const vista = as.find(x => x.desde <= hoy && (!x.hasta || x.hasta >= hoy)) || as[as.length - 1]
     return { t, celdas, contratoPrincipal: vista.contrato_id, vista }
   }).filter(Boolean) as { t: any, celdas: { a?: Asig, en: boolean }[], contratoPrincipal: string, vista: Asig }[], [trab, asigs, turnos, contrato, dias, desde, hasta, soloActivos])
+  // Cupos (cargos vendidos) sin cubrir o cuyo trabajador aún no tiene contrato en ese contrato
+  const porContratar = useMemo(() => cupos.filter(c => (contrato.length === 0 || contrato.includes(c.contrato_id)) && (() => {
+    if (!c.trabajador_id) return true
+    const t = trab.find(x => x.id === c.trabajador_id); if (!t || (soloActivos && !t.activo)) return false
+    return !asigs.some(a => a.trabajador_id === c.trabajador_id && a.contrato_id === c.contrato_id && (!a.hasta || a.hasta >= hoy))
+  })()).sort((a, b) => a.cargo.localeCompare(b.cargo, 'es') || (a.trabajador_id ? 1 : 0) - (b.trabajador_id ? 1 : 0)), [cupos, trab, asigs, contrato, soloActivos, hoy])
+  const abrirCupo = (c: Cupo) => { setCu(c); setFcu({ nombre: '', rut: '', tipo: 'directo', existente: '' }); setMsgCu('') }
+  const cubrirNuevo = async () => {
+    if (!cu) return
+    if (!fcu.nombre.trim()) { setMsgCu('Escribe el nombre del trabajador.'); return }
+    const { data, error } = await supabase.from('op_trabajadores').insert({ nombre: fcu.nombre.trim(), rut: fcu.rut.trim() || null, cargo: cu.cargo, tipo_personal: fcu.tipo, examenes: 'pendiente', examenes_fecha: hoy }).select('id').single()
+    if (error || !data) { setMsgCu(msgError(error)); return }
+    const r = await supabase.from('op_cupos').update({ trabajador_id: data.id }).eq('id', cu.id)
+    if (r.error) { setMsgCu(msgError(r.error)); return }
+    setCu(null); cargar()
+  }
+  const cubrirExistente = async () => {
+    if (!cu || !fcu.existente) { setMsgCu('Elige un trabajador.'); return }
+    const r = await supabase.from('op_cupos').update({ trabajador_id: fcu.existente }).eq('id', cu.id)
+    if (r.error) { setMsgCu(msgError(r.error)); return }
+    setCu(null); cargar()
+  }
   const totales = dias.map((_, i) => filas.filter(f => f.celdas[i].en).length)
 
   const descargar = () => descargarXlsx(`Turnos_${desde}_a_${hasta}.xlsx`, async (X) => {
@@ -153,13 +179,25 @@ export default function GrillaTurnos() {
                 <Fragment key={f.t.id}>
                 {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: 0, color: '#475467' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</div></td></tr>}
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
-                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
+                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><PuntoExamen estado={f.t.examenes} /><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
                   <td style={{ ...CC, ...ST(150), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
                   <td style={{ ...CC, ...ST(250), width: '96px', minWidth: '96px', maxWidth: '96px' }}>{!f.t.ciudad ? <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span> : f.t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '10.5px', padding: '1px 7px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700, whiteSpace: 'nowrap' }} title={f.t.ciudad}>{f.t.ciudad}</span> : <span style={{ fontSize: '11px', color: '#667085' }} title={f.t.ciudad}>{f.t.ciudad}</span>}</td>
                   <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = venc(f.vista); return <><button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>
                   {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const fin = !!c.a && !!c.a.vence && c.a.vence === dias[i] && c.a.tipo_contrato !== 'indefinido'; const tip = [fin ? `Fin de contrato (${c.a?.tipo_contrato === 'pf1' ? 'PF1' : c.a?.tipo_contrato === 'pf2' ? 'PF2' : 'plazo'}) ${fechaCorta(c.a?.vence)}` : '', vs?.map(resumenVuelo).join(' / ')].filter(Boolean).join(' · ')
                     return <td key={i} data-c={i} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
+              {porContratar.length > 0 && <tr><td colSpan={dias.length + 4} style={{ background: '#fde2e1', fontWeight: 700, fontSize: '11px', padding: 0, color: '#7a1212' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>POR CONTRATAR ({porContratar.length}) · cargos vendidos sin trabajador o sin contrato</div></td></tr>}
+              {porContratar.map(c => { const t = c.trabajador_id ? trab.find(x => x.id === c.trabajador_id) : null; return (
+                <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
+                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }}>
+                    {t ? <><PuntoExamen estado={t.examenes} /><Link href={`/operaciones/trabajadores/${t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{t.nombre}</Link></>
+                      : <button onClick={() => abrirCupo(c)} title="Cubrir este cupo con un trabajador" style={{ border: '1px dashed #b42318', background: '#fff5f5', color: '#b42318', borderRadius: '6px', fontSize: '11px', fontWeight: 700, padding: '1px 8px', cursor: 'pointer' }}>＋ Vacante</button>}
+                  </td>
+                  <td style={{ ...CC, ...ST(150), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#16213E', fontWeight: 600 }} title={c.cargo}>{c.cargo}{c.es_reemplazo ? <span title="Cupo de reemplazo" style={{ marginLeft: '4px', fontSize: '10px', color: '#b7791f' }}>↺</span> : null}</td>
+                  <td style={{ ...CC, ...ST(250), width: '96px', minWidth: '96px', maxWidth: '96px', color: '#667085', fontSize: '11px' }}>{t?.ciudad || ''}</td>
+                  <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd', fontSize: '10.5px', color: '#667085' }} title={nCont(c.contrato_id)}>{t ? 'sin contrato aún' : nCont(c.contrato_id)}</td>
+                  {dias.map((_, i) => <td key={i} data-c={i} style={{ width: W, minWidth: W, height: '22px', background: '#fff8f8', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7' }} />)}
+                </tr>) })}
               <tr>
                 <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '4px 6px 4px 12px', fontWeight: 700, zIndex: 4, bottom: 0, borderTop: '2px solid #d0d5dd' }}>Total en faena</td><td colSpan={3} style={{ ...ST(150), bottom: 0, zIndex: 4, borderTop: '2px solid #d0d5dd', borderRight: '1px solid #d0d5dd' }} />
                 {totales.map((n, i) => <td key={i} data-c={i} style={{ position: 'sticky', bottom: 0, zIndex: 2, background: '#fff', borderTop: '2px solid #d0d5dd', textAlign: 'center', fontWeight: 700, color: '#16213E' }}>{n}</td>)}
@@ -168,6 +206,28 @@ export default function GrillaTurnos() {
           </table>
         </div>
       )}
+      {cu && (
+        <div onClick={() => setCu(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>Cubrir cupo: {cu.cargo}</p>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>{nCont(cu.contrato_id)}</p>
+            <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700 }}>Trabajador nuevo (reclutamiento ya tiene el nombre)</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '2 1 200px' }}><label style={label}>Nombre *</label><input value={fcu.nombre} onChange={e => setFcu({ ...fcu, nombre: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 130px' }}><label style={label}>RUT</label><input value={fcu.rut} onChange={e => setFcu({ ...fcu, rut: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 130px' }}><label style={label}>Tipo de personal</label><select value={fcu.tipo} onChange={e => setFcu({ ...fcu, tipo: e.target.value })} style={input}><option value="directo">Directo</option><option value="indirecto">Indirecto</option></select></div>
+            </div>
+            <button onClick={cubrirNuevo} style={{ ...btn(), marginTop: '8px' }}>Crear ficha y asignar al cupo</button>
+            <p style={{ margin: '4px 0 12px', fontSize: '11.5px', color: '#667085' }}>Parte con exámenes «pendiente». Luego se completa su ficha, se aprueban los exámenes y se carga contrato, turnos y pasajes.</p>
+            <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700 }}>O elegir un trabajador que ya existe</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select value={fcu.existente} onChange={e => setFcu({ ...fcu, existente: e.target.value })} style={input}><option value="">— elegir —</option>{trab.filter(t => t.activo && !cupos.some(c => c.trabajador_id === t.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(t => <option key={t.id} value={t.id}>{t.nombre}{t.cargo ? ` · ${t.cargo}` : ''}</option>)}</select>
+              <button onClick={cubrirExistente} style={btn(false)}>Asignar</button>
+            </div>
+            {msgCu && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msgCu}</p>}
+            <button onClick={() => setCu(null)} style={{ ...btn(false), marginTop: '12px' }}>Cerrar</button>
+          </div>
+        </div>)}
       {ec && (
         <div onClick={() => setEc(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>

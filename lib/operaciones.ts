@@ -19,6 +19,8 @@ export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepc
 export const ESTADOS_VUELO: Record<string, string> = { por_comprar: 'Por comprar', comprado: 'Comprado' }
 export const resumenVuelo = (v: Vuelo) => `${v.estado === 'por_comprar' ? 'POR COMPRAR · ' : ''}${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.origen && v.destino ? v.origen + '→' + v.destino : ''} ${v.hora_salida ? v.hora_salida + (v.hora_llegada ? '-' + v.hora_llegada : '') : v.hora || ''}`.replace(/\s+/g, ' ').trim()
 export const ESTATUS_CONTRATO: Record<string, string> = { carta_aviso: 'Carta de aviso enviada', proceso_finiquito: 'Proceso de finiquito' }
+export type Cupo = { id: string, contrato_id: string, cargo: string, trabajador_id: string | null, es_reemplazo: boolean, reemplaza_trabajador_id: string | null, notas: string | null }
+export const COLOR_EXAMEN: Record<string, string> = { aprobado: '#1e8e4e', pendiente: '#f59e0b', rechazado: '#dc2626' }
 export const EXAMENES: Record<string, string> = { pendiente: 'Pendiente', aprobado: 'Aprobado', rechazado: 'Rechazado' }
 export const MODALIDADES: Record<string, string> = { vuelo: 'Vuelo', local: 'Local' }
 export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']

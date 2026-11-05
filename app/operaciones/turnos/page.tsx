@@ -28,7 +28,7 @@ export default function GrillaTurnos() {
   const [modo, setModo] = useState<'turno' | 'vuelo'>('turno')
   const [msg, setMsg] = useState('')
   const [pv, setPv] = useState<{ t: any, dia: string } | null>(null)
-  const [ec, setEc] = useState<{ id: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string } | null>(null)
+  const [ec, setEc] = useState<{ id: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string, o_tipo: string, o_vence: string } | null>(null)
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
@@ -78,9 +78,11 @@ export default function GrillaTurnos() {
     if (e) setMsg(e)
     cargar()
   }
-  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' }) }
+  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '', o_tipo: a.tipo_contrato || '', o_vence: a.vence || '' }) }
   const guardarContrato = async () => {
     if (!ec) return
+    if (ec.tipo_contrato && ec.tipo_contrato !== 'indefinido' && ec.o_vence && ec.tipo_contrato !== ec.o_tipo && (!ec.vence || ec.vence === ec.o_vence)) { setMsgEc('Al cambiar de plazo indica la nueva fecha de vencimiento (distinta a la anterior).'); return }
+    if (ec.tipo_contrato && ec.tipo_contrato !== 'indefinido' && !ec.vence) { setMsgEc('Indica la fecha en que vence este plazo fijo.'); return }
     const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ec.tipo_contrato || null, vence: ec.tipo_contrato === 'indefinido' ? null : (ec.vence || null), hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
     if (error) { setMsgEc(msgError(error)); return }
     setEc(null); cargar()
@@ -160,6 +162,12 @@ export default function GrillaTurnos() {
           <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
             <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{ec.nombre}</p>
             <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{ec.contrato}</p>
+            {(() => { const a = asigs.find(x => x.id === ec.id); if (!a || !a.vence || a.tipo_contrato === 'indefinido') return null
+              const n = diasEntre(hoy, a.vence); const nom = a.tipo_contrato ? TIPOS_CONTRATO[a.tipo_contrato] : 'El contrato'
+              const rojo = n <= 15, amb = n <= 30
+              return <div style={{ background: rojo ? '#fde2e1' : amb ? '#fff3cd' : '#e6f4ea', color: rojo ? '#7a1212' : amb ? '#6b4500' : '#14532d', borderRadius: '8px', padding: '7px 10px', margin: '0 0 8px', fontSize: '12.5px', fontWeight: 600 }}>
+                {rojo ? '⚠️' : 'ℹ️'} {nom} {n < 0 ? `venció el ${fechaCorta(a.vence)} (hace ${-n} día${n === -1 ? '' : 's'})` : n === 0 ? `vence HOY (${fechaCorta(a.vence)})` : `vence el ${fechaCorta(a.vence)} (en ${n} día${n === 1 ? '' : 's'})`}.
+                <span style={{ fontWeight: 400 }}> Para renovar: cambia el tipo de contrato y pon la nueva fecha de vencimiento.</span></div> })()}
             {(() => { const a = asigs.find(x => x.id === ec.id); if (!a) return null; return (
               <div style={{ background: '#e8f0fe', border: '1px solid #c7d7f5', borderRadius: '8px', padding: '8px 10px', margin: '0 0 10px', fontSize: '12px', color: '#16213E', lineHeight: 1.5 }}>
                 <strong>Contrato actual</strong><br />

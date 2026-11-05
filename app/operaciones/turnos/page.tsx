@@ -107,14 +107,19 @@ export default function GrillaTurnos() {
     return libro
   })
 
+  const cola = useRef<Promise<void>>(Promise.resolve())
   const clicCelda = async (f: { t: any, celdas: { a?: Asig, en: boolean }[] }, i: number) => {
     setMsg(''); const d = dias[i]
     if (modo === 'vuelo') { setPv({ t: f.t, dia: d }); return }
     if (!f.celdas[i].a) { setMsg(`${f.t.nombre} no tiene contrato el ${fechaCorta(d)}: asígnalo primero en su ficha.`); return }
     // actualización inmediata en pantalla y luego guardado
-    const e = await marcarDia(turnos.filter(x => x.trabajador_id === f.t.id), f.t.id, d, !f.celdas[i].en)
-    if (e) setMsg(e)
-    cargar()
+    const on = !f.celdas[i].en
+    // los clics se procesan de a uno, en orden, para que no se pisen entre sí
+    cola.current = cola.current.then(async () => {
+      const e = await marcarDia(turnos.filter(x => x.trabajador_id === f.t.id), f.t.id, d, on)
+      if (e) setMsg(e)
+      await cargar()
+    })
   }
   const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '', o_tipo: a.tipo_contrato || '', o_vence: a.vence || '' }) }
   const guardarContrato = async () => {

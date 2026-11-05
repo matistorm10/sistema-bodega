@@ -71,7 +71,9 @@ export async function traerTodo(tabla: string, columnas = '*', orden = 'id'): Pr
 
 // Cambia un día de un trabajador a "en turno" (on=true) o "descanso" (on=false) ajustando los tramos de turno
 export async function marcarDia(turnos: Turno[], trabId: string, dia: string, on: boolean): Promise<string | null> {
-  const ts = [...turnos].sort((a, b) => a.sube.localeCompare(b.sube))
+  // Siempre se parte de los turnos reales guardados (no de la pantalla): evita choques al hacer clic rápido en varias celdas
+  const fresco = await supabase.from('op_turnos').select('*').eq('trabajador_id', trabId)
+  const ts = ((fresco.error ? turnos : (fresco.data || [])) as Turno[]).sort((a, b) => a.sube.localeCompare(b.sube))
   const cont = ts.find(x => x.sube <= dia && (!x.baja || x.baja >= dia))
   const run = async (q: any) => { const { error } = await q; if (error) throw error }
   try {

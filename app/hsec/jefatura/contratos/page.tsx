@@ -8,6 +8,7 @@ import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { CATEGORIAS, ESTADOS_DOC, COLOR_DOC, diasDesde } from '@/lib/contratos'
 import { fechaCL } from '@/lib/prevencion'
+import QrMiper from '@/components/programa/QrMiper'
 
 const abrir = async (path: string) => {
   const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(path, 600)
@@ -28,6 +29,7 @@ export default function JefaturaContratos() {
   const [aAsignar, setAAsignar] = useState<Record<string, string>>({})
   const [hist, setHist] = useState<Record<string, any[]>>({})
   const [cargando, setCargando] = useState(true)
+  const [qr, setQr] = useState<any | null>(null)
   const [msg, setMsg] = useState('')
   const [nuevo, setNuevo] = useState({ nombre: '', referencia: '', cliente_id: '' })
   const [edit, setEdit] = useState<{ id: string, nombre: string, referencia: string, cliente_id: string } | null>(null)
@@ -190,6 +192,7 @@ export default function JefaturaContratos() {
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => setQr(c)} title="QR para que cualquier trabajador vea la MIPER desde su celular" style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>📱 QR MIPER</button>
                           <button onClick={() => setEdit({ id: c.id, nombre: c.nombre, referencia: c.referencia || '', cliente_id: c.cliente_id || '' })} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>✏️ Editar</button>
                           <button onClick={() => archivar(c)} style={{ ...btn(false), padding: '5px 10px', fontSize: '12px' }}>{c.activo ? 'Archivar' : 'Reactivar'}</button>
                           <button onClick={() => eliminarContrato(c)} style={{ ...btn(false, true), padding: '5px 10px', fontSize: '12px' }}>Eliminar</button>
@@ -293,6 +296,7 @@ export default function JefaturaContratos() {
           </>
         )}
       </div>
+      {qr && <QrMiper contrato={qr} cliente={clientes.find(x => x.id === qr.cliente_id)?.nombre || ''} onCerrar={() => setQr(null)} onCambio={cargar} />}
     </main>
   )
 }

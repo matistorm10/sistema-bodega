@@ -20,7 +20,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/'
   const router = useRouter()
 
-  const esLogin = pathname === '/login' || pathname === '/reset-password'
+  const esLogin = pathname === '/login' || pathname === '/reset-password' || pathname.startsWith('/miper/')
   if (esLogin || !usuario) return <>{children}</>
 
   const esAdmin = usuario.rol === 'admin'

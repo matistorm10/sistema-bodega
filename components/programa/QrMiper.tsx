@@ -19,16 +19,18 @@ export default function QrMiper({ contrato, cliente, onCerrar, onCambio }: { con
   const copiar = async () => { try { await navigator.clipboard.writeText(url); setMsg('Enlace copiado ✓') } catch { setMsg('No se pudo copiar.') } }
   const afiche = async () => {
     const { jsPDF } = await import('jspdf')
+    const { cargarLogo } = await import('@/lib/generarGuiaTraslado')
+    const logo = await cargarLogo()
     const d = new jsPDF({ unit: 'mm', format: 'a4' }); const W = 210
-    d.setFont('helvetica', 'bold'); d.setFontSize(30); d.text('MIPER', W / 2, 32, { align: 'center' })
-    d.setFontSize(14); d.text('Matriz de Identificación de Peligros y Evaluación de Riesgos', W / 2, 42, { align: 'center' })
-    d.addImage(img, 'PNG', 45, 55, 120, 120)
+    if (logo) { const w = 70, h = Math.min(28, w * logo.ratio); d.addImage(logo.data, 'JPEG', (W - w) / 2, 10, w, h) }
+    d.setFont('helvetica', 'bold'); d.setFontSize(30); d.text('MIPER', W / 2, 46, { align: 'center' })
+    d.setFontSize(14); d.text('Matriz de Identificación de Peligros y Evaluación de Riesgos', W / 2, 54, { align: 'center' })
+    d.addImage(img, 'PNG', 50, 64, 110, 110)
     d.setFontSize(20); d.text('Escanea para ver la MIPER vigente', W / 2, 190, { align: 'center' })
     d.setFont('helvetica', 'normal'); d.setFontSize(13)
     const linea = d.splitTextToSize([cliente, contrato.referencia, contrato.nombre && 'N° ' + contrato.nombre].filter(Boolean).join(' · '), 170)
     d.text(linea, W / 2, 202, { align: 'center' })
     d.setFontSize(10); d.setTextColor(110); d.text('No necesitas usuario ni clave. Siempre muestra la última revisión aprobada.', W / 2, 232, { align: 'center' })
-    d.text('GRUPO INDELI', W / 2, 280, { align: 'center' })
     d.save(`QR_MIPER_${contrato.nombre}.pdf`)
   }
   return (

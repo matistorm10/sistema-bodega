@@ -7,6 +7,7 @@ import { AZUL } from '@/lib/theme'
 import { card, btn, input, label } from '@/components/programa/ui'
 import { tallasDe } from '@/lib/epp'
 import PuntoExamen from '@/components/operaciones/PuntoExamen'
+import { formatearRut } from '@/lib/rut'
 import Marco from '@/components/operaciones/Marco'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
 import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
@@ -66,7 +67,7 @@ export default function Trabajadores() {
         <div style={{ ...card, marginBottom: '12px' }}>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 200px' }}><label style={label}>Nombre *</label><input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} style={input} /></div>
-            <div style={{ flex: '0 1 140px' }}><label style={label}>RUT</label><input value={f.rut} onChange={e => setF({ ...f, rut: e.target.value })} placeholder="12.345.678-9" style={input} /></div>
+            <div style={{ flex: '0 1 140px' }}><label style={label}>RUT</label><input value={f.rut} onChange={e => setF({ ...f, rut: formatearRut(e.target.value) })} placeholder="12.345.678-9" style={input} /></div>
             <div style={{ flex: '1 1 160px' }}><label style={label}>Cargo</label><CargoSelect value={f.cargo} onChange={v => setF({ ...f, cargo: v })} cargos={car.cargos} recargar={car.recargar} /></div>
             <div style={{ flex: '1 1 140px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={f.ciudad} onChange={v => setF({ ...f, ciudad: v })} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
             <div style={{ flex: '0 1 130px' }}><label style={label}>Exámenes</label><select value={f.examenes} onChange={e => setF({ ...f, examenes: e.target.value })} style={input}>{Object.entries(EXAMENES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>

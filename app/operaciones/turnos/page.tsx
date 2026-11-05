@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card, btn, input, label } from '@/components/programa/ui'
+import { formatearRut } from '@/lib/rut'
 import Marco from '@/components/operaciones/Marco'
 import PuntoExamen from '@/components/operaciones/PuntoExamen'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
@@ -214,7 +215,7 @@ export default function GrillaTurnos() {
             <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700 }}>Trabajador nuevo (reclutamiento ya tiene el nombre)</p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ flex: '2 1 200px' }}><label style={label}>Nombre *</label><input value={fcu.nombre} onChange={e => setFcu({ ...fcu, nombre: e.target.value })} style={input} /></div>
-              <div style={{ flex: '1 1 130px' }}><label style={label}>RUT</label><input value={fcu.rut} onChange={e => setFcu({ ...fcu, rut: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 130px' }}><label style={label}>RUT</label><input value={fcu.rut} onChange={e => setFcu({ ...fcu, rut: formatearRut(e.target.value) })} placeholder="12.345.678-9" style={input} /></div>
               <div style={{ flex: '1 1 130px' }}><label style={label}>Tipo de personal</label><select value={fcu.tipo} onChange={e => setFcu({ ...fcu, tipo: e.target.value })} style={input}><option value="directo">Directo</option><option value="indirecto">Indirecto</option></select></div>
             </div>
             <button onClick={cubrirNuevo} style={{ ...btn(), marginTop: '8px' }}>Crear ficha y asignar al cupo</button>
@@ -249,14 +250,14 @@ export default function GrillaTurnos() {
               </div>) })()}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 150px' }}><label style={label}>Tipo de contrato</label><select value={ec.tipo_contrato} onChange={e => setEc({ ...ec, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              <div style={{ flex: '1 1 150px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" disabled={ec.tipo_contrato === 'indefinido'} value={ec.tipo_contrato === 'indefinido' ? '' : ec.vence} onChange={e => setEc({ ...ec, vence: e.target.value })} style={input} /></div>
-              <div style={{ flex: '1 1 150px' }}><label style={label}>Sale de este contrato el</label><input type="date" value={ec.hasta} onChange={e => setEc({ ...ec, hasta: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 150px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" min="2000-01-01" max="2100-12-31" disabled={ec.tipo_contrato === 'indefinido'} value={ec.tipo_contrato === 'indefinido' ? '' : ec.vence} onChange={e => setEc({ ...ec, vence: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 150px' }}><label style={label}>Sale de este contrato el</label><input type="date" min="2000-01-01" max="2100-12-31" value={ec.hasta} onChange={e => setEc({ ...ec, hasta: e.target.value })} style={input} /></div>
               <div style={{ flex: '1 1 100px' }}><label style={label}>Régimen</label><input value={ec.regimen} onChange={e => setEc({ ...ec, regimen: e.target.value })} placeholder="14x14" style={input} /></div>
               <div style={{ flex: '1 1 140px' }}><label style={label}>Sueldo</label><input type="number" value={ec.sueldo} onChange={e => setEc({ ...ec, sueldo: e.target.value })} style={input} /></div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
               <div style={{ flex: '2 1 190px' }}><label style={label}>Estatus del contrato</label><select value={ec.estatus} onChange={e => setEc({ ...ec, estatus: e.target.value, estatus_fecha: e.target.value ? (ec.estatus_fecha || hoy) : '' })} style={input}><option value="">Normal (sin aviso)</option>{Object.entries(ESTATUS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              {ec.estatus && <div style={{ flex: '1 1 140px' }}><label style={label}>Fecha</label><input type="date" value={ec.estatus_fecha} onChange={e => setEc({ ...ec, estatus_fecha: e.target.value })} style={input} /></div>}
+              {ec.estatus && <div style={{ flex: '1 1 140px' }}><label style={label}>Fecha</label><input type="date" min="2000-01-01" max="2100-12-31" value={ec.estatus_fecha} onChange={e => setEc({ ...ec, estatus_fecha: e.target.value })} style={input} /></div>}
             </div>
             <div style={{ marginTop: '8px' }}><label style={label}>Condiciones / trato</label><input value={ec.condiciones} onChange={e => setEc({ ...ec, condiciones: e.target.value })} style={input} /></div>
             <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#667085', lineHeight: 1.45 }}><strong>Vence</strong>: cuándo se cumple el plazo fijo (se marca con la línea roja en la grilla). <strong>Sale de este contrato el</strong>: último día del trabajador en este contrato; déjalo vacío si sigue. Se llena sola al mover a otro contrato o al retirarlo.</p>

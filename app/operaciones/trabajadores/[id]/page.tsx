@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { card, btn, input, label } from '@/components/programa/ui'
+import { formatearRut } from '@/lib/rut'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
 import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
@@ -166,7 +167,7 @@ export default function Ficha() {
         </div>
         {verRet && (
           <div style={{ marginTop: '10px', background: '#fff5f5', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ flex: '0 1 150px' }}><label style={label}>Fecha de retiro *</label><input type="date" value={ret.fecha} onChange={e => setRet({ ...ret, fecha: e.target.value })} style={input} /></div>
+            <div style={{ flex: '0 1 150px' }}><label style={label}>Fecha de retiro *</label><input type="date" min="2000-01-01" max="2100-12-31" value={ret.fecha} onChange={e => setRet({ ...ret, fecha: e.target.value })} style={input} /></div>
             <div style={{ flex: '1 1 180px' }}><label style={label}>Motivo</label><select value={ret.motivo} onChange={e => setRet({ ...ret, motivo: e.target.value })} style={input}>{['Término de contrato', 'Renuncia', 'Despido', 'No continúa en el proyecto', 'Exámenes rechazados', 'Otro'].map(m => <option key={m}>{m}</option>)}</select></div>
             <div style={{ flex: '2 1 220px' }}><label style={label}>Observación</label><input value={ret.nota} onChange={e => setRet({ ...ret, nota: e.target.value })} style={input} /></div>
             <button onClick={retirar} style={btn(false, true)}>Confirmar retiro</button>
@@ -178,8 +179,8 @@ export default function Ficha() {
         <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: '14px' }}>Datos</p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 220px' }}><label style={label}>Nombre</label><input value={d.nombre || ''} onChange={e => set('nombre', e.target.value)} style={input} /></div>
-          <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', e.target.value)} style={input} /></div>
-          <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
+          <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', formatearRut(e.target.value))} placeholder="12.345.678-9" style={input} /></div>
+          <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" min="1900-01-01" max={hoyISO()} value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
           <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><CargoSelect value={d.cargo || ''} onChange={v => set('cargo', v)} cargos={car.cargos} recargar={car.recargar} /></div>
           <div style={{ flex: '1 1 160px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={d.ciudad || ''} onChange={v => set('ciudad', v)} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
@@ -207,10 +208,10 @@ export default function Ficha() {
             ) : <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: '#b7791f' }}>Este trabajador no tiene un contrato vigente hoy.</p>}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <div style={{ flex: '2 1 240px' }}><label style={label}>Contrato *</label><select value={fa.contrato_id} onChange={e => setFa({ ...fa, contrato_id: e.target.value })} style={input}><option value="">— elegir —</option>{contratos.map(c => <option key={c.id} value={c.id}>{nCont(c.id)}</option>)}</select></div>
-              <div style={{ flex: '0 1 150px' }}><label style={label}>Desde *</label><input type="date" value={fa.desde} onChange={e => setFa({ ...fa, desde: e.target.value })} style={input} /></div>
+              <div style={{ flex: '0 1 150px' }}><label style={label}>Desde *</label><input type="date" min="2000-01-01" max="2100-12-31" value={fa.desde} onChange={e => setFa({ ...fa, desde: e.target.value })} style={input} /></div>
               <div style={{ flex: '0 1 110px' }}><label style={label}>Régimen</label><input value={fa.regimen} onChange={e => setFa({ ...fa, regimen: e.target.value })} placeholder="14x14" style={input} /></div>
               <div style={{ flex: '1 1 150px' }}><label style={label}>Tipo de contrato</label><select value={fa.tipo_contrato} onChange={e => setFa({ ...fa, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              <div style={{ flex: '0 1 150px' }}><label style={label}>Vence (plazo fijo)</label><input type="date" value={fa.vence} onChange={e => setFa({ ...fa, vence: e.target.value })} style={input} /></div>
+              <div style={{ flex: '0 1 150px' }}><label style={label}>Vence (plazo fijo)</label><input type="date" min="2000-01-01" max="2100-12-31" value={fa.vence} onChange={e => setFa({ ...fa, vence: e.target.value })} style={input} /></div>
               <div style={{ flex: '0 1 140px' }}><label style={label}>Sueldo</label><input type="number" value={fa.sueldo} onChange={e => setFa({ ...fa, sueldo: e.target.value })} style={input} /></div>
             </div>
             <div style={{ marginTop: '10px' }}><label style={label}>Condiciones / trato</label><input value={fa.condiciones} onChange={e => setFa({ ...fa, condiciones: e.target.value })} style={input} /></div>
@@ -224,13 +225,13 @@ export default function Ficha() {
             {ed && ed.id === a.id ? (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '1 1 140px' }}><label style={label}>Tipo</label><select value={ed.tipo_contrato} onChange={e => setEd({ ...ed, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                <div style={{ flex: '0 1 140px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" value={ed.vence} onChange={e => setEd({ ...ed, vence: e.target.value })} style={input} /></div>
-                <div style={{ flex: '0 1 140px' }}><label style={label}>Sale de este contrato el</label><input type="date" value={ed.hasta} onChange={e => setEd({ ...ed, hasta: e.target.value })} style={input} /></div>
+                <div style={{ flex: '0 1 140px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.vence} onChange={e => setEd({ ...ed, vence: e.target.value })} style={input} /></div>
+                <div style={{ flex: '0 1 140px' }}><label style={label}>Sale de este contrato el</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.hasta} onChange={e => setEd({ ...ed, hasta: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 100px' }}><label style={label}>Régimen</label><input value={ed.regimen} onChange={e => setEd({ ...ed, regimen: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 120px' }}><label style={label}>Sueldo</label><input type="number" value={ed.sueldo} onChange={e => setEd({ ...ed, sueldo: e.target.value })} style={input} /></div>
                 <div style={{ flex: '2 1 220px' }}><label style={label}>Condiciones</label><input value={ed.condiciones} onChange={e => setEd({ ...ed, condiciones: e.target.value })} style={input} /></div>
                 <div style={{ flex: '1 1 190px' }}><label style={label}>Estatus del contrato</label><select value={ed.estatus} onChange={e => setEd({ ...ed, estatus: e.target.value, estatus_fecha: e.target.value ? (ed.estatus_fecha || hoy) : '' })} style={input}><option value="">Normal (sin aviso)</option>{Object.entries(ESTATUS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                {ed.estatus && <div style={{ flex: '0 1 140px' }}><label style={label}>Fecha</label><input type="date" value={ed.estatus_fecha} onChange={e => setEd({ ...ed, estatus_fecha: e.target.value })} style={input} /></div>}
+                {ed.estatus && <div style={{ flex: '0 1 140px' }}><label style={label}>Fecha</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.estatus_fecha} onChange={e => setEd({ ...ed, estatus_fecha: e.target.value })} style={input} /></div>}
                 <button onClick={guardarEd} style={{ ...btn(), padding: '8px 14px' }}>Guardar</button><button onClick={() => setEd(null)} style={{ ...btn(false), padding: '8px 14px' }}>Cancelar</button>
               </div>
             ) : (
@@ -260,15 +261,15 @@ export default function Ficha() {
           <button onClick={descargar} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>⬇ Descargar Excel</button>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '10px' }}>
-          <div><label style={label}>Sube</label><input type="date" value={ft.sube} onChange={e => setFt({ ...ft, sube: e.target.value })} style={{ ...input, width: '150px' }} /></div>
-          <div><label style={label}>Baja (vacío = aún en faena)</label><input type="date" value={ft.baja} onChange={e => setFt({ ...ft, baja: e.target.value })} style={{ ...input, width: '150px' }} /></div>
+          <div><label style={label}>Sube</label><input type="date" min="2000-01-01" max="2100-12-31" value={ft.sube} onChange={e => setFt({ ...ft, sube: e.target.value })} style={{ ...input, width: '150px' }} /></div>
+          <div><label style={label}>Baja (vacío = aún en faena)</label><input type="date" min="2000-01-01" max="2100-12-31" value={ft.baja} onChange={e => setFt({ ...ft, baja: e.target.value })} style={{ ...input, width: '150px' }} /></div>
           <button onClick={agregarTurno} style={btn()}>Agregar turno</button>
         </div>
         {msgT && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '0 0 8px' }}>{msgT}</p>}
         {turnos.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Sin turnos registrados.</p> : turnos.map(tu => (
           <div key={tu.id} style={{ borderTop: '1px solid #eef1f6', padding: '6px 0', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '13px' }}>
             <span style={{ flex: '1 1 200px' }}><strong>{fechaCorta(tu.sube)}</strong> → <strong>{tu.baja ? fechaCorta(tu.baja) : 'en faena'}</strong> <span style={{ color: '#98a2b3', fontSize: '12px' }}>{tu.baja ? `· ${diasEntre(tu.sube, tu.baja) + 1} días` : ''}</span></span>
-            <input type="date" defaultValue={tu.baja || ''} key={tu.id + (tu.baja || '')} onBlur={e => { const v = e.target.value || null; if (v !== tu.baja) cambiarBaja(tu, v) }} title="Cambiar fecha de bajada" style={{ ...input, width: '150px', padding: '4px 8px' }} />
+            <input type="date" min="2000-01-01" max="2100-12-31" defaultValue={tu.baja || ''} key={tu.id + (tu.baja || '')} onBlur={e => { const v = e.target.value || null; if (v !== tu.baja) cambiarBaja(tu, v) }} title="Cambiar fecha de bajada" style={{ ...input, width: '150px', padding: '4px 8px' }} />
             {tu.baja && <button onClick={() => cambiarBaja(tu, sumarDias(tu.baja as string, 1))} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>+1 día</button>}
             <button onClick={() => borrarTurno(tu)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Eliminar</button>
           </div>))}

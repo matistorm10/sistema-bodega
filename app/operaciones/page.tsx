@@ -1,17 +1,20 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
-import { etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, TIPOS_CONTRATO, type Asig, type Turno } from '@/lib/operaciones'
+import FiltroContratos from '@/components/operaciones/FiltroContratos'
+import { etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function Operaciones() {
   const [trab, setTrab] = useState<any[]>([])
   const [asigs, setAsigs] = useState<Asig[]>([])
   const [turnos, setTurnos] = useState<Turno[]>([])
   const [contratos, setContratos] = useState<any[]>([])
+  const [vuelos, setVuelos] = useState<Vuelo[]>([])
+  const [fc, setFc] = useState<string[]>([]); const [hoverDia, setHoverDia] = useState<number | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const hoy = hoyISO()
@@ -19,8 +22,8 @@ export default function Operaciones() {
   useEffect(() => {
     (async () => {
       try {
-        const [t, a, tu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia,activo').order('nombre')])
-        setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || [])
+        const [t, a, tu, vu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), traerTodo('op_vuelos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia,activo').order('nombre')])
+        setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setVuelos(vu as Vuelo[]); setContratos(c.data || [])
       } catch (e: any) { setError(e.message || 'No se pudo cargar') }
       setCargando(false)
     })()
@@ -35,18 +38,37 @@ export default function Operaciones() {
     return { c, total: ids.length, enFaena, descanso: ids.length - enFaena }
   }).filter(f => f.total > 0)
   const totEn = filas.reduce((a, f) => a + f.enFaena, 0), totDesc = filas.reduce((a, f) => a + f.descanso, 0)
-  const hasta14 = sumarDias(hoy, 14), hasta30 = sumarDias(hoy, 30)
-  const subidas = turnos.filter(t => t.sube > hoy && t.sube <= hasta14).sort((a, b) => a.sube.localeCompare(b.sube))
-  const bajadas = turnos.filter(t => t.baja && t.baja >= hoy && t.baja <= hasta14).sort((a, b) => (a.baja || '').localeCompare(b.baja || ''))
-  const vencen = asigs.filter(a => a.tipo_contrato && a.tipo_contrato !== 'indefinido' && a.vence && a.vence >= sumarDias(hoy, -7) && a.vence <= hasta30 && !a.hasta).sort((a, b) => (a.vence || '').localeCompare(b.vence || ''))
   const sinContratoHoy = activos.filter(t => !asigEn(asigs, t.id, hoy)).length
 
   const kpi = (n: number | string, t: string, col = '#16213E') => <div style={{ ...card, textAlign: 'center' }}><p style={{ margin: 0, fontSize: '26px', fontWeight: 700, color: col }}>{n}</p><p style={{ margin: '2px 0 0', fontSize: '11.5px', color: '#667085' }}>{t}</p></div>
-  const lista = (titulo: string, items: { k: string, t: string, f: string }[]) => (
-    <div style={card}>
-      <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px' }}>{titulo}</p>
-      {items.length === 0 ? <p style={{ margin: 0, fontSize: '12.5px', color: '#999' }}>Nada en este período.</p> : items.slice(0, 12).map(i => <p key={i.k} style={{ margin: '3px 0', fontSize: '12.5px' }}><strong>{fechaCorta(i.f)}</strong> · {i.t}</p>)}
-      {items.length > 12 && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#667085' }}>…y {items.length - 12} más</p>}
+  // Personal en faena por día del mes presente, por contrato y total
+  const mesIni = hoy.slice(0, 7) + '-01'
+  const diasMes = useMemo(() => { const d = new Date(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)), 0).getDate(); return Array.from({ length: d }, (_, i) => sumarDias(mesIni, i)) }, [hoy]) // eslint-disable-line react-hooks/exhaustive-deps
+  const serie = useMemo(() => {
+    const porC: Record<string, number[]> = {}; const total = diasMes.map(() => 0)
+    diasMes.forEach((d, i) => trab.forEach(t => {
+      const a = asigEn(asigs, t.id, d); if (!a || estadoEn(asigs, turnos, t.id, d) !== 'faena') return
+      ;(porC[a.contrato_id] ||= diasMes.map(() => 0))[i]++; total[i]++
+    }))
+    return { porC, total }
+  }, [trab, asigs, turnos, diasMes])
+  const PALETA = ['#1B4F9C', '#e8710a', '#0f9d9a', '#9334e6', '#c5221f', '#7a8a00', '#d6409f', '#5f6b7a']
+  const lineas = contratos.filter(c => serie.porC[c.id] && (fc.length === 0 || fc.includes(c.id))).map((c, i) => ({ id: c.id, nombre: etiquetaContrato(c, 50), datos: serie.porC[c.id], col: PALETA[i % PALETA.length] }))
+  const ymax = Math.max(5, ...serie.total, ...lineas.flatMap(l => l.datos)); const yTope = Math.ceil(ymax / 5) * 5
+  const GW = 820, GH = 300, ML = 38, MR = 12, MT = 14, MB = 28
+  const gx = (i: number) => ML + (diasMes.length <= 1 ? 0 : i * (GW - ML - MR) / (diasMes.length - 1)), gy = (v: number) => MT + (GH - MT - MB) * (1 - v / yTope)
+  const trazo = (d: number[]) => d.map((v, i) => `${i === 0 ? 'M' : 'L'}${gx(i).toFixed(1)},${gy(v).toFixed(1)}`).join(' ')
+  // Pasajes: comprados vs por comprar (por comprar solo de trabajadores activos)
+  const vigentes = vuelos.filter(v => v.estado === 'comprado' || trab.find(t => t.id === v.trabajador_id)?.activo !== false)
+  const indicePasajes = (desde: string, hasta: string) => { const l = vigentes.filter(v => v.fecha >= desde && v.fecha <= hasta); const c = l.filter(v => v.estado === 'comprado').length; return { c, p: l.length - c, pct: l.length ? Math.round(c * 100 / l.length) : 0 } }
+  const finMes = diasMes[diasMes.length - 1]
+  const pMes = indicePasajes(mesIni, finMes), pFut = indicePasajes(hoy, '9999-12-31'), pUrg = vigentes.filter(v => v.estado === 'por_comprar' && v.fecha >= hoy && v.fecha <= sumarDias(hoy, 7)).length
+  const kpi2 = (n: number | string, t: string, col = '#16213E') => <div style={{ flex: '1 1 90px', textAlign: 'center' }}><p style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: col }}>{n}</p><p style={{ margin: '2px 0 0', fontSize: '11.5px', color: '#667085' }}>{t}</p></div>
+  const bloquePasajes = (titulo: string, p: { c: number, p: number, pct: number }) => (
+    <div style={{ marginBottom: '12px' }}>
+      <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700, color: '#475467' }}>{titulo}</p>
+      <div style={{ display: 'flex', gap: '6px' }}>{kpi2(p.c, 'comprados', '#e8710a')}{kpi2(p.p, 'por comprar', p.p ? '#c5221f' : '#1e8e4e')}{kpi2(p.pct + '%', 'comprado')}</div>
+      <div style={{ height: '8px', borderRadius: '6px', background: '#fde2e1', overflow: 'hidden', marginTop: '6px' }}><div style={{ width: p.pct + '%', height: '100%', background: '#e8710a' }} /></div>
     </div>
   )
   const acceso = (href: string, icono: string, t: string, d: string) => (
@@ -84,10 +106,40 @@ export default function Operaciones() {
               </tbody>
             </table>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '12px' }}>
-            {lista('⬆️ Subidas próximos 14 días', subidas.map(t => ({ k: t.id, f: t.sube, t: `${nTrab(t.trabajador_id)} · ${nCont(asigEn(asigs, t.trabajador_id, t.sube)?.contrato_id)}` })))}
-            {lista('⬇️ Bajadas próximos 14 días', bajadas.map(t => ({ k: t.id, f: t.baja as string, t: `${nTrab(t.trabajador_id)} · ${nCont(asigEn(asigs, t.trabajador_id, t.baja as string)?.contrato_id)}` })))}
-            {lista('📄 Plazos de contrato por vencer (30 días)', vencen.map(a => ({ k: a.id, f: a.vence as string, t: `${nTrab(a.trabajador_id)} · ${TIPOS_CONTRATO[a.tipo_contrato as string]}${(a.vence as string) < hoy ? ' (vencido)' : ''}` })))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: '12px', alignItems: 'start' }}>
+            <div style={{ ...card, gridColumn: 'span 2', minWidth: 0 }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Personal en faena por día · {new Date(mesIni + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}</p>
+                <span style={{ marginLeft: 'auto' }}><FiltroContratos contratos={contratos.filter(c => serie.porC[c.id])} sel={fc} onChange={setFc} /></span>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <svg viewBox={`0 0 ${GW} ${GH}`} style={{ width: '100%', height: 'auto', display: 'block' }} onMouseLeave={() => setHoverDia(null)}>
+                  {Array.from({ length: yTope / 5 + 1 }, (_, k) => k * 5).map(v => <g key={v}><line x1={ML} x2={GW - MR} y1={gy(v)} y2={gy(v)} stroke="#eef1f6" /><text x={ML - 6} y={gy(v) + 4} fontSize="10.5" textAnchor="end" fill="#667085">{v}</text></g>)}
+                  {diasMes.map((d, i) => (i % (diasMes.length > 20 ? 2 : 1) === 0 || i === diasMes.length - 1) && <text key={d} x={gx(i)} y={GH - 10} fontSize="10.5" textAnchor="middle" fill={d === hoy ? '#1B4F9C' : '#667085'} fontWeight={d === hoy ? 700 : 400}>{i + 1}</text>)}
+                  {diasMes.includes(hoy) && <line x1={gx(diasMes.indexOf(hoy))} x2={gx(diasMes.indexOf(hoy))} y1={MT} y2={GH - MB} stroke="#1B4F9C" strokeDasharray="3 3" opacity=".5" />}
+                  {lineas.map(l => <path key={l.id} d={trazo(l.datos)} fill="none" stroke={l.col} strokeWidth="2" strokeLinejoin="round" />)}
+                  <path d={trazo(serie.total)} fill="none" stroke="#16213E" strokeWidth="3" strokeDasharray="7 4" strokeLinejoin="round" />
+                  {hoverDia !== null && <g><line x1={gx(hoverDia)} x2={gx(hoverDia)} y1={MT} y2={GH - MB} stroke="#98a2b3" />{lineas.map(l => <circle key={l.id} cx={gx(hoverDia)} cy={gy(l.datos[hoverDia])} r="3.5" fill={l.col} />)}<circle cx={gx(hoverDia)} cy={gy(serie.total[hoverDia])} r="4" fill="#16213E" /></g>}
+                  {diasMes.map((d, i) => <rect key={d} x={gx(i) - (GW - ML - MR) / (diasMes.length - 1) / 2} y={MT} width={(GW - ML - MR) / (diasMes.length - 1)} height={GH - MT - MB} fill="transparent" onMouseEnter={() => setHoverDia(i)} />)}
+                </svg>
+                {hoverDia !== null && (
+                  <div style={{ position: 'absolute', top: 0, left: hoverDia > diasMes.length / 2 ? undefined : `${gx(hoverDia) / GW * 100 + 2}%`, right: hoverDia > diasMes.length / 2 ? `${100 - gx(hoverDia) / GW * 100 + 2}%` : undefined, background: '#fff', border: '1px solid #d0d5dd', borderRadius: '8px', padding: '6px 9px', fontSize: '11.5px', boxShadow: '0 4px 14px rgba(16,24,40,.15)', pointerEvents: 'none', maxWidth: '260px' }}>
+                    <strong>{fechaCorta(diasMes[hoverDia])}</strong>
+                    {lineas.map(l => <div key={l.id} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><span style={{ width: '9px', height: '9px', borderRadius: '50%', background: l.col, flexShrink: 0 }} /><span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nombre}</span><strong>{l.datos[hoverDia]}</strong></div>)}
+                    <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid #eef1f6', marginTop: '3px', paddingTop: '3px' }}><span style={{ flex: 1 }}>Total todos los contratos</span><strong>{serie.total[hoverDia]}</strong></div>
+                  </div>)}
+              </div>
+              <div style={{ display: 'flex', gap: '6px 16px', flexWrap: 'wrap', marginTop: '8px', fontSize: '12px' }}>
+                {lineas.map(l => <span key={l.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '16px', height: '3px', background: l.col, borderRadius: '2px' }} />{l.nombre}</span>)}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}><span style={{ width: '16px', borderTop: '3px dashed #16213E' }} />Total todos los contratos (máx. {Math.max(...serie.total)})</span>
+              </div>
+            </div>
+            <div style={{ ...card, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}><p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>✈️ Pasajes</p><Link href="/operaciones/vuelos" style={{ marginLeft: 'auto', fontSize: '12px', color: AZUL, textDecoration: 'none', fontWeight: 600 }}>Ver detalle →</Link></div>
+              {bloquePasajes('Este mes', pMes)}
+              {bloquePasajes('Desde hoy en adelante', pFut)}
+              <p style={{ margin: 0, fontSize: '12px', color: pUrg ? '#c5221f' : '#667085', fontWeight: pUrg ? 700 : 400 }}>{pUrg ? `⚠️ ${pUrg} pasaje(s) por comprar con viaje en los próximos 7 días` : 'Sin pasajes pendientes para los próximos 7 días.'}</p>
+            </div>
           </div>
         </>
       )}

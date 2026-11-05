@@ -4,10 +4,12 @@ import Link from 'next/link'
 import { AZUL } from '@/lib/theme'
 import { card, btn, input } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
+import { useCiudades } from '@/components/operaciones/useCiudades'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
-import { traerTodo, hoyISO, fechaCorta, descargarXlsx, CIUDADES, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
+import { traerTodo, hoyISO, fechaCorta, descargarXlsx, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
 
 export default function VuelosPasajes() {
+  const ciu = useCiudades()
   const hoy = hoyISO()
   const [vuelos, setVuelos] = useState<Vuelo[]>([]); const [trab, setTrab] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
@@ -34,7 +36,7 @@ export default function VuelosPasajes() {
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar trabajador…" style={{ ...input, width: '200px' }} />
         <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los estados</option><option value="por_comprar">Por comprar</option><option value="comprado">Comprado</option></select>
-        <select value={fOrigen} onChange={e => setFOrigen(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los orígenes</option>{CIUDADES.map(l => <option key={l}>{l}</option>)}<option value="_sin">Sin ciudad definida</option></select>
+        <select value={fOrigen} onChange={e => setFOrigen(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los orígenes</option>{ciu.nombres.map(l => <option key={l}>{l}</option>)}<option value="_sin">Sin ciudad definida</option></select>
         <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Subida y bajada</option><option value="subida">Subida</option><option value="bajada">Bajada</option></select>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={pasados} onChange={e => setPasados(e.target.checked)} />Ver pasados</label>
         <button onClick={descargar} style={{ ...btn(), marginLeft: 'auto' }}>⬇ Descargar Excel</button>

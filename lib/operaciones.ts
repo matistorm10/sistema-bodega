@@ -18,11 +18,7 @@ export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: st
 export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepción', 'La Serena']
 export const ESTADOS_VUELO: Record<string, string> = { por_comprar: 'Por comprar', comprado: 'Comprado' }
 export const resumenVuelo = (v: Vuelo) => `${v.estado === 'por_comprar' ? 'POR COMPRAR · ' : ''}${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.origen && v.destino ? v.origen + '→' + v.destino : ''} ${v.hora_salida ? v.hora_salida + (v.hora_llegada ? '-' + v.hora_llegada : '') : v.hora || ''}`.replace(/\s+/g, ' ').trim()
-export const CIUDADES = ['Arica', 'Iquique', 'Antofagasta', 'Calama', 'San Pedro Atacama', 'Tocopilla', 'La Serena', 'Santiago', 'Los Andes', 'Viña del Mar', 'Limache', 'Villa Alemana', 'Concepción', 'Rancagua', 'Puerto Montt']
 export const MODALIDADES: Record<string, string> = { vuelo: 'Vuelo', local: 'Local' }
-// Aeropuerto desde donde se compra el pasaje según la ciudad de origen (vacío si no está en la lista de aeropuertos)
-const AEROP: Record<string, string> = { 'Iquique': 'Iquique', 'Antofagasta': 'Antofagasta', 'Tocopilla': 'Antofagasta', 'Calama': 'Calama', 'San Pedro Atacama': 'Calama', 'La Serena': 'La Serena', 'Santiago': 'Santiago', 'Los Andes': 'Santiago', 'Viña del Mar': 'Santiago', 'Limache': 'Santiago', 'Villa Alemana': 'Santiago', 'Rancagua': 'Santiago', 'Concepción': 'Concepción' }
-export const aeropuertoDe = (ciudad?: string | null) => (ciudad && AEROP[ciudad]) || ''
 export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']
 export const DIAS_SEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 

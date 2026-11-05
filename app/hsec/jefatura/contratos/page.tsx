@@ -66,6 +66,15 @@ export default function JefaturaContratos() {
     setEdit(null); await cargar()
   }
   const eliminarContrato = async (c: any) => {
+    // Si el contrato ya tiene personal en el control de Operaciones, no se puede borrar (se perdería su historial)
+    const [oa, oc] = await Promise.all([
+      supabase.from('op_asignaciones').select('id', { count: 'exact', head: true }).eq('contrato_id', c.id),
+      supabase.from('op_cupos').select('id', { count: 'exact', head: true }).eq('contrato_id', c.id),
+    ])
+    if ((oa.count || 0) > 0 || (oc.count || 0) > 0) {
+      alert(`No se puede eliminar «${c.nombre}»: tiene ${oa.count || 0} asignación(es) de personal y ${oc.count || 0} cupo(s) en el módulo Operaciones.\n\nPara dejar de usarlo, usa «Archivar». Se conserva todo el historial y deja de aparecer como activo.`)
+      return
+    }
     const n = docs.filter(d => d.contrato_id === c.id).length
     const aviso = n === 0
       ? `¿Eliminar el contrato «${c.nombre}»? No tiene documentos.`

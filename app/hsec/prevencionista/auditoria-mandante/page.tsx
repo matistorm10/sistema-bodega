@@ -220,19 +220,24 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
       if (ev?.ok && !rm[it.id]) guardar(it, { estado: 'cumple', obs: 'Completado automáticamente: ' + ev.txt })
     })
   }, [auto]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [msgIt, setMsgIt] = useState<{ id: string, txt: string } | null>(null)
+  const aviso = (it: AudItem, txt: string) => { setMsg(txt); setMsgIt({ id: it.id, txt }) }
   const marcar = async (it: AudItem, v: AudResp['estado']) => {
     const actual = rm[it.id]?.estado
-    if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'miper' && !miperOk) { setMsg(`Ítem ${it.numero || ''}: la MIPER debe estar cargada y aprobada en Contratos y documentos.`); return }
+    setMsgIt(null); setMsg('')
+    if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'miper' && !miperOk) { aviso(it, `Ítem ${it.numero || ''}: la MIPER debe estar cargada y aprobada en Contratos y documentos.`); return }
     if (v === 'cumple' && actual !== 'cumple' && it.requiere_trabajador) {
       const c = difCompleta(it.id, trabs, docs)
-      if (c.total === 0) { setMsg(`Ítem ${it.numero || ''}: primero agrega a los trabajadores del contrato.`); return }
-      if (!c.ok) { setMsg(`Ítem ${it.numero || ''}: faltan los documentos firmados de ${c.faltan} trabajador(es).`); return }
+      if (c.total === 0) { aviso(it, `Ítem ${it.numero || ''}: primero agrega a los trabajadores del contrato.`); return }
+      if (!c.ok) { aviso(it, `Ítem ${it.numero || ''}: faltan los documentos firmados de ${c.faltan} trabajador(es).`); return }
     } else if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'epp') {
-      if (eppEst.total === 0) { setMsg(`Ítem ${it.numero || ''}: el Jefe aún no define qué EPP aplican ni carga sus certificados en el módulo EPP.`); return }
-      if (!eppEst.ok) { setMsg(`Ítem ${it.numero || ''}: faltan certificados vigentes de ${eppEst.total - eppEst.conCert} EPP (los carga el Jefe en el módulo EPP).`); return }
+      if (eppEst.total === 0) { aviso(it, `Ítem ${it.numero || ''}: el Jefe aún no define qué EPP aplican ni carga sus certificados en el módulo EPP.`); return }
+      if (!eppEst.ok) { aviso(it, `Ítem ${it.numero || ''}: faltan certificados vigentes de ${eppEst.total - eppEst.conCert} EPP (los carga el Jefe en el módulo EPP).`); return }
+    } else if (v === 'cumple' && actual !== 'cumple' && it.fuente === 'miper') {
+      // respaldado por la MIPER aprobada en Contratos y documentos
     } else if (v === 'cumple' && actual !== 'cumple' && evaluarAuto(it)?.ok) {
       // respaldado por datos del sistema
-    } else if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { setMsg(`Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
+    } else if (v === 'cumple' && actual !== 'cumple' && !dpor(it.id).some(docValido)) { aviso(it, `Ítem ${it.numero || ''}: para marcarlo «Cumple» sube primero un documento de respaldo vigente.`); return }
     await guardar(it, { estado: actual === v ? 'pendiente' : v })
   }
   const subir = async (it: AudItem, f: File) => {
@@ -331,6 +336,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                   {e === 'pendiente' && <span style={{ fontSize: '11.5px', color: '#986a00' }}>Pendiente</span>}
                   {it.orientacion && <button type="button" onClick={() => setOrient({ ...orient, [it.id]: !orient[it.id] })} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>{orient[it.id] ? 'Ocultar' : 'Ver'} orientación</button>}
                 </div>
+                {msgIt?.id === it.id && <p style={{ margin: '0 0 6px', fontSize: '12px', padding: '7px 10px', borderRadius: '8px', background: '#fde8e8', border: '1px solid #f3b4b4', color: '#9b1c1c' }}>⚠️ {msgIt.txt}</p>}
                 {orient[it.id] && it.orientacion && <p style={{ margin: '0 0 6px', fontSize: '12px', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '8px', padding: '8px 10px', whiteSpace: 'pre-line', color: '#344054' }}>{it.orientacion}</p>}
 
                 {(() => { const ev = evaluarAuto(it); return ev ? <p style={{ margin: '0 0 6px', fontSize: '12px', padding: '7px 10px', borderRadius: '8px', background: ev.ok ? '#f3fbf6' : '#fff8e5', border: `1px solid ${ev.ok ? '#b9e2c8' : '#f0d98a'}`, color: ev.ok ? '#14532d' : '#7a5600' }}>{ev.ok ? '✓ Se completa solo con datos del sistema: ' : '⏳ Se completará solo cuando se cumpla: '}{ev.txt}</p> : null })()}
@@ -591,7 +597,7 @@ function Formatos({ formatos, items, sel, setVista, recargar, wrap }: { formatos
             setBusy(true); setMsg('')
             const { data, error } = await supabase.from('aud_formatos').insert({ nombre: 'SQM · Auditoría de Calificación P3', codigo: 'REG-PR-004 v002', descripcion: 'Reglamento de Contratistas y Subcontratistas SQM', usa_puntaje: true }).select().maybeSingle()
             if (error || !data) { setBusy(false); err(error); return }
-            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : i.n === 1 ? 'trabajadores' : i.n === 7 ? 'liderazgo' : i.n === 19 ? 'epp_entrega' : i.n === 9 ? 'miper' : null }))
+            const filas = P3_ITEMS.map(i => ({ formato_id: data.id, orden: i.n, seccion: P3_SECCIONES[i.s], numero: String(i.n), texto: i.t, orientacion: i.o, puntaje: i.p, requiere_trabajador: [9, 16, 23, 29, 31].includes(i.n), fuente: i.n === 21 ? 'epp' : i.n === 1 ? 'trabajadores' : i.n === 7 ? 'liderazgo' : i.n === 19 ? 'epp_entrega' : [9, 10, 12].includes(i.n) ? 'miper' : null }))
             const r = await supabase.from('aud_items').insert(filas)
             setBusy(false); if (r.error) { err(r.error); return }
             await recargar()

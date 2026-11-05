@@ -18,6 +18,8 @@ export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: st
 export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepción', 'La Serena']
 export const ESTADOS_VUELO: Record<string, string> = { por_comprar: 'Por comprar', comprado: 'Comprado' }
 export const resumenVuelo = (v: Vuelo) => `${v.estado === 'por_comprar' ? 'POR COMPRAR · ' : ''}${v.tipo || 'vuelo'} ${v.medio === 'bus' ? 'bus' : v.aerolinea || ''} ${v.origen && v.destino ? v.origen + '→' + v.destino : ''} ${v.hora_salida ? v.hora_salida + (v.hora_llegada ? '-' + v.hora_llegada : '') : v.hora || ''}`.replace(/\s+/g, ' ').trim()
+// Aeropuertos "locales": el personal que sale de ahí no necesita vuelo (cerca de la faena)
+export const LOCALES = ['Antofagasta', 'Calama']
 export const AEROLINEAS = ['SKY', 'JETSMART', 'LATAM']
 export const DIAS_SEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 

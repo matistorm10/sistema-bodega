@@ -81,7 +81,7 @@ export default function GrillaTurnos() {
   const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' }) }
   const guardarContrato = async () => {
     if (!ec) return
-    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ec.tipo_contrato || null, vence: ec.vence || null, hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
+    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ec.tipo_contrato || null, vence: ec.tipo_contrato === 'indefinido' ? null : (ec.vence || null), hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
     if (error) { setMsgEc(msgError(error)); return }
     setEc(null); cargar()
   }
@@ -159,11 +159,19 @@ export default function GrillaTurnos() {
         <div onClick={() => setEc(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
             <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{ec.nombre}</p>
-            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>{ec.contrato}</p>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{ec.contrato}</p>
+            {(() => { const a = asigs.find(x => x.id === ec.id); if (!a) return null; return (
+              <div style={{ background: '#e8f0fe', border: '1px solid #c7d7f5', borderRadius: '8px', padding: '8px 10px', margin: '0 0 10px', fontSize: '12px', color: '#16213E', lineHeight: 1.5 }}>
+                <strong>Contrato actual</strong><br />
+                En este contrato desde el {fechaCorta(a.desde)}{a.hasta ? ` · termina el ${fechaCorta(a.hasta)}` : ' · sin fecha de término'}<br />
+                {a.tipo_contrato ? `${TIPOS_CONTRATO[a.tipo_contrato]}${a.tipo_contrato !== 'indefinido' && a.vence ? ` · vence el ${fechaCorta(a.vence)}` : ''}` : 'Tipo de contrato sin definir'}{a.regimen ? ` · régimen ${a.regimen}` : ''}{a.sueldo ? ` · sueldo $${Number(a.sueldo).toLocaleString('es-CL')}` : ''}
+                {a.estatus_contrato && <><br />{a.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'} {ESTATUS_CONTRATO[a.estatus_contrato]}{a.estatus_fecha ? ` (${fechaCorta(a.estatus_fecha)})` : ''}</>}
+                {a.condiciones && <><br />Condiciones: {a.condiciones}</>}
+              </div>) })()}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 150px' }}><label style={label}>Tipo de contrato</label><select value={ec.tipo_contrato} onChange={e => setEc({ ...ec, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              <div style={{ flex: '1 1 150px' }}><label style={label}>Vence</label><input type="date" value={ec.vence} onChange={e => setEc({ ...ec, vence: e.target.value })} style={input} /></div>
-              <div style={{ flex: '1 1 150px' }}><label style={label}>Término en este contrato</label><input type="date" value={ec.hasta} onChange={e => setEc({ ...ec, hasta: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 150px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" disabled={ec.tipo_contrato === 'indefinido'} value={ec.tipo_contrato === 'indefinido' ? '' : ec.vence} onChange={e => setEc({ ...ec, vence: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 150px' }}><label style={label}>Sale de este contrato el</label><input type="date" value={ec.hasta} onChange={e => setEc({ ...ec, hasta: e.target.value })} style={input} /></div>
               <div style={{ flex: '1 1 100px' }}><label style={label}>Régimen</label><input value={ec.regimen} onChange={e => setEc({ ...ec, regimen: e.target.value })} placeholder="14x14" style={input} /></div>
               <div style={{ flex: '1 1 140px' }}><label style={label}>Sueldo</label><input type="number" value={ec.sueldo} onChange={e => setEc({ ...ec, sueldo: e.target.value })} style={input} /></div>
             </div>
@@ -172,6 +180,7 @@ export default function GrillaTurnos() {
               {ec.estatus && <div style={{ flex: '1 1 140px' }}><label style={label}>Fecha</label><input type="date" value={ec.estatus_fecha} onChange={e => setEc({ ...ec, estatus_fecha: e.target.value })} style={input} /></div>}
             </div>
             <div style={{ marginTop: '8px' }}><label style={label}>Condiciones / trato</label><input value={ec.condiciones} onChange={e => setEc({ ...ec, condiciones: e.target.value })} style={input} /></div>
+            <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#667085', lineHeight: 1.45 }}><strong>Vence</strong>: cuándo se cumple el plazo fijo (se marca con la línea roja en la grilla). <strong>Sale de este contrato el</strong>: último día del trabajador en este contrato; déjalo vacío si sigue. Se llena sola al mover a otro contrato o al retirarlo.</p>
             {msgEc && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msgEc}</p>}
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}><button onClick={guardarContrato} style={btn()}>Guardar</button><button onClick={() => setEc(null)} style={btn(false)}>Cancelar</button></div>
           </div>

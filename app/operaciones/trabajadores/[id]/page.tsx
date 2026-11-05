@@ -207,8 +207,8 @@ export default function Ficha() {
             {ed && ed.id === a.id ? (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '1 1 140px' }}><label style={label}>Tipo</label><select value={ed.tipo_contrato} onChange={e => setEd({ ...ed, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                <div style={{ flex: '0 1 140px' }}><label style={label}>Vence</label><input type="date" value={ed.vence} onChange={e => setEd({ ...ed, vence: e.target.value })} style={input} /></div>
-                <div style={{ flex: '0 1 140px' }}><label style={label}>Hasta (termino)</label><input type="date" value={ed.hasta} onChange={e => setEd({ ...ed, hasta: e.target.value })} style={input} /></div>
+                <div style={{ flex: '0 1 140px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" value={ed.vence} onChange={e => setEd({ ...ed, vence: e.target.value })} style={input} /></div>
+                <div style={{ flex: '0 1 140px' }}><label style={label}>Sale de este contrato el</label><input type="date" value={ed.hasta} onChange={e => setEd({ ...ed, hasta: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 100px' }}><label style={label}>Régimen</label><input value={ed.regimen} onChange={e => setEd({ ...ed, regimen: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 120px' }}><label style={label}>Sueldo</label><input type="number" value={ed.sueldo} onChange={e => setEd({ ...ed, sueldo: e.target.value })} style={input} /></div>
                 <div style={{ flex: '2 1 220px' }}><label style={label}>Condiciones</label><input value={ed.condiciones} onChange={e => setEd({ ...ed, condiciones: e.target.value })} style={input} /></div>

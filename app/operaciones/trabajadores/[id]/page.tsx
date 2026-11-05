@@ -44,6 +44,13 @@ export default function Ficha() {
     const { error } = await supabase.from('op_trabajadores').update({ nombre: d.nombre, rut: d.rut || null, fecha_nacimiento: d.fecha_nacimiento || null, cargo: d.cargo || null, tipo_personal: d.tipo_personal || 'directo', ciudad: d.ciudad || null, modalidad_viaje: d.modalidad_viaje || null, talla_calzado: d.talla_calzado || null, talla_ropa: d.talla_ropa || null, notas: d.notas || null, activo: d.activo }).eq('id', id)
     setMsg(error ? msgError(error) : 'Guardado ✓'); if (!error) cargar()
   }
+  // Al abrir el formulario se carga el contrato actual del trabajador para partir con su información
+  const abrirFormA = () => {
+    if (verFormA) { setVerFormA(false); return }
+    setMsgA('')
+    setFa(actual ? { ...vacio, contrato_id: actual.contrato_id, desde: hoyISO() > actual.desde ? hoyISO() : actual.desde, regimen: actual.regimen || '', tipo_contrato: actual.tipo_contrato || '', vence: '', sueldo: actual.sueldo ? String(actual.sueldo) : '', condiciones: actual.condiciones || '' } : { ...vacio })
+    setVerFormA(true)
+  }
   const asignar = async () => {
     setMsgA('')
     if (!fa.contrato_id || !fa.desde) { setMsgA('Elige el contrato y la fecha de inicio.'); return }
@@ -126,10 +133,17 @@ export default function Ficha() {
       <div style={{ ...card, marginBottom: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Contratos <span style={{ fontWeight: 400, fontSize: '12px', color: '#98a2b3' }}>· un trabajador solo puede estar en un contrato por día</span></p>
-          <button onClick={() => setVerFormA(!verFormA)} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>{verFormA ? 'Cancelar' : '+ Asignar / mover de contrato'}</button>
+          <button onClick={abrirFormA} style={{ ...btn(false), padding: '6px 12px', fontSize: '12px' }}>{verFormA ? 'Cancelar' : '+ Asignar / mover de contrato'}</button>
         </div>
         {verFormA && (
           <div style={{ background: '#f8fafc', border: '1px solid #e2e6ed', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
+            {actual ? (
+              <div style={{ background: '#e8f0fe', border: '1px solid #c7d7f5', borderRadius: '8px', padding: '8px 10px', marginBottom: '10px', fontSize: '12.5px', color: '#16213E' }}>
+                <strong>Contrato actual:</strong> {nCont(actual.contrato_id)}<br />
+                Desde {fechaCorta(actual.desde)}{actual.hasta ? ` hasta ${fechaCorta(actual.hasta)}` : ''}{actual.regimen ? ` · régimen ${actual.regimen}` : ''}{actual.tipo_contrato ? ` · ${TIPOS_CONTRATO[actual.tipo_contrato]}${actual.vence ? ' vence ' + fechaCorta(actual.vence) : ''}` : ''}{actual.sueldo ? ` · sueldo $${Number(actual.sueldo).toLocaleString('es-CL')}` : ''}{actual.condiciones ? ` · ${actual.condiciones}` : ''}
+                <br /><span style={{ color: '#475467' }}>Los campos parten con esos datos: cámbialos para mover de contrato o renovar (por ejemplo, de plazo fijo 1 a plazo fijo 2 con nueva fecha de vencimiento).</span>
+              </div>
+            ) : <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: '#b7791f' }}>Este trabajador no tiene un contrato vigente hoy.</p>}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <div style={{ flex: '2 1 240px' }}><label style={label}>Contrato *</label><select value={fa.contrato_id} onChange={e => setFa({ ...fa, contrato_id: e.target.value })} style={input}><option value="">— elegir —</option>{contratos.map(c => <option key={c.id} value={c.id}>{nCont(c.id)}</option>)}</select></div>
               <div style={{ flex: '0 1 150px' }}><label style={label}>Desde *</label><input type="date" value={fa.desde} onChange={e => setFa({ ...fa, desde: e.target.value })} style={input} /></div>

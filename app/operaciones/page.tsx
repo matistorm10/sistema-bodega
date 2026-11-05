@@ -19,7 +19,7 @@ export default function Operaciones() {
   useEffect(() => {
     (async () => {
       try {
-        const [t, a, tu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,empresa,referencia,activo').order('nombre')])
+        const [t, a, tu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia,activo').order('nombre')])
         setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || [])
       } catch (e: any) { setError(e.message || 'No se pudo cargar') }
       setCargando(false)

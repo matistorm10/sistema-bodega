@@ -9,7 +9,7 @@ import { card, btn, input, label } from '@/components/programa/ui'
 import { LUGARES } from '@/lib/capacitaciones'
 import { DIAS } from '@/lib/semanal'
 
-// Un solo lugar para armar cada faena: quién la atiende, qué cliente (informes semanales) y qué grupo del programa de capacitaciones.
+// Un solo lugar para armar cada faena: quién la atiende y qué cliente tiene.
 export default function FaenasAsignaciones() {
   const { usuario, cargando: cargandoUsuario } = useUsuarioActual()
   const puede = usuario?.rol === 'admin' || !!usuario?.esJefeHsec
@@ -61,6 +61,10 @@ export default function FaenasAsignaciones() {
     if (cliente) {
       let e = (await supabase.from('pr_faena_cliente').upsert({ ubicacion_id: ub, cliente_id: cliente })).error
       if (err(e)) return
+      // El grupo del programa de capacitaciones se deduce del cliente (ENGIE, SQM, SACYR-EUROHINCA); si no calza, no se toca
+      const nom = (clientes.find(c => c.id === cliente)?.nombre || '').toLowerCase()
+      const grupo = nom.includes('engie') ? 'engie' : nom.includes('sqm') ? 'sqm' : (nom.includes('sacyr') || nom.includes('hinca')) ? 'sacyr' : ''
+      if (grupo) await supabase.from('pr_cap_ubic_lugar').upsert({ ubicacion_id: ub, lugar: grupo })
       // quita asignaciones semanales antiguas de esta faena con otro cliente y deja a todos los prevencionistas con el nuevo
       e = (await supabase.from('pr_semanal_asignaciones').delete().eq('ubicacion_id', ub).neq('cliente_id', cliente)).error
       if (err(e)) return
@@ -148,7 +152,7 @@ export default function FaenasAsignaciones() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '10px', marginBottom: '12px' }}>
                       <div><label style={label}>Normativa DS 132 en esta faena</label>
                         <select value={norm.find(n => n.ubicacion_id === u.id)?.aplica_ds132 ? 'si' : 'no'} onChange={e => setDs132(u.id, e.target.value === 'si')} style={input}><option value="no">No aplica</option><option value="si">Aplica (el Asesor PRL debe completar la lista DS 132)</option></select></div>
-                      <div><label style={label}>Cliente (informes semanales)</label>
+                      <div><label style={label}>Cliente</label>
                         <select value={cli} onChange={e => e.target.value === '__nuevo' ? setNuevoCli({ ub: u.id, nombre: '', dia: '7', plazo: '1', hora: '23:59' }) : setCliente(u.id, e.target.value)} style={input}><option value="">Sin cliente</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}<option value="__nuevo">➕ Crear cliente nuevo…</option></select>
                         {cli && (renombrar && renombrar.id === cli ? (
                           <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
@@ -158,8 +162,6 @@ export default function FaenasAsignaciones() {
                           </div>
                         ) : <button onClick={() => setRenombrar({ id: cli, nombre: clientes.find(c => c.id === cli)?.nombre || '' })} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', fontSize: '12px', padding: '4px 0 0' }}>✏️ Editar nombre del cliente</button>)}
                       </div>
-                      <div><label style={label}>Grupo del programa de capacitaciones</label>
-                        <select value={lugares.find(l => l.ubicacion_id === u.id)?.lugar || ''} onChange={e => setLugar(u.id, e.target.value)} style={input}><option value="">Sin clasificar</option>{Object.entries(LUGARES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                     </div>
                     {nuevoCli && nuevoCli.ub === u.id && (
                       <div style={{ border: '1px solid #cfe0f5', background: '#f4f8fd', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>

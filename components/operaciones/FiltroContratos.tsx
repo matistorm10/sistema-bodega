@@ -11,7 +11,7 @@ export default function FiltroContratos({ contratos, sel, onChange }: { contrato
     const f = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false) }
     document.addEventListener('mousedown', f); return () => document.removeEventListener('mousedown', f)
   }, [])
-  const ord = [...contratos].sort((a, b) => `${a.empresa || ''}${a.nombre}`.localeCompare(`${b.empresa || ''}${b.nombre}`))
+  const ord = [...contratos].sort((a, b) => etiquetaContrato(a).localeCompare(etiquetaContrato(b), 'es'))
   const txt = sel.length === 0 ? 'Todos los contratos' : sel.length === 1 ? etiquetaContrato(contratos.find(c => c.id === sel[0]), 40) : `${sel.length} contratos seleccionados`
   const alternar = (id: string) => onChange(sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id])
   return (

@@ -9,10 +9,11 @@ export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 :
 // Indirectos primero, luego directos; dentro de cada grupo por nombre
 export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || String(a.nombre).localeCompare(String(b.nombre), 'es')
 // Etiqueta de contrato: Cliente · Nombre del contrato · N°
-export function etiquetaContrato(c?: { nombre?: string, empresa?: string | null, referencia?: string | null } | null, largo = 60): string {
+export function etiquetaContrato(c?: { nombre?: string, cliente?: { nombre?: string } | { nombre?: string }[] | null, referencia?: string | null } | null, largo = 60): string {
   if (!c) return '—'
   const ref = (c.referencia || '').trim(); const refC = ref.length > largo ? ref.slice(0, largo - 1).trimEnd() + '…' : ref
-  return [c.empresa, refC, c.nombre && c.nombre !== ref ? 'N° ' + c.nombre : ''].filter(Boolean).join(' · ')
+  const cli = Array.isArray(c.cliente) ? c.cliente[0]?.nombre : c.cliente?.nombre
+  return [cli, refC, c.nombre && c.nombre !== ref ? 'N° ' + c.nombre : ''].filter(Boolean).join(' · ')
 }
 export type Vuelo = { id: string, trabajador_id: string, fecha: string, tipo: string | null, medio: string, aerolinea: string | null, hora: string | null, origen: string | null, destino: string | null, hora_salida: string | null, hora_llegada: string | null, reserva: string | null, notas: string | null, estado: string }
 export const LUGARES = ['Santiago', 'Antofagasta', 'Calama', 'Iquique', 'Concepción', 'La Serena']

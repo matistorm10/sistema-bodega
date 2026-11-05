@@ -35,7 +35,7 @@ export default function GrillaTurnos() {
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
-    const [t, a, tu, c, v, cp] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos')])
+    const [t, a, tu, c, v, cp] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos')])
     setCupos(cp as Cupo[])
     setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
   }

@@ -16,7 +16,7 @@ export default function Dotacion() {
   const [cid, setCid] = useState(''); const [cargando, setCargando] = useState(true); const [msg, setMsg] = useState('')
   const [nc, setNc] = useState({ cargo: '', n: '1' }); const [abierto, setAbierto] = useState<string | null>(null); const [elegir, setElegir] = useState<{ cupo: string, w: string } | null>(null)
   const cargar = async () => {
-    const [c, cp, t] = await Promise.all([supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'), traerTodo('op_cupos'), traerTodo('op_trabajadores', 'id,nombre,cargo,activo,examenes', 'nombre')])
+    const [c, cp, t] = await Promise.all([supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_cupos'), traerTodo('op_trabajadores', 'id,nombre,cargo,activo,examenes', 'nombre')])
     setContratos(c.data || []); setCupos(cp as Cupo[]); setTrab(t); setCargando(false)
   }
   useEffect(() => { cargar() }, [])

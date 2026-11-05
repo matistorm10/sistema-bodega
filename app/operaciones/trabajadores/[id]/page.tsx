@@ -39,6 +39,11 @@ export default function Ficha() {
     setT(a.data); setD(a.data || {}); setAsigs((b.data || []) as Asig[]); setTurnos((c.data || []) as Turno[]); setContratos(ct.data || [])
   }, [id])
   useEffect(() => { cargar() }, [cargar])
+  // Si se llegó desde la grilla de Turnos, el botón de volver regresa directo a Turnos
+  const [deTurnos, setDeTurnos] = useState(false)
+  useEffect(() => { try { setDeTurnos(new URLSearchParams(window.location.search).get('desde') === 'turnos') } catch {} }, [])
+  const volverA = deTurnos ? '/operaciones/turnos' : '/operaciones/trabajadores'
+  const volverT = deTurnos ? '← Volver a Turnos' : '← Trabajadores'
   const nCont = (cid?: string) => etiquetaContrato(contratos.find(x => x.id === cid))
 
   const guardarDatos = async () => {
@@ -127,13 +132,13 @@ export default function Ficha() {
   const tallasC = tallasDe({ usa_talla: true, tipo_talla: 'calzado' }), tallasR = tallasDe({ usa_talla: true, tipo_talla: 'ropa' })
   const ciu = useCiudades()
   const car = useCargos()
-  if (!t) return <Marco titulo="Ficha del trabajador" volver="/operaciones/trabajadores" volverTxt="← Trabajadores"><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></Marco>
+  if (!t) return <Marco titulo="Ficha del trabajador" volver={volverA} volverTxt={volverT}><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></Marco>
   const sel = (v: string, f: (x: string) => void, opts: string[]) => <select value={v || ''} onChange={e => f(e.target.value)} style={input}><option value="">—</option>{v && !opts.includes(v) && <option>{v}</option>}{opts.map(o => <option key={o}>{o}</option>)}</select>
   const actual = asigs.find(a => a.desde <= hoy && (!a.hasta || a.hasta >= hoy))
   const enTurno = turnos.find(x => x.sube <= hoy && (!x.baja || x.baja >= hoy))
 
   return (
-    <Marco titulo={t.nombre} volver="/operaciones/trabajadores" volverTxt="← Trabajadores" ancho={960}>
+    <Marco titulo={t.nombre} volver={volverA} volverTxt={volverT} ancho={960}>
       <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{t.ciudad ? <>Origen: <strong>{t.ciudad}</strong> </> : <span style={{ color: '#b7791f' }}>Sin ciudad de origen </span>}{t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#e8f0fe', color: '#1B4F9C' }}>✈ Vuelo</span> : t.modalidad_viaje === 'local' ? <span style={{ fontSize: '11.5px', color: '#667085' }}>(Local)</span> : <span style={{ color: '#b7791f' }}>(modalidad sin definir)</span>} · Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
 
       {!t.activo && <div style={{ background: '#fde2e1', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '13px', color: '#7a1212', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>

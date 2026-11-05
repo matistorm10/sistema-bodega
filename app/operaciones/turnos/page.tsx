@@ -35,8 +35,19 @@ export default function GrillaTurnos() {
     const [t, a, tu, c, v] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,empresa,referencia').order('nombre'), traerTodo('op_vuelos')])
     setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
   }
+  // Recuerda filtros, mes y modo para que al volver desde una ficha la grilla quede como estaba
+  const [listo, setListo] = useState(false)
   useEffect(() => {
+    if (!listo) return
+    try { sessionStorage.setItem('op_turnos_estado', JSON.stringify({ contrato, desde, soloActivos, modo })) } catch {}
+  }, [listo, contrato, desde, soloActivos, modo])
+  useEffect(() => {
+    try {
+      const g = sessionStorage.getItem('op_turnos_estado')
+      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (e.modo === 'turno' || e.modo === 'vuelo') setModo(e.modo) }
+    } catch {}
     try { const c = new URLSearchParams(window.location.search).get('contrato'); if (c) setContrato(c.split(',').filter(Boolean)) } catch {}
+    setListo(true)
     cargar()
   }, [])
   const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
@@ -142,7 +153,7 @@ export default function GrillaTurnos() {
                 <Fragment key={f.t.id}>
                 {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: 0, color: '#475467' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</div></td></tr>}
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
-                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><Link href={`/operaciones/trabajadores/${f.t.id}`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
+                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
                   <td style={{ ...CC, ...ST(150), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
                   <td style={{ ...CC, ...ST(250), width: '96px', minWidth: '96px', maxWidth: '96px' }}>{!f.t.ciudad ? <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span> : f.t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '10.5px', padding: '1px 7px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700, whiteSpace: 'nowrap' }} title={f.t.ciudad}>{f.t.ciudad}</span> : <span style={{ fontSize: '11px', color: '#667085' }} title={f.t.ciudad}>{f.t.ciudad}</span>}</td>
                   <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = venc(f.vista); return <><button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>

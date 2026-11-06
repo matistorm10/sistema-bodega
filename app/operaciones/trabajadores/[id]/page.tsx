@@ -7,6 +7,7 @@ import { formatearRut } from '@/lib/rut'
 import { tallasDe } from '@/lib/epp'
 import Marco from '@/components/operaciones/Marco'
 import CalendarioTurnos from '@/components/operaciones/CalendarioTurnos'
+import FechaNac from '@/components/operaciones/FechaNac'
 import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
 import CiudadSelect from '@/components/operaciones/CiudadSelect'
 import { useCiudades } from '@/components/operaciones/useCiudades'
@@ -182,7 +183,7 @@ export default function Ficha() {
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 220px' }}><label style={label}>Nombre</label><input value={d.nombre || ''} onChange={e => set('nombre', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', formatearRut(e.target.value))} placeholder="12.345.678-9" style={input} /></div>
-          <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><input type="date" min="1900-01-01" max={hoyISO()} value={d.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} style={input} /></div>
+          <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><FechaNac value={d.fecha_nacimiento || ''} onChange={v => set('fecha_nacimiento', v)} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
           <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><CargoSelect value={d.cargo || ''} onChange={v => set('cargo', v)} cargos={car.cargos} recargar={car.recargar} /></div>
           <div style={{ flex: '1 1 160px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={d.ciudad || ''} onChange={v => set('ciudad', v)} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>

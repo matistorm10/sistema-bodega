@@ -24,7 +24,7 @@ export default function Ficha() {
   const [contratos, setContratos] = useState<any[]>([])
   const [msg, setMsg] = useState(''); const [msgA, setMsgA] = useState(''); const [msgT, setMsgT] = useState('')
   const [fa, setFa] = useState({ ...vacio }); const [verFormA, setVerFormA] = useState(false)
-  const [ed, setEd] = useState<{ id: string, tipo_contrato: string, vence: string, regimen: string, sueldo: string, condiciones: string, hasta: string, estatus: string, estatus_fecha: string } | null>(null)
+  const [ed, setEd] = useState<{ id: string, desde: string, tipo_contrato: string, vence: string, regimen: string, sueldo: string, condiciones: string, hasta: string, estatus: string, estatus_fecha: string } | null>(null)
   const [verRet, setVerRet] = useState(false); const [ret, setRet] = useState({ fecha: hoyISO(), motivo: 'Término de contrato', nota: '' }); const [msgR, setMsgR] = useState('')
   const [ft, setFt] = useState({ sube: hoyISO(), baja: '' })
   const hoy = hoyISO()
@@ -106,7 +106,9 @@ export default function Ficha() {
   }
   const guardarEd = async () => {
     if (!ed) return
-    const { error } = await supabase.from('op_asignaciones').update({ tipo_contrato: ed.tipo_contrato || null, vence: ed.vence || null, regimen: ed.regimen || null, sueldo: ed.sueldo ? Number(ed.sueldo) : null, condiciones: ed.condiciones || null, hasta: ed.hasta || null, estatus_contrato: ed.estatus || null, estatus_fecha: ed.estatus ? (ed.estatus_fecha || hoy) : null }).eq('id', ed.id)
+    if (!ed.desde) { setMsgA('Indica la fecha de inicio del contrato.'); return }
+    if (ed.hasta && ed.hasta < ed.desde) { setMsgA('La fecha de salida no puede ser anterior al inicio.'); return }
+    const { error } = await supabase.from('op_asignaciones').update({ desde: ed.desde, tipo_contrato: ed.tipo_contrato || null, vence: ed.tipo_contrato === 'indefinido' ? null : (ed.vence || null), regimen: ed.regimen || null, sueldo: ed.sueldo ? Number(ed.sueldo) : null, condiciones: ed.condiciones || null, hasta: ed.hasta || null, estatus_contrato: ed.estatus || null, estatus_fecha: ed.estatus ? (ed.estatus_fecha || hoy) : null }).eq('id', ed.id)
     if (error) { setMsgA(msgError(error)); return } setEd(null); setMsgA(''); cargar()
   }
   const borrarAsig = async (a: Asig) => { if (!confirm('¿Eliminar esta asignación de contrato?')) return; const { error } = await supabase.from('op_asignaciones').delete().eq('id', a.id); if (error) setMsgA(msgError(error)); else cargar() }
@@ -224,6 +226,7 @@ export default function Ficha() {
           <div key={a.id} style={{ borderTop: '1px solid #eef1f6', padding: '8px 0', fontSize: '13px' }}>
             {ed && ed.id === a.id ? (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '0 1 140px' }}><label style={label}>Inicio del contrato</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.desde} onChange={e => setEd({ ...ed, desde: e.target.value })} style={input} /></div>
                 <div style={{ flex: '1 1 140px' }}><label style={label}>Tipo</label><select value={ed.tipo_contrato} onChange={e => setEd({ ...ed, tipo_contrato: e.target.value })} style={input}><option value="">—</option>{Object.entries(TIPOS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                 <div style={{ flex: '0 1 140px' }}><label style={label}>Vence (fin del plazo fijo)</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.vence} onChange={e => setEd({ ...ed, vence: e.target.value })} style={input} /></div>
                 <div style={{ flex: '0 1 140px' }}><label style={label}>Sale de este contrato el</label><input type="date" min="2000-01-01" max="2100-12-31" value={ed.hasta} onChange={e => setEd({ ...ed, hasta: e.target.value })} style={input} /></div>
@@ -242,7 +245,7 @@ export default function Ficha() {
                   {a.condiciones && <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#667085' }}>{a.condiciones}</p>}
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button onClick={() => setEd({ id: a.id, tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', hasta: a.hasta || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' })} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>Editar</button>
+                  <button onClick={() => setEd({ id: a.id, desde: a.desde, tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', hasta: a.hasta || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '' })} style={{ ...btn(false), padding: '4px 10px', fontSize: '11.5px' }}>Editar</button>
                   <button onClick={() => borrarAsig(a)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Eliminar</button>
                 </div>
               </div>

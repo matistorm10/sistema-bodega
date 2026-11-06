@@ -151,6 +151,7 @@ export default function Ficha() {
   if (!t) return <Marco titulo="Ficha del trabajador" volver={volverA} volverTxt={volverT}><p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p></Marco>
   const sel = (v: string, f: (x: string) => void, opts: string[]) => <select value={v || ''} onChange={e => f(e.target.value)} style={input}><option value="">—</option>{v && !opts.includes(v) && <option>{v}</option>}{opts.map(o => <option key={o}>{o}</option>)}</select>
   const actual = asigs.find(a => a.desde <= hoy && (!a.hasta || a.hasta >= hoy))
+  const esBO = t.tipo_personal === 'backoffice'
   const enTurno = turnos.find(x => x.sube <= hoy && (!x.baja || x.baja >= hoy))
 
   return (
@@ -184,7 +185,7 @@ export default function Ficha() {
           <div style={{ flex: '1 1 220px' }}><label style={label}>Nombre</label><input value={d.nombre || ''} onChange={e => set('nombre', e.target.value)} style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>RUT</label><input value={d.rut || ''} onChange={e => set('rut', formatearRut(e.target.value))} placeholder="12.345.678-9" style={input} /></div>
           <div style={{ flex: '0 1 150px' }}><label style={label}>Nacimiento</label><FechaNac value={d.fecha_nacimiento || ''} onChange={v => set('fecha_nacimiento', v)} /></div>
-          <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
+          <div style={{ flex: '0 1 140px' }}><label style={label}>Tipo de personal</label><select value={d.tipo_personal || 'directo'} onChange={e => set('tipo_personal', e.target.value)} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option><option value="backoffice">Back Office</option></select></div>
           <div style={{ flex: '1 1 180px' }}><label style={label}>Cargo</label><CargoSelect value={d.cargo || ''} onChange={v => set('cargo', v)} cargos={car.cargos} recargar={car.recargar} /></div>
           <div style={{ flex: '1 1 160px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={d.ciudad || ''} onChange={v => set('ciudad', v)} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
           <div style={{ flex: '0 1 140px' }}><label style={label}>Viaja</label><select value={d.modalidad_viaje || ''} onChange={e => set('modalidad_viaje', e.target.value)} style={{ ...input, ...(d.modalidad_viaje === 'vuelo' ? { background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700 } : {}) }}><option value="">—</option>{Object.entries(MODALIDADES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
@@ -195,6 +196,8 @@ export default function Ficha() {
         <button onClick={guardarDatos} style={btn()}>Guardar datos</button>{msg && <span style={{ marginLeft: '10px', fontSize: '12.5px', color: msg.endsWith('✓') ? '#1e8e4e' : '#c5221f' }}>{msg}</span>}
       </div>
 
+      {esBO && <div style={{ ...card, marginBottom: '12px', background: '#f0f4ff' }}><p style={{ margin: 0, fontSize: '13px', color: '#344054' }}><strong>Back Office</strong> · personal de casa matriz. Su contrato lo lleva la casa matriz, por eso aquí no se le asigna contrato, turnos ni calendario.</p></div>}
+      {!esBO && (<>
       <div style={{ ...card, marginBottom: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Contratos <span style={{ fontWeight: 400, fontSize: '12px', color: '#98a2b3' }}>· un trabajador solo puede estar en un contrato por día</span></p>
@@ -278,6 +281,7 @@ export default function Ficha() {
             <button onClick={() => borrarTurno(tu)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '11.5px' }}>Eliminar</button>
           </div>))}
       </div>
+      </>)}
     </Marco>
   )
 }

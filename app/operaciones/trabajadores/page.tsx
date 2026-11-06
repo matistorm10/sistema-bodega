@@ -27,6 +27,8 @@ export default function Trabajadores() {
   const [cargando, setCargando] = useState(true)
   const [q, setQ] = useState(''); const [fContrato, setFContrato] = useState<string[]>([]); const [fTipo, setFTipo] = useState(''); const [fExam, setFExam] = useState(''); const [fEstado, setFEstado] = useState(''); const [verInactivos, setVerInactivos] = useState(false)
   const [nuevo, setNuevo] = useState(false)
+  const [vista, setVista] = useState<'terreno' | 'backoffice'>('terreno')
+  useEffect(() => { try { if (new URLSearchParams(window.location.search).get('vista') === 'backoffice') setVista('backoffice') } catch {} }, [])
   const ciu = useCiudades()
   const car = useCargos()
   const [f, setF] = useState({ nombre: '', rut: '', cargo: '', ciudad: '', modalidad: '', examenes: 'pendiente', tipo: 'directo', calzado: '', ropa: '' })
@@ -40,11 +42,11 @@ export default function Trabajadores() {
   useEffect(() => { cargar() }, [])
   const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
 
-  const filas = useMemo(() => trab.filter(t => (verInactivos || t.activo)).map(t => {
+  const filas = useMemo(() => trab.filter(t => (verInactivos || t.activo) && ((t.tipo_personal === 'backoffice') === (vista === 'backoffice'))).map(t => {
     const a = asigEn(asigs, t.id, hoy)
     return { t, a, est: estadoEn(asigs, turnos, t.id, hoy) }
   }).sort((x, y) => cmpPersonal(x.t, y.t)).filter(r => (fContrato.length === 0 || (!!r.a && fContrato.includes(r.a.contrato_id))) && (!fTipo || r.t.tipo_personal === fTipo) && (!fExam || r.t.examenes === fExam) && (!fEstado || r.est === fEstado) &&
-    (!q.trim() || `${r.t.nombre} ${r.t.rut || ''} ${r.t.cargo || ''}`.toLowerCase().includes(q.trim().toLowerCase()))), [trab, asigs, turnos, q, fExam, fContrato, fEstado, verInactivos, hoy])
+    (!q.trim() || `${r.t.nombre} ${r.t.rut || ''} ${r.t.cargo || ''}`.toLowerCase().includes(q.trim().toLowerCase()))), [trab, asigs, turnos, q, fExam, fContrato, fEstado, verInactivos, hoy, vista])
 
   const crear = async () => {
     if (!f.nombre.trim()) { setMsg('Escribe el nombre.'); return }
@@ -54,11 +56,14 @@ export default function Trabajadores() {
   }
   return (
     <Marco titulo="Trabajadores">
+      <div style={{ display: 'inline-flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+        {([['terreno', `Personal de contratos (${trab.filter(t => t.activo && t.tipo_personal !== 'backoffice').length})`], ['backoffice', `Back Office (${trab.filter(t => t.activo && t.tipo_personal === 'backoffice').length})`]] as const).map(([k, tx]) => <button key={k} onClick={() => { setVista(k); setNuevo(false); setF(x => ({ ...x, tipo: k === 'backoffice' ? 'backoffice' : 'directo' })) }} style={{ padding: '8px 14px', fontSize: '12.5px', border: 'none', cursor: 'pointer', fontWeight: vista === k ? 700 : 500, background: vista === k ? AZUL : '#fff', color: vista === k ? '#fff' : '#475467' }}>{tx}</button>)}
+      </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nombre, RUT o cargo…" style={{ ...input, width: '240px' }} />
-        <FiltroContratos contratos={contratos} sel={fContrato} onChange={setFContrato} />
-        <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Directos e indirectos</option><option value="indirecto">Solo indirectos</option><option value="directo">Solo directos</option></select>
-        <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los estados hoy</option><option value="faena">En faena</option><option value="descanso">Descanso</option><option value="sin_contrato">Sin contrato</option></select>
+        {vista === 'terreno' && <FiltroContratos contratos={contratos} sel={fContrato} onChange={setFContrato} />}
+        {vista === 'terreno' && <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Directos e indirectos</option><option value="indirecto">Solo indirectos</option><option value="directo">Solo directos</option></select>}
+        {vista === 'terreno' && <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los estados hoy</option><option value="faena">En faena</option><option value="descanso">Descanso</option><option value="sin_contrato">Sin contrato</option></select>}
         <select value={fExam} onChange={e => setFExam(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Exámenes: todos</option>{Object.entries(EXAMENES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />Ver retirados</label>
         <button onClick={() => setNuevo(!nuevo)} style={{ ...btn(), marginLeft: 'auto' }}>{nuevo ? 'Cancelar' : '+ Nuevo trabajador'}</button>
@@ -72,7 +77,7 @@ export default function Trabajadores() {
             <div style={{ flex: '1 1 140px' }}><label style={label}>Ciudad de origen</label><CiudadSelect value={f.ciudad} onChange={v => setF({ ...f, ciudad: v })} ciudades={ciu.ciudades} recargar={ciu.recargar} /></div>
             <div style={{ flex: '0 1 130px' }}><label style={label}>Exámenes</label><select value={f.examenes} onChange={e => setF({ ...f, examenes: e.target.value })} style={input}>{Object.entries(EXAMENES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div style={{ flex: '0 1 110px' }}><label style={label}>Viaja</label><select value={f.modalidad} onChange={e => setF({ ...f, modalidad: e.target.value })} style={input}><option value="">—</option><option value="vuelo">Vuelo</option><option value="local">Local</option></select></div>
-            <div style={{ flex: '0 1 130px' }}><label style={label}>Tipo de personal</label><select value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })} style={input}><option value="indirecto">Indirecto</option><option value="directo">Directo</option></select></div>
+            <div style={{ flex: '0 1 130px' }}><label style={label}>Tipo de personal</label><select value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })} style={input}><option value="indirecto">Indirecto</option><option value="backoffice">Back Office</option><option value="directo">Directo</option></select></div>
             <div style={{ flex: '0 1 100px' }}><label style={label}>Talla calzado</label><select value={f.calzado} onChange={e => setF({ ...f, calzado: e.target.value })} style={input}><option value="">—</option>{tallasDe({ usa_talla: true, tipo_talla: 'calzado' }).map(t => <option key={t}>{t}</option>)}</select></div>
             <div style={{ flex: '0 1 100px' }}><label style={label}>Talla ropa</label><select value={f.ropa} onChange={e => setF({ ...f, ropa: e.target.value })} style={input}><option value="">—</option>{tallasDe({ usa_talla: true, tipo_talla: 'ropa' }).map(t => <option key={t}>{t}</option>)}</select></div>
           </div>
@@ -89,12 +94,12 @@ export default function Trabajadores() {
             <tbody>{filas.map(({ t, a, est }) => (
               <tr key={t.id} style={{ borderTop: '1px solid #eef1f6', opacity: t.activo ? 1 : 0.55 }}>
                 <td style={{ padding: '7px 8px', fontWeight: 600 }}><PuntoExamen estado={t.examenes} /><Link href={`/operaciones/trabajadores/${t.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{t.nombre}</Link><span style={{ display: 'block', fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}>{t.rut || 'sin RUT'}</span></td>
-                <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', color: t.tipo_personal === 'indirecto' ? '#8a5a00' : '#667085' }}>{TIPOS_PERSONAL[t.tipo_personal] || 'Directo'}</span></td>
+                <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.tipo_personal === 'indirecto' ? '#fff3cd' : t.tipo_personal === 'backoffice' ? '#e8f0fe' : '#f2f4f7', color: t.tipo_personal === 'indirecto' ? '#8a5a00' : t.tipo_personal === 'backoffice' ? '#1B4F9C' : '#667085' }}>{TIPOS_PERSONAL[t.tipo_personal] || 'Directo'}</span></td>
                 <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.examenes === 'aprobado' ? '#e6f4ea' : t.examenes === 'rechazado' ? '#fde2e1' : '#fff3cd', color: t.examenes === 'aprobado' ? '#1e8e4e' : t.examenes === 'rechazado' ? '#b42318' : '#8a5a00' }}>{EXAMENES[t.examenes] || 'Pendiente'}</span></td>
                 <td style={{ padding: '7px 8px' }}>{t.cargo || '—'}</td>
-                <td style={{ padding: '7px 8px' }}>{nCont(a?.contrato_id)}</td>
+                <td style={{ padding: '7px 8px' }}>{t.tipo_personal === 'backoffice' ? <span style={{ color: '#667085' }}>Casa matriz</span> : nCont(a?.contrato_id)}</td>
                 <td style={{ padding: '7px 8px' }}>{a?.tipo_contrato ? `${TIPOS_CONTRATO[a.tipo_contrato]}${a.vence ? ' · ' + fechaCorta(a.vence) : ''}` : '—'}</td>
-                <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: ESTADO[est].bg, color: ESTADO[est].col }}>{ESTADO[est].t}</span></td>
+                <td style={{ padding: '7px 8px' }}>{t.tipo_personal === 'backoffice' ? '—' : <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: ESTADO[est].bg, color: ESTADO[est].col }}>{ESTADO[est].t}</span>}</td>
                 <td style={{ padding: '7px 8px', color: '#667085' }}>{t.talla_calzado || '—'} / {t.talla_ropa || '—'}</td>
               </tr>))}
             </tbody>

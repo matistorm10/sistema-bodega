@@ -31,7 +31,8 @@ export default function Operaciones() {
 
   const nTrab = (id: string) => trab.find(t => t.id === id)?.nombre || '—'
   const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
-  const activos = trab.filter(t => t.activo)
+  const activos = trab.filter(t => t.activo && t.tipo_personal !== 'backoffice')
+  const nBO = trab.filter(t => t.activo && t.tipo_personal === 'backoffice').length
   const filas = contratos.map(c => {
     const ids = asigs.filter(a => a.contrato_id === c.id && a.desde <= hoy && (!a.hasta || a.hasta >= hoy)).map(a => a.trabajador_id)
     const enFaena = ids.filter(id => estadoEn(asigs, turnos, id, hoy) === 'faena').length
@@ -84,13 +85,14 @@ export default function Operaciones() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '10px', marginBottom: '14px' }}>
             {acceso('/operaciones/trabajadores', '👷', 'Trabajadores', 'Ficha, contratos, plazos y turnos de cada persona')}
+            {acceso('/operaciones/trabajadores?vista=backoffice', '🏢', 'Back Office', 'Personal de casa matriz: se controla aquí sin contrato ni turnos')}
             {acceso('/operaciones/turnos', '🗓️', 'Turnos', 'Grilla de quién está en faena cada día, por contrato, con descarga a Excel')}
             {acceso('/operaciones/dotacion', '🧩', 'Dotación por contrato', 'Cargos vendidos por contrato, cupos con y sin nombre, reemplazos')}
             {acceso('/operaciones/vuelos', '✈️', 'Vuelos y pasajes', 'Qué pasajes están por comprar y cuáles ya se compraron, con el aeropuerto de origen de cada trabajador')}
           </div>
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>Dónde está el personal hoy ({fechaCorta(hoy)})</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>
-            {kpi(totEn, 'En faena', '#1e8e4e')}{kpi(totDesc, 'En descanso', '#1B4F9C')}{kpi(activos.length, 'Trabajadores activos')}{kpi(sinContratoHoy, 'Activos sin contrato hoy', sinContratoHoy ? '#b7791f' : '#1e8e4e')}{kpi(activos.filter(t => t.examenes === 'pendiente').length, 'Exámenes pendientes', '#b7791f')}
+            {kpi(totEn, 'En faena', '#1e8e4e')}{kpi(totDesc, 'En descanso', '#1B4F9C')}{kpi(activos.length, 'Trabajadores activos')}{kpi(nBO, 'Back Office', '#1B4F9C')}{kpi(sinContratoHoy, 'Activos sin contrato hoy', sinContratoHoy ? '#b7791f' : '#1e8e4e')}{kpi(activos.filter(t => t.examenes === 'pendiente').length, 'Exámenes pendientes', '#b7791f')}
           </div>
           <div style={{ ...card, marginBottom: '14px', overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

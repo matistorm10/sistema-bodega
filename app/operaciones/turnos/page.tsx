@@ -270,7 +270,7 @@ export default function GrillaTurnos() {
             <p style={{ margin: '4px 0 12px', fontSize: '11.5px', color: '#667085' }}>Parte con exámenes «pendiente». Luego se completa su ficha, se aprueban los exámenes y se carga contrato, turnos y pasajes.</p>
             <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700 }}>O elegir un trabajador que ya existe</p>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <select value={fcu.existente} onChange={e => setFcu({ ...fcu, existente: e.target.value })} style={input}><option value="">— elegir —</option>{trab.filter(t => t.activo && !cupos.some(c => c.trabajador_id === t.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(t => <option key={t.id} value={t.id}>{t.nombre}{t.cargo ? ` · ${t.cargo}` : ''}</option>)}</select>
+              <select value={fcu.existente} onChange={e => setFcu({ ...fcu, existente: e.target.value })} style={input}><option value="">— elegir —</option>{trab.filter(t => t.activo && t.tipo_personal !== 'backoffice' && !cupos.some(c => c.trabajador_id === t.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(t => <option key={t.id} value={t.id}>{t.nombre}{t.cargo ? ` · ${t.cargo}` : ''}</option>)}</select>
               <button onClick={cubrirExistente} style={btn(false)}>Asignar</button>
             </div>
             {msgCu && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msgCu}</p>}

@@ -4,8 +4,8 @@ export const sumarDias = (iso: string, n: number) => { const d = new Date(iso + 
 export const fechaCorta = (iso?: string | null) => { if (!iso) return '—'; const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}-${m}-${y}` }
 export const diasEntre = (a: string, b: string) => Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000)
 export const TIPOS_CONTRATO: Record<string, string> = { pf1: 'Plazo fijo 1', pf2: 'Plazo fijo 2', indefinido: 'Indefinido' }
-export const TIPOS_PERSONAL: Record<string, string> = { indirecto: 'Indirecto', directo: 'Directo' }
-export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 : 1)
+export const TIPOS_PERSONAL: Record<string, string> = { indirecto: 'Indirecto', directo: 'Directo', backoffice: 'Back Office' }
+export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 : t?.tipo_personal === 'backoffice' ? 2 : 1)
 // Indirectos primero, luego directos; dentro de cada grupo por nombre
 export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || String(a.nombre).localeCompare(String(b.nombre), 'es')
 // Etiqueta de contrato: Cliente · Nombre del contrato · N°

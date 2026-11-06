@@ -5,12 +5,15 @@ export const fechaCorta = (iso?: string | null) => { if (!iso) return '—'; con
 export const diasEntre = (a: string, b: string) => Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000)
 export const TIPOS_CONTRATO: Record<string, string> = { pf1: 'Plazo fijo 1', pf2: 'Plazo fijo 2', indefinido: 'Indefinido' }
 export const TIPOS_PERSONAL: Record<string, string> = { indirecto: 'Indirecto', directo: 'Directo', backoffice: 'Back Office' }
+// Contrato "virtual" para el personal Back Office (casa matriz): aparece en Turnos sin ser un contrato real
+export const BACKOFFICE_ID = '__backoffice__'
 export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 : t?.tipo_personal === 'backoffice' ? 2 : 1)
 // Indirectos primero, luego directos; dentro de cada grupo por nombre
 export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || String(a.nombre).localeCompare(String(b.nombre), 'es')
 // Etiqueta de contrato: Cliente · Nombre del contrato · N°
 export function etiquetaContrato(c?: { nombre?: string, cliente?: { nombre?: string } | { nombre?: string }[] | null, referencia?: string | null } | null, largo = 60): string {
   if (!c) return '—'
+  if ((c as any).id === BACKOFFICE_ID) return 'Back Office'
   const ref = (c.referencia || '').trim(); const refC = ref.length > largo ? ref.slice(0, largo - 1).trimEnd() + '…' : ref
   const cli = Array.isArray(c.cliente) ? c.cliente[0]?.nombre : c.cliente?.nombre
   return [cli, refC, c.nombre && c.nombre !== ref ? 'N° ' + c.nombre : ''].filter(Boolean).join(' · ')

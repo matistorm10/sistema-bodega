@@ -9,7 +9,7 @@ import Marco from '@/components/operaciones/Marco'
 import PuntoExamen from '@/components/operaciones/PuntoExamen'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { type Cupo, ESTATUS_CONTRATO, resumenVuelo, planRango, aplicarPlanLocal, guardarPlan, type PlanTurnos, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { BACKOFFICE_ID, type Cupo, ESTATUS_CONTRATO, resumenVuelo, planRango, aplicarPlanLocal, guardarPlan, type PlanTurnos, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function GrillaTurnos() {
   const hoy = hoyISO()
@@ -38,7 +38,7 @@ export default function GrillaTurnos() {
   const cargar = async () => {
     const [t, a, tu, c, v, cp] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos')])
     setCupos(cp as Cupo[])
-    setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
+    setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos([...(c.data || []), { id: BACKOFFICE_ID, nombre: 'Back Office', referencia: null, cliente: null }]); setCargando(false)
   }
   // Recuerda filtros, mes y modo para que al volver desde una ficha la grilla quede como estaba
   const [listo, setListo] = useState(false)
@@ -61,7 +61,10 @@ export default function GrillaTurnos() {
   const hasta = dias[dias.length - 1]
 
   const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).map(t => {
-    const as = asigs.filter(a => a.trabajador_id === t.id && a.desde <= hasta && (!a.hasta || a.hasta >= desde) && (contrato.length === 0 || contrato.includes(a.contrato_id)))
+    // Back Office: sin contrato real; se muestra bajo el «contrato» virtual Back Office
+    const as: Asig[] = t.tipo_personal === 'backoffice'
+      ? ((contrato.length === 0 || contrato.includes(BACKOFFICE_ID)) ? [{ id: 'bo-' + t.id, trabajador_id: t.id, contrato_id: BACKOFFICE_ID, desde: '2000-01-01', hasta: null, tipo_contrato: 'indefinido', vence: null, regimen: null, sueldo: null, condiciones: null } as Asig] : [])
+      : asigs.filter(a => a.trabajador_id === t.id && a.desde <= hasta && (!a.hasta || a.hasta >= desde) && (contrato.length === 0 || contrato.includes(a.contrato_id)))
     if (as.length === 0) return null
     const ts = turnos.filter(x => x.trabajador_id === t.id && x.sube <= hasta && (!x.baja || x.baja >= desde))
     const celdas = dias.map(d => {
@@ -226,12 +229,12 @@ export default function GrillaTurnos() {
             <tbody>
               {filas.map((f, ix) => (
                 <Fragment key={f.t.id}>
-                {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: 0, color: '#475467' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</div></td></tr>}
+                {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: 0, color: '#475467' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : f.t.tipo_personal === 'backoffice' ? 'BACK OFFICE' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</div></td></tr>}
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
                   <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '150px', minWidth: '150px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><PuntoExamen estado={f.t.examenes} /><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
                   <td style={{ ...CC, ...ST(150), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
                   <td style={{ ...CC, ...ST(250), width: '96px', minWidth: '96px', maxWidth: '96px' }}>{!f.t.ciudad ? <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span> : f.t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '10.5px', padding: '1px 7px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700, whiteSpace: 'nowrap' }} title={f.t.ciudad}>{f.t.ciudad}</span> : <span style={{ fontSize: '11px', color: '#667085' }} title={f.t.ciudad}>{f.t.ciudad}</span>}</td>
-                  <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = venc(f.vista); return <><button onClick={() => abrirContrato(f)} title={`${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>
+                  <td style={{ ...CC, ...ST(346), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = f.t.tipo_personal === 'backoffice' ? { bg: '#e8f0fe', col: '#1B4F9C', t: 'Back Office' } : venc(f.vista); return <><button onClick={() => f.t.tipo_personal !== 'backoffice' && abrirContrato(f)} title={f.t.tipo_personal === 'backoffice' ? 'Personal de casa matriz: sin contrato en este sistema' : `${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: f.t.tipo_personal === 'backoffice' ? 'default' : 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>
                   {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const fin = !!c.a && !!c.a.vence && c.a.vence === dias[i] && c.a.tipo_contrato !== 'indefinido'; const tip = [fin ? `Fin de contrato (${c.a?.tipo_contrato === 'pf1' ? 'PF1' : c.a?.tipo_contrato === 'pf2' ? 'PF2' : 'plazo'}) ${fechaCorta(c.a?.vence)}` : '', vs?.map(resumenVuelo).join(' / ')].filter(Boolean).join(' · ')
                     return <td key={i} data-c={i} data-r={ix} onMouseDown={e => empezarSel(e, ix, i)} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', userSelect: 'none', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}

@@ -32,7 +32,7 @@ export default function GrillaTurnos() {
   const [modo, setModo] = useState<'turno' | 'vuelo'>('turno')
   const [msg, setMsg] = useState('')
   const [pv, setPv] = useState<{ t: any, dia: string } | null>(null)
-  const [ec, setEc] = useState<{ id: string, desde: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string, o_tipo: string, o_vence: string } | null>(null)
+  const [ec, setEc] = useState<{ id: string, contrato_id: string, desde: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string, o_tipo: string, o_vence: string } | null>(null)
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
@@ -165,14 +165,14 @@ export default function GrillaTurnos() {
   }
   useEffect(() => { window.addEventListener('mouseup', terminarSel); return () => window.removeEventListener('mouseup', terminarSel) }) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(''), 7000); return () => clearTimeout(t) }, [msg])
-  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, desde: a.desde, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '', o_tipo: a.tipo_contrato || '', o_vence: a.vence || '' }) }
+  const abrirContrato = (f: { t: any, vista: Asig }) => { const a = f.vista; setMsgEc(''); setEc({ id: a.id, contrato_id: a.contrato_id, desde: a.desde, nombre: f.t.nombre, contrato: nCont(a.contrato_id), tipo_contrato: a.tipo_contrato || '', vence: a.vence || '', hasta: a.hasta || '', regimen: a.regimen || '', sueldo: a.sueldo ? String(a.sueldo) : '', condiciones: a.condiciones || '', estatus: a.estatus_contrato || '', estatus_fecha: a.estatus_fecha || '', o_tipo: a.tipo_contrato || '', o_vence: a.vence || '' }) }
   const guardarContrato = async () => {
     if (!ec) return
     if (ec.tipo_contrato && ec.tipo_contrato !== 'indefinido' && ec.o_vence && ec.tipo_contrato !== ec.o_tipo && (!ec.vence || ec.vence === ec.o_vence)) { setMsgEc('Al cambiar de plazo indica la nueva fecha de vencimiento (distinta a la anterior).'); return }
     if (ec.tipo_contrato && ec.tipo_contrato !== 'indefinido' && !ec.vence) { setMsgEc('Indica la fecha en que vence este plazo fijo.'); return }
     if (!ec.desde) { setMsgEc('Indica la fecha de inicio del contrato.'); return }
     if (ec.hasta && ec.hasta < ec.desde) { setMsgEc('La fecha de salida no puede ser anterior al inicio.'); return }
-    const { error } = await supabase.from('op_asignaciones').update({ desde: ec.desde, tipo_contrato: ec.tipo_contrato || null, vence: ec.tipo_contrato === 'indefinido' ? null : (ec.vence || null), hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
+    const { error } = await supabase.from('op_asignaciones').update({ contrato_id: ec.contrato_id, desde: ec.desde, tipo_contrato: ec.tipo_contrato || null, vence: ec.tipo_contrato === 'indefinido' ? null : (ec.vence || null), hasta: ec.hasta || null, regimen: ec.regimen || null, sueldo: ec.sueldo ? Number(ec.sueldo) : null, condiciones: ec.condiciones || null, estatus_contrato: ec.estatus || null, estatus_fecha: ec.estatus ? (ec.estatus_fecha || hoy) : null }).eq('id', ec.id)
     if (error) { setMsgEc(msgError(error)); return }
     setEc(null); cargar()
   }
@@ -284,7 +284,7 @@ export default function GrillaTurnos() {
         <div onClick={() => setEc(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
             <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>{ec.nombre}</p>
-            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{ec.contrato}</p>
+            <div style={{ margin: '0 0 8px' }}><label style={label}>Contrato</label><select value={ec.contrato_id} onChange={e => setEc({ ...ec, contrato_id: e.target.value })} style={input}>{contratos.filter(c => c.id !== BACKOFFICE_ID).map(c => <option key={c.id} value={c.id}>{nCont(c.id)}</option>)}</select></div>
             {(() => { const a = asigs.find(x => x.id === ec.id); if (!a || !a.vence || a.tipo_contrato === 'indefinido') return null
               const n = diasEntre(hoy, a.vence); const nom = a.tipo_contrato ? TIPOS_CONTRATO[a.tipo_contrato] : 'El contrato'
               const rojo = n <= 15, amb = n <= 30

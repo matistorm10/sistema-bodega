@@ -35,6 +35,8 @@ export default function JefaturaPrograma() {
   const [comentario, setComentario] = useState('')
   const [ver, setVer] = useState<any | null>(null)
   const [prevPend, setPrevPend] = useState<any[]>([])
+  const [retros, setRetros] = useState<Record<string, { desde: string, hasta: string | null }>>({})
+  const [verRetro, setVerRetro] = useState(false); const [retroDesde, setRetroDesde] = useState('2026-08-01'); const [msgRetro, setMsgRetro] = useState('')
 
   const cargar = useCallback(async () => {
     const [p, m, a, mm, f, nm, asg] = await Promise.all([
@@ -46,6 +48,7 @@ export default function JefaturaPrograma() {
       supabase.from('pr_faena_normativa').select('ubicacion_id').eq('aplica_ds132', true),
       supabase.from('pr_epp_ubicaciones').select('usuario_id,ubicacion_id'),
     ])
+    const rt = await supabase.from('pr_prog_retro').select('usuario_id,desde,hasta'); setRetros(Object.fromEntries((rt.data || []).map((r: any) => [r.usuario_id, { desde: r.desde, hasta: r.hasta }])))
     const ap = new Set((nm.data || []).map((x: any) => x.ubicacion_id)); setConDs132(new Set((asg.data || []).filter((x: any) => ap.has(x.ubicacion_id)).map((x: any) => x.usuario_id)))
     const prev = mesAnterior(mesActual())
     const { data: mp } = await supabase.from('pr_prog_mensual').select('usuario_id,estado').eq('mes', prev)
@@ -55,6 +58,15 @@ export default function JefaturaPrograma() {
   }, [mes])
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
+  const habilitarRetro = async (ids: string[]) => {
+    if (!retroDesde) { setMsgRetro('Indica desde qué fecha.'); return }
+    const { error } = await supabase.from('pr_prog_retro').upsert(ids.map(id => ({ usuario_id: id, desde: retroDesde, hasta: null, created_by: usuario?.id })))
+    setMsgRetro(error ? 'No se pudo guardar: ' + error.message : `Registro retroactivo habilitado desde ${fechaCL(retroDesde)} para ${ids.length} persona(s).`); cargar()
+  }
+  const quitarRetro = async (ids: string[]) => {
+    const { error } = await supabase.from('pr_prog_retro').delete().in('usuario_id', ids)
+    setMsgRetro(error ? 'No se pudo quitar: ' + error.message : 'Registro retroactivo desactivado.'); cargar()
+  }
   const resumen = (u: any) => {
     const ms = metas.filter(m => m.cargo === u.cargo_programa && (m.actividad !== 'verificacion_ds132' || conDs132.has(u.id) || acts.some(a => a.usuario_id === u.id && a.actividad === 'verificacion_ds132')))
     const mine = acts.filter(a => a.usuario_id === u.id)
@@ -119,6 +131,29 @@ export default function JefaturaPrograma() {
                 <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>📥 {pend.length} documento(s) esperando tu aprobación o rechazo</p>
                 {personas.filter(u => pend.some((a: any) => a.usuario_id === u.id)).map(u => <button key={u.id} onClick={() => setAbierto(u.id)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', margin: '2px 6px 2px 0' }}>{u.nombre} ({pend.filter((a: any) => a.usuario_id === u.id).length}) → Revisar</button>)}
               </div>) : null })()}
+            <div style={{ ...card, marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setVerRetro(v => !v)}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '13.5px' }}>🕘 Registro con fechas anteriores (ponerse al día)</p>
+                <span style={{ fontSize: '12px', color: '#667085' }}>{Object.keys(retros).length} persona(s) habilitada(s)</span>
+                <span style={{ marginLeft: 'auto', color: '#667085' }}>{verRetro ? '▲' : '▼'}</span>
+              </div>
+              {verRetro && (
+                <div style={{ marginTop: '10px' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475467' }}>Por defecto cada persona solo registra con la fecha de hoy. Aquí habilitas a quienes pueden registrar con fechas desde un día anterior hasta hoy. No aplica a meses ya enviados o aprobados (devuélvelos primero). Se sigue permitiendo un solo registro por actividad y día, y la firma queda con la fecha real en que se firma.</p>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '8px' }}>
+                    <div><label style={{ display: 'block', fontSize: '11.5px', color: '#667085', marginBottom: '2px' }}>Habilitar desde</label><input type="date" min="2020-01-01" max="2100-12-31" value={retroDesde} onChange={e => setRetroDesde(e.target.value)} style={{ ...input, width: '160px' }} /></div>
+                    <button onClick={() => habilitarRetro(personas.map(u => u.id))} style={btn()}>Habilitar a todos</button>
+                    <button onClick={() => quitarRetro(personas.map(u => u.id))} style={btn(false)}>Quitar a todos</button>
+                  </div>
+                  {msgRetro && <p style={{ fontSize: '12.5px', color: '#475467', margin: '0 0 8px' }}>{msgRetro}</p>}
+                  {personas.map(u => { const r = retros[u.id]; return (
+                    <div key={u.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '5px 0', borderTop: '1px solid #eef1f6', fontSize: '13px' }}>
+                      <span style={{ flex: 1 }}>{u.nombre} <span style={{ color: '#98a2b3', fontSize: '11.5px' }}>{CARGOS_PROGRAMA[u.cargo_programa]}</span></span>
+                      {r ? <><span style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '20px', background: '#d7efe0', color: '#14532d', fontWeight: 600 }}>Desde {fechaCL(r.desde)}</span><button onClick={() => quitarRetro([u.id])} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Quitar</button></>
+                        : <button onClick={() => habilitarRetro([u.id])} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Habilitar</button>}
+                    </div>) })}
+                </div>)}
+            </div>
             <EditorMetas metas={metas} onCambio={cargar} />
             {usuario && <MiFirma usuarioId={usuario.id} />}
             <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...input, width: 'auto', marginBottom: '12px' }}>

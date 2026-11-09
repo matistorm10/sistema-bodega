@@ -13,14 +13,21 @@ const hora = () => new Date().toTimeString().slice(0, 5)
 const vacios = (n: number, v: any = null) => Array.from({ length: n }, () => v)
 
 type Props = {
-  actividad: string, usuario: any, faenas: any[], inicial?: any, soloLectura?: boolean,
+  actividad: string, usuario: any, faenas: any[], inicial?: any, soloLectura?: boolean, retro?: { desde: string, hasta: string | null } | null, mes?: string,
   onGuardar: (r: { fecha: string, ubicacion_id: string | null, datos: any, porcentaje: number | null }) => Promise<void>, onCancelar: () => void,
 }
 
-export default function FormActividad({ actividad, usuario, faenas, inicial, soloLectura, onGuardar, onCancelar }: Props) {
+export default function FormActividad({ actividad, usuario, faenas, inicial, soloLectura, retro, mes, onGuardar, onCancelar }: Props) {
   const meta = ACTIVIDADES[actividad]
   const d0 = inicial?.datos || {}
-  const [fecha, setFecha] = useState<string>(inicial?.fecha || hoy())
+  // Registro retroactivo (habilitado por la jefatura): la fecha se puede elegir entre 'desde' y hoy
+  const retroOk = !!retro && !inicial
+  const maxFecha = retro?.hasta && retro.hasta < hoy() ? retro.hasta : hoy()
+  const [fecha, setFecha] = useState<string>(() => {
+    if (inicial?.fecha) return inicial.fecha
+    if (retro && mes && mes < hoy().slice(0, 7)) { const ini = mes + '-01'; return ini < retro.desde ? retro.desde : ini }
+    return hoy()
+  })
   const [faena, setFaena] = useState<string>(inicial?.ubicacion_id || '')
   const [h, setH] = useState<string>(d0.hora || hora())
   const [empresa, setEmpresa] = useState<string>(d0.empresa || 'INDELI Construcción y Montaje Ltda.')
@@ -84,6 +91,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
 
   const guardar = async () => {
     setMsg('')
+    if (!fecha) { setMsg('Indica la fecha del registro.'); return }
     if (!faena) { setMsg('Elige la faena / centro de costo.'); return }
     let datos: any = { respaldos }
     let porcentaje: number | null = null
@@ -121,7 +129,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
           if (!x?.justif?.trim() || !x?.accion?.trim()) { setMsg(`El ítem ${planas[i].n} es «NO»: completa la justificación y el plan de acción.`); return }
           const ejec = x.status === 'Ejecutado' || x.status === 'Cerrado'
           if (!ejec && !x.fecha) { setMsg(`Ítem ${planas[i].n}: indica la fecha comprometida del plan de acción (o márcalo como Ejecutado).`); return }
-          if (!ejec && x.fecha < hoy() && x.fecha !== d0.det?.[planas[i].n]?.fecha) { setMsg(`Ítem ${planas[i].n}: la fecha comprometida no puede ser anterior a hoy.`); return }
+          if (!ejec && x.fecha < (retroOk ? fecha : hoy()) && x.fecha !== d0.det?.[planas[i].n]?.fecha) { setMsg(`Ítem ${planas[i].n}: la fecha comprometida no puede ser anterior a hoy.`); return }
         }
       }
       const si = items.filter(x => x === 'si').length, no = items.filter(x => x === 'no').length
@@ -131,7 +139,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
       const s = fort.filter(x => x.trim()).length, o = oport.filter(x => x.trim()).length
       porcentaje = pct(s, s + o)
-      if (comps.some(c => c.texto.trim() && c.plazo && c.plazo < hoy())) { setMsg('La fecha de un compromiso no puede ser anterior a hoy.'); return }
+      if (comps.some(c => c.texto.trim() && c.plazo && c.plazo < (retroOk ? fecha : hoy()))) { setMsg('La fecha de un compromiso no puede ser anterior a hoy.'); return }
       datos = { ...datos, hora: h, empresa, lugar, tarea, n_seguros: String(fort.filter(x => x.trim()).length), n_oport: String(oport.filter(x => x.trim()).length), fortalezas: fort.filter(x => x.trim()), oportunidades: oport.filter(x => x.trim()), compromisos_lista: comps.filter(c => c.texto.trim()) }
     } else if (actividad === 'inspeccion_epp' || actividad === 'inspeccion_bloqueo') {
       const validas = filas.filter(f => f.nombre.trim())
@@ -167,7 +175,9 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
     <div style={{ ...card, marginBottom: '14px' }}>
       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: '15px', color: '#16213E' }}>{meta.nombre}</p>
       <Fila>
-        <Campo titulo="Fecha (hoy, automática)" ancho="140px"><input type="date" value={fecha} readOnly disabled style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>
+        {retroOk
+          ? <Campo titulo="Fecha (registro retroactivo habilitado)" ancho="190px"><input type="date" value={fecha} min={retro!.desde} max={maxFecha} onChange={e => setFecha(e.target.value)} style={input} /></Campo>
+          : <Campo titulo="Fecha (hoy, automática)" ancho="140px"><input type="date" value={fecha} readOnly disabled style={{ ...input, background: '#f3f5f9', color: '#475467' }} /></Campo>}
         <Campo titulo="Faena / centro de costo">
           <select value={faena} onChange={e => setFaena(e.target.value)} disabled={lect} style={input}><option value="">Seleccionar…</option>{faenas.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select>
         </Campo>
@@ -246,7 +256,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
                             <input value={x?.justif || ''} onChange={e => setDetalle(it.n, 'justif', e.target.value)} disabled={lect} placeholder="Justificación" style={input} />
                             <input value={x?.accion || ''} onChange={e => setDetalle(it.n, 'accion', e.target.value)} disabled={lect} placeholder="Plan de acción de mejora" style={input} />
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              {(x?.status === 'Ejecutado' || x?.status === 'Cerrado') ? null : <input type="date" min={hoy()} value={x?.fecha || ''} onChange={e => setDetalle(it.n, 'fecha', e.target.value && e.target.value < hoy() ? hoy() : e.target.value)} disabled={lect} title="Fecha comprometida (no puede ser anterior a hoy)" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />}
+                              {(x?.status === 'Ejecutado' || x?.status === 'Cerrado') ? null : <input type="date" min={retroOk ? fecha : hoy()} value={x?.fecha || ''} onChange={e => setDetalle(it.n, 'fecha', e.target.value && e.target.value < hoy() ? hoy() : e.target.value)} disabled={lect} title="Fecha comprometida (no puede ser anterior a hoy)" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />}
                               <input value={x?.responsable || ''} onChange={e => setDetalle(it.n, 'responsable', e.target.value)} disabled={lect} placeholder="Responsable" style={{ ...input, flex: '1 1 130px', width: 'auto' }} />
                               <select value={(x?.status === 'Ejecutado' || x?.status === 'Cerrado') ? 'Ejecutado' : 'En ejecución'} onChange={e => setDetalle(it.n, 'status', e.target.value)} disabled={lect} style={{ ...input, flex: '1 1 110px', width: 'auto' }}>
                                 <option>En ejecución</option><option>Ejecutado</option>

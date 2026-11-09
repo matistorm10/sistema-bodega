@@ -25,6 +25,7 @@ export default function Programa() {
   const cargo = usuario?.cargoPrograma || null
 
   const [mes, setMes] = useState(mesActual())
+  const [retro, setRetro] = useState<{ desde: string, hasta: string | null } | null>(null)
   const [metas, setMetas] = useState<any[]>([])
   const [acts, setActs] = useState<any[]>([])
   const [mensual, setMensual] = useState<any | null>(null)
@@ -53,6 +54,7 @@ export default function Programa() {
     setMetas(m.data || []); setActs(a.data || []); setMensual(mm.data || null)
     const { data: rr } = await supabase.from('pr_prog_actividades').select('mes,actividad,revision_comentario').eq('usuario_id', usuario.id).eq('revision_estado', 'rechazado')
     setRechOtros(rr || [])
+    const { data: rt } = await supabase.from('pr_prog_retro').select('desde,hasta').eq('usuario_id', usuario.id).maybeSingle(); setRetro(rt || null)
     const propias = usuario.esPrevencionista && usuario.rol !== 'admin' && !usuario.esJefeHsec ? await misUbicacionesIds(usuario.id) : null
     setFaenas((f.data || []).filter((x: any) => x.activa !== false && (!propias || propias.has(x.id))))
     setDescVerificado(usuario.esPrevencionista ? d.data?.estado === 'verificado' : true)
@@ -104,7 +106,7 @@ export default function Programa() {
     const { error } = form.registro
       ? await supabase.from('pr_prog_actividades').update({ fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje }).eq('id', form.registro.id)
       : await supabase.from('pr_prog_actividades').insert(cuerpo)
-    if (error) { setMsg(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día; puedes editar el de hoy.' : error.message.includes('fecha') ? 'La fecha debe ser la de hoy y no se puede cambiar.' : 'No se pudo guardar: ' + error.message); return }
+    if (error) { setMsg(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad en esa fecha. Solo se permite un registro por día; puedes editar el existente.' : error.message.includes('fecha') ? 'La fecha no está permitida: solo puedes registrar con la fecha de hoy, o con fechas anteriores si la jefatura te habilitó el registro retroactivo. La fecha de un registro ya guardado no se cambia.' : 'No se pudo guardar: ' + error.message); return }
     // si la fecha cae en otro mes, cambia a ese mes para que la persona vea el registro
     if (r.fecha.slice(0, 7) !== mes) setMes(r.fecha.slice(0, 7))
     setForm(null); setMsg(''); await cargar()
@@ -139,7 +141,7 @@ export default function Programa() {
     const { error } = registro
       ? await supabase.from('pr_prog_actividades').update(campos).eq('id', id)
       : await supabase.from('pr_prog_actividades').insert({ ...campos, id, actividad, usuario_id: usuario.id })
-    if (error) throw new Error(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad hoy. Solo se permite un registro por día.' : error.message.includes('fecha') ? 'La fecha debe ser la de hoy.' : 'No se pudo guardar: ' + error.message)
+    if (error) throw new Error(error.message.includes('Ya existe un registro') ? 'Ya registraste esta actividad en esa fecha. Solo se permite un registro por día.' : error.message.includes('fecha') ? 'La fecha no está permitida (solo hoy, o el rango habilitado por la jefatura).' : 'No se pudo guardar: ' + error.message)
     setPendiente(null); setForm(null); setMsg(''); await cargar()
   }
   const eliminar = async (a: any) => {
@@ -184,7 +186,7 @@ export default function Programa() {
             )}
             {/* el formulario queda montado (oculto) para no perder lo digitado al volver desde la vista previa */}
             <div style={{ display: pendiente ? 'none' : 'block' }}>
-              <FormActividad actividad={form.actividad} usuario={usuario} faenas={form.actividad === 'verificacion_ds132' ? faenas.filter(f => ds132ids.has(f.id)) : faenas} inicial={form.registro} soloLectura={form.registro?.revision_estado === 'aprobado'}
+              <FormActividad actividad={form.actividad} usuario={usuario} faenas={form.actividad === 'verificacion_ds132' ? faenas.filter(f => ds132ids.has(f.id)) : faenas} inicial={form.registro} retro={retro} mes={mes} soloLectura={form.registro?.revision_estado === 'aprobado'}
                 onGuardar={guardar} onCancelar={() => { setForm(null); setMsg('') }} />
             </div>
           </>

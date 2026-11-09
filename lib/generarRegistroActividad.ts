@@ -11,6 +11,8 @@ export type RegistroPDF = {
   actividad: string, fecha: string, faena: string, nombre: string, cargo: string,
   datos: any, porcentaje: number | null,
   firma?: string | null, firmadoAt?: string | null,   // sin firmadoAt = vista previa
+  // Las autoevaluaciones DS 594 / DS 132 además las firma el administrador de contrato o faena
+  admin?: { nombre?: string | null, firma?: string | null, firmadoAt?: string | null } | null,
 }
 const R: Record<string, string> = { si: 'SÍ', no: 'NO', na: 'N/A', C: 'C', NC: 'NC', NA: 'NA' }
 const fcl = (f?: string | null) => f ? f.slice(0, 10).split('-').reverse().join('-') : ''
@@ -23,6 +25,8 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   const logo = await cargarLogo()
   const firma = r.firma ? await normalizarImagen(r.firma) : null
   const preview = !r.firmadoAt
+  const requiereAdmin = r.actividad === 'verificacion_ds594' || r.actividad === 'verificacion_ds132'
+  const firmaAdmin = r.admin?.firma ? await normalizarImagen(r.admin.firma) : null
 
   const encabezado = () => {
     doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(M, 8, W - 2 * M, 20); doc.line(M + 40, 8, M + 40, 28)
@@ -121,6 +125,21 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
     doc.text(r.nombre + (r.cargo ? ` · ${r.cargo}` : ''), M + 3, y + 32.5)
     const fh = new Date(r.firmadoAt!).toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' })
     doc.text(`Firmado electrónicamente el ${fh}`, M + 100, y + 32.5)
+  }
+  if (requiereAdmin) {
+    let y2 = y + 42
+    if (y2 + 38 > 280) { doc.addPage(); encabezado(); y2 = 40 }
+    doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(M, y2, W - 2 * M, 38)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(0); doc.text('Firma electrónica del administrador de contrato / faena', M + 3, y2 + 6)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+    if (r.admin?.firmadoAt) {
+      if (firmaAdmin) { const h = 18, w = Math.min(55, h * firmaAdmin.w / firmaAdmin.h); doc.addImage(firmaAdmin.data, 'PNG', M + 3, y2 + 9, w, w * firmaAdmin.h / firmaAdmin.w) }
+      doc.line(M + 3, y2 + 28, M + 80, y2 + 28)
+      doc.text((r.admin.nombre || '') + ' · Administrador de contrato / faena', M + 3, y2 + 32.5)
+      doc.text(`Firmado electrónicamente el ${new Date(r.admin.firmadoAt).toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' })}`, M + 100, y2 + 32.5)
+    } else {
+      doc.setTextColor(197, 34, 31); doc.text('Pendiente de firma del administrador de contrato o faena.', M + 3, y2 + 22, { maxWidth: W - 2 * M - 6 }); doc.setTextColor(0)
+    }
   }
 
   const n = doc.getNumberOfPages()

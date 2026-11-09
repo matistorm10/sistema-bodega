@@ -8,6 +8,7 @@ import { misUbicacionesIds } from '@/lib/prevencion'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
 import FirmaPreview from '@/components/programa/FirmaPreview'
+import FirmasAdministrador from '@/components/programa/FirmasAdministrador'
 import { generarRegistroActividad } from '@/lib/generarRegistroActividad'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
 import { ACTIVIDADES, ORDEN_ACTIVIDADES, CARGOS_PROGRAMA, mesActual, nombreMes, mesesRecientes, pct, estadoPlazo, mesAnterior } from '@/lib/programa'
@@ -137,7 +138,7 @@ export default function Programa() {
     const path = `programa/${usuario.id}/registros/${id}_${Date.now()}.pdf`
     const up = await supabase.storage.from('hsec-documentos').upload(path, blob, { contentType: 'application/pdf' })
     if (up.error) throw new Error('No se pudo archivar el documento: ' + up.error.message)
-    const campos = { fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje, pdf_path: path, firmado_at: ahora }
+    const campos = { fecha: r.fecha, ubicacion_id: r.ubicacion_id, datos: r.datos, porcentaje: r.porcentaje, pdf_path: path, firmado_at: ahora, ...(actividad === 'verificacion_ds594' || actividad === 'verificacion_ds132' ? { admin_firma_por: null, admin_firma_at: null } : {}) }
     const { error } = registro
       ? await supabase.from('pr_prog_actividades').update(campos).eq('id', id)
       : await supabase.from('pr_prog_actividades').insert({ ...campos, id, actividad, usuario_id: usuario.id })
@@ -235,6 +236,7 @@ export default function Programa() {
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
             </div>
 
+            {cargo === 'administrador_faena' && <FirmasAdministrador usuario={usuario!} faenas={faenas} />}
             <div style={{ display: 'grid', gap: '8px' }}>
               {filas.map(f => {
                 const meta = ACTIVIDADES[f.k]
@@ -257,6 +259,7 @@ export default function Programa() {
                           <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f3f5f9', fontSize: '12.5px' }}>
                             <span>{fechaCL(a.fecha)} · {faenas.find(x => x.id === a.ubicacion_id)?.nombre || '—'}{a.datos?.tarea ? ` · ${a.datos.tarea}` : a.datos?.tema ? ` · ${a.datos.tema}` : a.datos?.rbs ? ` · RBS N°${a.datos.rbs}` : ''}{a.porcentaje !== null ? ` · ${a.porcentaje}%` : ''}
                               {a.firmado_at && <span style={{ marginLeft: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: a.revision_estado === 'aprobado' ? '#e7f6ec' : a.revision_estado === 'rechazado' ? '#fde8e8' : '#fef7e0', color: a.revision_estado === 'aprobado' ? '#14532d' : a.revision_estado === 'rechazado' ? '#9b1c1c' : '#986a00' }}>{a.revision_estado === 'aprobado' ? 'Aprobado' : a.revision_estado === 'rechazado' ? 'Rechazado' : 'Pendiente de revisión'}</span>}
+                              {a.firmado_at && (a.actividad === 'verificacion_ds594' || a.actividad === 'verificacion_ds132') && <span style={{ marginLeft: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: a.admin_firma_at ? '#e7f6ec' : '#fde8e8', color: a.admin_firma_at ? '#14532d' : '#9b1c1c' }}>{a.admin_firma_at ? '✍️ Firmado por el administrador' : '⏳ Falta firma del administrador'}</span>}
                               {a.revision_estado === 'rechazado' && a.revision_comentario && <span style={{ display: 'block', color: '#9b1c1c', fontSize: '12px' }}>Motivo: {a.revision_comentario}</span>}</span>
                             <span style={{ display: 'flex', gap: '6px' }}>
                               {a.pdf_path && <button onClick={() => verPdf(a.pdf_path)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>📄 PDF</button>}

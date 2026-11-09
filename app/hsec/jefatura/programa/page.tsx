@@ -194,7 +194,8 @@ export default function JefaturaPrograma() {
                                 <span style={{ display: 'flex', gap: '6px' }}>
                                   {a.pdf_path && <button onClick={async () => { const { data, error } = await supabase.storage.from('hsec-documentos').createSignedUrl(a.pdf_path, 600); if (error || !data) { alert('No se pudo abrir el PDF.'); return } window.open(data.signedUrl, '_blank') }} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>📄 PDF firmado</button>}
                                   <button onClick={() => setVer(a)} style={{ ...btn(false), padding: '3px 10px', fontSize: '12px' }}>Ver</button>
-                                  {a.firmado_at && a.revision_estado !== 'aprobado' && <button onClick={() => revisar(a, 'aprobado')} style={{ ...btn(), padding: '3px 10px', fontSize: '12px' }}>✓ Aprobar</button>}
+                                  {a.firmado_at && (a.actividad === 'verificacion_ds594' || a.actividad === 'verificacion_ds132') && !a.admin_firma_at && <span style={{ fontSize: '11px', color: '#9b1c1c', fontWeight: 600 }}>⏳ Falta firma del administrador</span>}
+                                  {a.firmado_at && a.revision_estado !== 'aprobado' && !((a.actividad === 'verificacion_ds594' || a.actividad === 'verificacion_ds132') && !a.admin_firma_at) && <button onClick={() => revisar(a, 'aprobado')} style={{ ...btn(), padding: '3px 10px', fontSize: '12px' }}>✓ Aprobar</button>}
                                   {a.firmado_at && a.revision_estado !== 'rechazado' && <button onClick={() => { const c = prompt('Comentario para el APR (obligatorio):'); if (c && c.trim()) revisar(a, 'rechazado', c.trim()) }} style={{ ...btn(false, true), padding: '3px 10px', fontSize: '12px' }}>✗ Rechazar</button>}
                                 </span>
                               </div>

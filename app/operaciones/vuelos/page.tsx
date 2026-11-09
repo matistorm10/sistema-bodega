@@ -5,8 +5,10 @@ import { AZUL } from '@/lib/theme'
 import { card, btn, input } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
 import { useCiudades } from '@/components/operaciones/useCiudades'
+import FiltroContratos from '@/components/operaciones/FiltroContratos'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
-import { traerTodo, hoyISO, fechaCorta, descargarXlsx, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
+import { supabase } from '@/lib/supabase'
+import { BACKOFFICE_ID, traerTodo, hoyISO, fechaCorta, descargarXlsx, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
 
 export default function VuelosPasajes() {
   const ciu = useCiudades()
@@ -15,13 +17,16 @@ export default function VuelosPasajes() {
   const [cargando, setCargando] = useState(true)
   const [fEstado, setFEstado] = useState('por_comprar'); const [fOrigen, setFOrigen] = useState(''); const [fTipo, setFTipo] = useState(''); const [q, setQ] = useState(''); const [pasados, setPasados] = useState(false)
   const [ed, setEd] = useState<Vuelo | null>(null)
-  const cargar = async () => { const [v, t] = await Promise.all([traerTodo('op_vuelos', '*', 'fecha'), traerTodo('op_trabajadores', '*', 'nombre')]); setVuelos(v as Vuelo[]); setTrab(t); setCargando(false) }
+  const [contratos, setContratos] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [fContrato, setFContrato] = useState<string[]>([])
+  const cargar = async () => { const [v, t, a, c] = await Promise.all([traerTodo('op_vuelos', '*', 'fecha'), traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre')]); setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a); setContratos([...(c.data || []), { id: BACKOFFICE_ID, nombre: 'Back Office', referencia: null, cliente: null }]); setCargando(false) }
   useEffect(() => { cargar() }, [])
   const tr = (id: string) => trab.find(t => t.id === id)
-  const filas = useMemo(() => vuelos.filter(v => (pasados || v.fecha >= hoy) && (tr(v.trabajador_id)?.activo !== false || v.estado !== 'por_comprar') && (!fEstado || v.estado === fEstado) && (!fTipo || v.tipo === fTipo) && (!fOrigen || (fOrigen === '_sin' ? !tr(v.trabajador_id)?.ciudad : tr(v.trabajador_id)?.ciudad === fOrigen)) &&
+  // el vuelo pertenece al contrato en que el trabajador estaba asignado en la fecha del viaje (o Back Office)
+  const delContrato = (v: Vuelo) => fContrato.length === 0 || (tr(v.trabajador_id)?.tipo_personal === 'backoffice' ? fContrato.includes(BACKOFFICE_ID) : asigs.some(a => a.trabajador_id === v.trabajador_id && fContrato.includes(a.contrato_id) && a.desde <= v.fecha && (!a.hasta || a.hasta >= v.fecha)))
+  const filas = useMemo(() => vuelos.filter(v => (pasados || v.fecha >= hoy) && (tr(v.trabajador_id)?.activo !== false || v.estado !== 'por_comprar') && (!fEstado || v.estado === fEstado) && delContrato(v) && (!fTipo || v.tipo === fTipo) && (!fOrigen || (fOrigen === '_sin' ? !tr(v.trabajador_id)?.ciudad : tr(v.trabajador_id)?.ciudad === fOrigen)) &&
     (!q.trim() || (tr(v.trabajador_id)?.nombre || '').toLowerCase().includes(q.trim().toLowerCase()))).sort((a, b) => a.fecha.localeCompare(b.fecha) || (tr(a.trabajador_id)?.nombre || '').localeCompare(tr(b.trabajador_id)?.nombre || '')),
-    [vuelos, trab, fEstado, fOrigen, fTipo, q, pasados, hoy]) // eslint-disable-line react-hooks/exhaustive-deps
-  const nPorComprar = vuelos.filter(v => v.estado === 'por_comprar' && v.fecha >= hoy).length
+    [vuelos, trab, asigs, fContrato, fEstado, fOrigen, fTipo, q, pasados, hoy]) // eslint-disable-line react-hooks/exhaustive-deps
+  const nPorComprar = vuelos.filter(v => v.estado === 'por_comprar' && v.fecha >= hoy && delContrato(v)).length
   const descargar = () => descargarXlsx('Vuelos_y_pasajes.xlsx', async (X) => {
     const l = new X.Workbook(); l.creator = 'Sistema INDELI'; const h = l.addWorksheet('Vuelos')
     h.addRow(['Fecha', 'Trabajador', 'RUT', 'Ciudad de origen', 'Viaja', 'Estado', 'Tipo', 'Medio', 'Aerolínea', 'Origen', 'Destino', 'Salida', 'Llegada', 'Reserva', 'Notas']).font = { bold: true }
@@ -35,6 +40,7 @@ export default function VuelosPasajes() {
       <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#475467' }}><strong style={{ color: nPorComprar ? '#b42318' : '#1e8e4e' }}>{nPorComprar}</strong> pasaje{nPorComprar === 1 ? '' : 's'} por comprar desde hoy. Los vuelos se proyectan («por comprar») en Turnos → modo Vuelos; aquí se ven en lista y se completan al comprarlos.</p>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar trabajador…" style={{ ...input, width: '200px' }} />
+        <FiltroContratos contratos={contratos} sel={fContrato} onChange={setFContrato} />
         <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los estados</option><option value="por_comprar">Por comprar</option><option value="comprado">Comprado</option></select>
         <select value={fOrigen} onChange={e => setFOrigen(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los orígenes</option>{ciu.nombres.map(l => <option key={l}>{l}</option>)}<option value="_sin">Sin ciudad definida</option></select>
         <select value={fTipo} onChange={e => setFTipo(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Subida y bajada</option><option value="subida">Subida</option><option value="bajada">Bajada</option></select>

@@ -180,3 +180,13 @@ export async function retirarTrabajador(id: string, fecha: string, motivo: strin
     return null
   } catch (e) { return e }
 }
+
+// Contratos que la persona puede ver en Operaciones: todos si es administración/reclutamiento; si no, solo los que se le asignaron.
+export async function traerContratosOp(cols = 'id,nombre,cliente:pr_clientes_informe(nombre),referencia') {
+  const r = await supabase.from('pr_contratos').select(cols).order('nombre')
+  const { data: completo } = await supabase.rpc('op_completo')
+  if (completo) return r
+  const { data: mios } = await supabase.from('op_usuario_contratos').select('contrato_id')
+  const ids = new Set((mios || []).map((x: any) => x.contrato_id))
+  return { ...r, data: ((r.data as any[]) || []).filter(c => ids.has(c.id)) }
+}

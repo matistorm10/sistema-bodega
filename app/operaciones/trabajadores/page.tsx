@@ -1,4 +1,5 @@
 'use client'
+import { traerContratosOp } from '@/lib/operaciones'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
@@ -39,7 +40,7 @@ export default function Trabajadores() {
   const hoy = hoyISO()
 
   const cargar = async () => {
-    const [t, a, tu, c] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre')])
+    const [t, a, tu, c] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), traerContratosOp()])
     setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
   }
   useEffect(() => { cargar() }, [])

@@ -1,4 +1,5 @@
 'use client'
+import { traerContratosOp } from '@/lib/operaciones'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -44,7 +45,7 @@ export default function GrillaTurnos() {
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
-    const [t, a, tu, c, v, cp, fa] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos'), traerTodo('op_fallos')])
+    const [t, a, tu, c, v, cp, fa] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), traerContratosOp(), traerTodo('op_vuelos'), traerTodo('op_cupos'), traerTodo('op_fallos')])
     setCupos(cp as Cupo[]); setFallos(fa as Fallo[])
     setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos(c.data || []); setCargando(false)
   }

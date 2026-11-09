@@ -1,4 +1,5 @@
 'use client'
+import { traerContratosOp } from '@/lib/operaciones'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
@@ -37,7 +38,7 @@ export default function Ficha() {
       supabase.from('op_trabajadores').select('*').eq('id', id).single(),
       supabase.from('op_asignaciones').select('*').eq('trabajador_id', id).order('desde', { ascending: false }),
       supabase.from('op_turnos').select('*').eq('trabajador_id', id).order('sube', { ascending: false }),
-      supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'),
+      traerContratosOp(),
       supabase.from('op_vuelos').select('*').eq('trabajador_id', id).order('fecha'),
       supabase.from('op_cupos').select('*').eq('trabajador_id', id).limit(1),
     ])

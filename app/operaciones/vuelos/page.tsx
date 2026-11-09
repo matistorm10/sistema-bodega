@@ -1,4 +1,5 @@
 'use client'
+import { traerContratosOp } from '@/lib/operaciones'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AZUL } from '@/lib/theme'
@@ -20,7 +21,7 @@ export default function VuelosPasajes() {
   const [fEstado, setFEstado] = useState('por_comprar'); const [fOrigen, setFOrigen] = useState(''); const [fTipo, setFTipo] = useState(''); const [q, setQ] = useState(''); const [pasados, setPasados] = useState(false)
   const [ed, setEd] = useState<Vuelo | null>(null)
   const [contratos, setContratos] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [fContrato, setFContrato] = useState<string[]>([])
-  const cargar = async () => { const [v, t, a, c] = await Promise.all([traerTodo('op_vuelos', '*', 'fecha'), traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre')]); setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a); setContratos([...(c.data || []), { id: BACKOFFICE_ID, nombre: 'Back Office', referencia: null, cliente: null }]); setCargando(false) }
+  const cargar = async () => { const [v, t, a, c] = await Promise.all([traerTodo('op_vuelos', '*', 'fecha'), traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerContratosOp()]); setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a); setContratos([...(c.data || []), { id: BACKOFFICE_ID, nombre: 'Back Office', referencia: null, cliente: null }]); setCargando(false) }
   useEffect(() => { cargar() }, [])
   const tr = (id: string) => trab.find(t => t.id === id)
   // el vuelo pertenece al contrato en que el trabajador estaba asignado en la fecha del viaje (o Back Office)

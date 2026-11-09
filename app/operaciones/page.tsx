@@ -1,4 +1,5 @@
 'use client'
+import { traerContratosOp } from '@/lib/operaciones'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
@@ -24,7 +25,7 @@ export default function Operaciones() {
   useEffect(() => {
     (async () => {
       try {
-        const [t, a, tu, vu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), traerTodo('op_vuelos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia,activo').order('nombre')])
+        const [t, a, tu, vu, c] = await Promise.all([traerTodo('op_trabajadores'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), traerTodo('op_vuelos'), traerContratosOp('id,nombre,cliente:pr_clientes_informe(nombre),referencia,activo')])
         setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setVuelos(vu as Vuelo[]); setContratos(c.data || [])
       } catch (e: any) { setError(e.message || 'No se pudo cargar') }
       setCargando(false)

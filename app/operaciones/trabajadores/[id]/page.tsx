@@ -11,7 +11,7 @@ import FechaNac from '@/components/operaciones/FechaNac'
 import CargoSelect, { useCargos } from '@/components/operaciones/CargoSelect'
 import CiudadSelect from '@/components/operaciones/CiudadSelect'
 import { useCiudades } from '@/components/operaciones/useCiudades'
-import { ESTATUS_CONTRATO, EXAMENES, MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { retirarTrabajador, MOTIVOS_RETIRO, ESTATUS_CONTRATO, EXAMENES, MODALIDADES, etiquetaContrato, TIPOS_PERSONAL, hoyISO, sumarDias, fechaCorta, diasEntre, TIPOS_CONTRATO, msgError, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 const vacio = { contrato_id: '', desde: hoyISO(), regimen: '', tipo_contrato: '', vence: '', sueldo: '', condiciones: '' }
 export default function Ficha() {
@@ -83,21 +83,8 @@ export default function Ficha() {
     if (!ret.fecha) { setMsgR('Indica la fecha de retiro.'); return }
     const futuros = vuelos.filter(v => v.fecha > ret.fecha).length
     if (!confirm(`Retirar a ${t.nombre} del control de personal desde el ${fechaCorta(ret.fecha)}.\nSe conserva toda su información e historial. Sus contratos y turnos abiertos terminan esa fecha${futuros ? ` y quedan ${futuros} vuelo(s) posterior(es) sin gestionar` : ''}. ¿Confirmas?`)) return
-    try {
-      for (const a of asigs) if (a.desde <= ret.fecha && (!a.hasta || a.hasta > ret.fecha)) { const { error } = await supabase.from('op_asignaciones').update({ hasta: ret.fecha }).eq('id', a.id); if (error) throw error }
-      for (const x of turnos) if (x.sube <= ret.fecha && (!x.baja || x.baja > ret.fecha)) { const { error } = await supabase.from('op_turnos').update({ baja: ret.fecha }).eq('id', x.id); if (error) throw error }
-      if (cupo) {
-        // Si ya hay un cupo de reemplazo para este trabajador, el reemplazo pasa a ser el cupo base; si no, el cupo queda vacante
-        const rep = await supabase.from('op_cupos').select('id').eq('reemplaza_trabajador_id', id).limit(1)
-        if (rep.data && rep.data[0]) {
-          const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error
-          const e2 = await supabase.from('op_cupos').update({ es_reemplazo: false, reemplaza_trabajador_id: null }).eq('id', rep.data[0].id); if (e2.error) throw e2.error
-          const e3 = await supabase.from('op_cupos').delete().eq('id', cupo.id); if (e3.error) throw e3.error
-        } else { const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error }
-      }
-      const { error } = await supabase.from('op_trabajadores').update({ activo: false, fecha_retiro: ret.fecha, motivo_retiro: [ret.motivo, ret.nota.trim()].filter(Boolean).join(' · ') }).eq('id', id)
-      if (error) throw error
-    } catch (e) { setMsgR(msgError(e)); return }
+    const e = await retirarTrabajador(id, ret.fecha, ret.motivo, ret.nota)
+    if (e) { setMsgR(msgError(e)); return }
     setVerRet(false); cargar()
   }
   const reintegrar = async () => {
@@ -172,7 +159,7 @@ export default function Ficha() {
         {verRet && (
           <div style={{ marginTop: '10px', background: '#fff5f5', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: '0 1 150px' }}><label style={label}>Fecha de retiro *</label><input type="date" min="2000-01-01" max="2100-12-31" value={ret.fecha} onChange={e => setRet({ ...ret, fecha: e.target.value })} style={input} /></div>
-            <div style={{ flex: '1 1 180px' }}><label style={label}>Motivo</label><select value={ret.motivo} onChange={e => setRet({ ...ret, motivo: e.target.value })} style={input}>{['Término de contrato', 'Renuncia', 'Despido', 'No continúa en el proyecto', 'Exámenes rechazados', 'Otro'].map(m => <option key={m}>{m}</option>)}</select></div>
+            <div style={{ flex: '1 1 180px' }}><label style={label}>Motivo</label><select value={ret.motivo} onChange={e => setRet({ ...ret, motivo: e.target.value })} style={input}>{MOTIVOS_RETIRO.map(m => <option key={m}>{m}</option>)}</select></div>
             <div style={{ flex: '2 1 220px' }}><label style={label}>Observación</label><input value={ret.nota} onChange={e => setRet({ ...ret, nota: e.target.value })} style={input} /></div>
             <button onClick={retirar} style={btn(false, true)}>Confirmar retiro</button>
             {msgR && <p style={{ width: '100%', margin: 0, fontSize: '12.5px', color: '#c5221f' }}>{msgR}</p>}

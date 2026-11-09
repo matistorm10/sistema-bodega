@@ -138,3 +138,42 @@ export async function guardarPlan(plan: PlanTurnos): Promise<string | null> {
     return null
   } catch (e) { return msgError(e) }
 }
+
+// Fallos: días de turno en que el trabajador no estuvo (se descuentan de los días trabajados para la nómina)
+export const FALLOS: Record<string, { t: string, l: string, color: string }> = {
+  inasistencia: { t: 'Inasistencia', l: 'I', color: '#b42318' },
+  permiso: { t: 'Permiso', l: 'P', color: '#7c3aed' },
+  licencia: { t: 'Licencia médica', l: 'L', color: '#0e7490' },
+  accidente: { t: 'Accidente laboral', l: 'A', color: '#c2410c' },
+  vacaciones: { t: 'Vacaciones', l: 'V', color: '#4d7c0f' },
+  otro: { t: 'Otro', l: 'O', color: '#475467' },
+}
+export type Fallo = { id?: string, trabajador_id: string, fecha: string, motivo: string, notas?: string | null }
+export const MOTIVOS_RETIRO = ['Renuncia', 'Término de contrato', 'Despido', 'No continúa en el proyecto', 'Exámenes rechazados', 'Otro']
+
+// Retiro del control de personal: no se borra nada; se cierran el contrato y el turno abiertos a la fecha de retiro y se libera el cupo.
+// Devuelve un error (o null si salió bien).
+export async function retirarTrabajador(id: string, fecha: string, motivo: string, nota: string): Promise<any | null> {
+  try {
+    const [a, tu, cp] = await Promise.all([
+      supabase.from('op_asignaciones').select('id,desde,hasta').eq('trabajador_id', id),
+      supabase.from('op_turnos').select('id,sube,baja').eq('trabajador_id', id),
+      supabase.from('op_cupos').select('id').eq('trabajador_id', id).limit(1),
+    ])
+    for (const x of a.data || []) if (x.desde <= fecha && (!x.hasta || x.hasta > fecha)) { const { error } = await supabase.from('op_asignaciones').update({ hasta: fecha }).eq('id', x.id); if (error) throw error }
+    for (const x of tu.data || []) if (x.sube <= fecha && (!x.baja || x.baja > fecha)) { const { error } = await supabase.from('op_turnos').update({ baja: fecha }).eq('id', x.id); if (error) throw error }
+    const cupo = cp.data?.[0]
+    if (cupo) {
+      // Si ya hay un cupo de reemplazo para este trabajador, el reemplazo pasa a ser el cupo base; si no, el cupo queda vacante
+      const rep = await supabase.from('op_cupos').select('id').eq('reemplaza_trabajador_id', id).limit(1)
+      if (rep.data && rep.data[0]) {
+        const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error
+        const e2 = await supabase.from('op_cupos').update({ es_reemplazo: false, reemplaza_trabajador_id: null }).eq('id', rep.data[0].id); if (e2.error) throw e2.error
+        const e3 = await supabase.from('op_cupos').delete().eq('id', cupo.id); if (e3.error) throw e3.error
+      } else { const e1 = await supabase.from('op_cupos').update({ trabajador_id: null }).eq('id', cupo.id); if (e1.error) throw e1.error }
+    }
+    const { error } = await supabase.from('op_trabajadores').update({ activo: false, fecha_retiro: fecha, motivo_retiro: [motivo, nota.trim()].filter(Boolean).join(' · ') }).eq('id', id)
+    if (error) throw error
+    return null
+  } catch (e) { return e }
+}

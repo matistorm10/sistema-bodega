@@ -9,7 +9,8 @@ import Marco from '@/components/operaciones/Marco'
 import PuntoExamen from '@/components/operaciones/PuntoExamen'
 import PanelVuelos from '@/components/operaciones/PanelVuelos'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { BACKOFFICE_ID, type Cupo, ESTATUS_CONTRATO, resumenVuelo, planRango, aplicarPlanLocal, guardarPlan, type PlanTurnos, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { construirNomina, nombreMesLargo } from '@/lib/nominaMensual'
+import { BACKOFFICE_ID, FALLOS, MOTIVOS_RETIRO, retirarTrabajador, type Fallo, type Cupo, ESTATUS_CONTRATO, resumenVuelo, planRango, aplicarPlanLocal, guardarPlan, type PlanTurnos, msgError, TIPOS_CONTRATO, diasEntre, etiquetaContrato, cmpPersonal, TIPOS_PERSONAL, traerTodo, hoyISO, sumarDias, fechaCorta, DIAS_SEM, descargarXlsx, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function GrillaTurnos() {
   const hoy = hoyISO()
@@ -29,15 +30,18 @@ export default function GrillaTurnos() {
   const ndias = diasEntre(desde, finVentana) + 1
   const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
-  const [modo, setModo] = useState<'turno' | 'vuelo'>('turno')
+  const [modo, setModo] = useState<'turno' | 'vuelo' | 'fallo'>('turno')
+  const [fallos, setFallos] = useState<Fallo[]>([]); const [motivoFallo, setMotivoFallo] = useState('inasistencia')
+  const [rt, setRt] = useState<{ t: any, fecha: string, motivo: string, nota: string } | null>(null); const [msgRt, setMsgRt] = useState('')
+  const [nm, setNm] = useState<{ mes: string } | null>(null)
   const [msg, setMsg] = useState('')
   const [pv, setPv] = useState<{ t: any, dia: string } | null>(null)
   const [ec, setEc] = useState<{ id: string, contrato_id: string, desde: string, nombre: string, contrato: string, tipo_contrato: string, vence: string, hasta: string, regimen: string, sueldo: string, condiciones: string, estatus: string, estatus_fecha: string, o_tipo: string, o_vence: string } | null>(null)
   const [msgEc, setMsgEc] = useState('')
 
   const cargar = async () => {
-    const [t, a, tu, c, v, cp] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos')])
-    setCupos(cp as Cupo[])
+    const [t, a, tu, c, v, cp, fa] = await Promise.all([traerTodo('op_trabajadores', '*', 'nombre'), traerTodo('op_asignaciones'), traerTodo('op_turnos'), supabase.from('pr_contratos').select('id,nombre,cliente:pr_clientes_informe(nombre),referencia').order('nombre'), traerTodo('op_vuelos'), traerTodo('op_cupos'), traerTodo('op_fallos')])
+    setCupos(cp as Cupo[]); setFallos(fa as Fallo[])
     setVuelos(v as Vuelo[]); setTrab(t); setAsigs(a as Asig[]); setTurnos(tu as Turno[]); setContratos([...(c.data || []), { id: BACKOFFICE_ID, nombre: 'Back Office', referencia: null, cliente: null }]); setCargando(false)
   }
   // Recuerda filtros, mes y modo para que al volver desde una ficha la grilla quede como estaba
@@ -49,7 +53,7 @@ export default function GrillaTurnos() {
   useEffect(() => {
     try {
       const g = sessionStorage.getItem('op_turnos_estado')
-      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (e.modo === 'turno' || e.modo === 'vuelo') setModo(e.modo) }
+      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (e.modo === 'turno' || e.modo === 'vuelo' || e.modo === 'fallo') setModo(e.modo) }
     } catch {}
     try { const c = new URLSearchParams(window.location.search).get('contrato'); if (c) setContrato(c.split(',').filter(Boolean)) } catch {}
     setListo(true)
@@ -57,6 +61,7 @@ export default function GrillaTurnos() {
   }, [])
   const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
   const vueloDe = useMemo(() => { const m = new Map<string, Vuelo[]>(); vuelos.forEach(v => { const k = v.trabajador_id + '|' + v.fecha; m.set(k, [...(m.get(k) || []), v]) }); return m }, [vuelos])
+  const falloDe = useMemo(() => { const m = new Map<string, Fallo>(); fallos.forEach(f => m.set(f.trabajador_id + '|' + f.fecha, f)); return m }, [fallos])
   const dias = useMemo(() => Array.from({ length: ndias }, (_, i) => sumarDias(desde, i)), [desde, ndias])
   const hasta = dias[dias.length - 1]
 
@@ -112,6 +117,14 @@ export default function GrillaTurnos() {
     return libro
   })
 
+  const confirmarRetiro = async () => {
+    if (!rt) return
+    if (!rt.fecha) { setMsgRt('Indica la fecha (último día en la empresa).'); return }
+    const e = await retirarTrabajador(rt.t.id, rt.fecha, rt.motivo, rt.nota)
+    if (e) { setMsgRt(msgError(e)); return }
+    setRt(null); setMsg(`${rt.t.nombre} quedó retirado desde el ${fechaCorta(rt.fecha)}. Sigue apareciendo en la nómina del mes.`); cargar()
+  }
+  const descargarNomina = () => { if (!nm) return; const mes = nm.mes; setNm(null); descargarXlsx(`Nomina_${mes}.xlsx`, async (X) => construirNomina(X, { mes, trab, asigs, turnos, fallos, contratoSel: contrato, nCont })) }
   const cola = useRef<Promise<void>>(Promise.resolve())
   const turnosRef = useRef<Turno[]>([]); turnosRef.current = turnos
   const clicCelda = (f: { t: any }, i: number) => { setMsg(''); if (modo === 'vuelo') setPv({ t: f.t, dia: dias[i] }) }
@@ -127,6 +140,19 @@ export default function GrillaTurnos() {
       for (const p of planes) { const e = await guardarPlan(p); if (e) { setMsg(e); const tu = await traerTodo('op_turnos'); setTurnos(tu as Turno[]); return } }
     })
   }
+  // Fallos (días de turno sin presentarse): la pantalla cambia al instante y el guardado va en segundo plano, en orden
+  const fallosRef = useRef<Fallo[]>([]); fallosRef.current = fallos
+  const cambiarFallos = (cambios: { trabId: string, fecha: string, motivo: string | null }[]) => {
+    let lista = fallosRef.current
+    for (const c of cambios) lista = [...lista.filter(f => !(f.trabajador_id === c.trabId && f.fecha === c.fecha)), ...(c.motivo ? [{ trabajador_id: c.trabId, fecha: c.fecha, motivo: c.motivo }] : [])]
+    fallosRef.current = lista; setFallos(lista)
+    cola.current = cola.current.then(async () => {
+      const poner = cambios.filter(c => c.motivo).map(c => ({ trabajador_id: c.trabId, fecha: c.fecha, motivo: c.motivo }))
+      if (poner.length) { const { error } = await supabase.from('op_fallos').upsert(poner, { onConflict: 'trabajador_id,fecha' }); if (error) { setMsg(msgError(error)); setFallos(await traerTodo('op_fallos') as Fallo[]); return } }
+      const quitar = new Map<string, string[]>(); cambios.filter(c => !c.motivo).forEach(c => quitar.set(c.trabId, [...(quitar.get(c.trabId) || []), c.fecha]))
+      for (const [tid, fs] of Array.from(quitar)) { const { error } = await supabase.from('op_fallos').delete().eq('trabajador_id', tid).in('fecha', fs); if (error) { setMsg(msgError(error)); setFallos(await traerTodo('op_fallos') as Fallo[]); return } }
+    })
+  }
   // Selección arrastrando el mouse: un solo clic cambia una celda; arrastrar cambia varias (de una o varias filas)
   const sel = useRef<{ r0: number, c0: number, r1: number, c1: number, on: boolean } | null>(null)
   const marcadas = useRef<HTMLElement[]>([])
@@ -137,9 +163,10 @@ export default function GrillaTurnos() {
     for (let r = ra; r <= rb; r++) for (let c = ca; c <= cb; c++) { const el = document.querySelector<HTMLElement>(`td[data-r="${r}"][data-c="${c}"]`); if (el) { el.style.boxShadow = 'inset 0 0 0 2px #1B4F9C'; el.style.filter = 'brightness(.85)'; marcadas.current.push(el) } }
   }
   const empezarSel = (e: React.MouseEvent, ix: number, i: number) => {
-    if (modo !== 'turno' || e.button !== 0) return
+    if ((modo !== 'turno' && modo !== 'fallo') || e.button !== 0) return
     e.preventDefault(); setMsg('')
-    sel.current = { r0: ix, c0: i, r1: ix, c1: i, on: !filas[ix].celdas[i].en }; pintarSel()
+    const hay = falloDe.get(filas[ix].t.id + '|' + dias[i])
+    sel.current = { r0: ix, c0: i, r1: ix, c1: i, on: modo === 'fallo' ? hay?.motivo !== motivoFallo : !filas[ix].celdas[i].en }; pintarSel()
   }
   const moverSel = (e: React.MouseEvent) => {
     if (!sel.current) return
@@ -150,6 +177,17 @@ export default function GrillaTurnos() {
   const terminarSel = () => {
     const s = sel.current; sel.current = null; limpiarSel(); if (!s) return
     const [ra, rb] = [Math.min(s.r0, s.r1), Math.max(s.r0, s.r1)], [ca, cb] = [Math.min(s.c0, s.c1), Math.max(s.c0, s.c1)]
+    if (modo === 'fallo') {
+      const cf: { trabId: string, fecha: string, motivo: string | null }[] = []; let fuera = 0
+      for (let r = ra; r <= rb; r++) { const f = filas[r]; if (!f) continue; for (let c = ca; c <= cb; c++) {
+        const hay = falloDe.get(f.t.id + '|' + dias[c])
+        if (s.on) { if (f.celdas[c]?.en) cf.push({ trabId: f.t.id, fecha: dias[c], motivo: motivoFallo }); else fuera++ }
+        else if (hay) cf.push({ trabId: f.t.id, fecha: dias[c], motivo: null })
+      } }
+      if (cf.length === 0) { setMsg(fuera ? 'Los fallos se marcan solo en días de turno (celdas verdes).' : ''); return }
+      if (fuera) setMsg(`${fuera} celda(s) que no eran día de turno no se modificaron.`)
+      cambiarFallos(cf); return
+    }
     const cambios: { trabId: string, a: string, b: string, on: boolean }[] = []; let sinContrato = 0
     for (let r = ra; r <= rb; r++) {
       const f = filas[r]; if (!f) continue
@@ -213,9 +251,11 @@ export default function GrillaTurnos() {
         <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} · desplázate a la derecha</span>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={soloActivos} onChange={e => setSoloActivos(e.target.checked)} />Solo activos</label>
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
-          {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos']] as const).map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
+          {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
         </div>
-        <button onClick={descargar} style={{ ...btn(), marginLeft: 'auto' }}>⬇ Descargar Excel</button>
+        {modo === 'fallo' && <select value={motivoFallo} onChange={e => setMotivoFallo(e.target.value)} style={{ ...input, width: 'auto', fontWeight: 700, borderColor: FALLOS[motivoFallo].color, color: FALLOS[motivoFallo].color }} title="Motivo con que se marcarán las celdas">{Object.entries(FALLOS).map(([k, v]) => <option key={k} value={k}>{v.l} · {v.t}</option>)}</select>}
+        <button onClick={() => setNm({ mes: hoy.slice(0, 7) })} style={{ ...btn(), marginLeft: 'auto' }}>📑 Nómina mensual</button>
+        <button onClick={descargar} style={btn(false)}>⬇ Descargar Excel</button>
       </div>
       {msg && <div onClick={() => setMsg('')} style={{ position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)', zIndex: 70, maxWidth: '90vw', background: '#fff', border: '1px solid #f3b4b4', borderLeft: '4px solid #c5221f', color: '#9b1c1c', fontSize: '13px', padding: '10px 14px', borderRadius: '10px', boxShadow: '0 6px 24px rgba(16,24,40,.2)', cursor: 'pointer' }}>{msg}</div>}
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
@@ -228,7 +268,7 @@ export default function GrillaTurnos() {
               {vac > 0 && chip(vac, vac === 1 ? 'cupo vacante por rellenar' : 'cupos vacantes por rellenar', '#fde2e1', '#7a1212')}
               {porContratar.length - vac > 0 && chip(porContratar.length - vac, 'por asignar al contrato', '#fff3cd', '#7a4b00')}
             </div>) })()}
-          <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
+          <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : modo === 'fallo' ? 'Elige el motivo y haz clic (o arrastra) sobre días de turno en que el trabajador no se presentó; vuelve a hacer clic para quitar el fallo. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
           <table onMouseOver={e => { alPasar(e); moverSel(e) }} onMouseLeave={alSalir} style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 486 + dias.length * W }}>
             <thead>
               <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '172px', minWidth: '172px', maxWidth: '172px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 4, top: 0 }}>Trabajador</th><th style={{ ...CH, ...ST(172), width: '100px', minWidth: '100px', top: 0, zIndex: 4 }}>Cargo</th><th style={{ ...CH, ...ST(272), width: '96px', minWidth: '96px', top: 0, zIndex: 4 }}>Origen</th><th style={{ ...CH, ...ST(368), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd', top: 0, zIndex: 4 }}>Contrato / plazo</th>
@@ -240,17 +280,18 @@ export default function GrillaTurnos() {
                 <Fragment key={f.t.id}>
                 {(ix === 0 || filas[ix - 1].t.tipo_personal !== f.t.tipo_personal) && <tr><td colSpan={dias.length + 4} style={{ background: f.t.tipo_personal === 'indirecto' ? '#fff3cd' : '#f2f4f7', fontWeight: 700, fontSize: '11px', padding: 0, color: '#475467' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>{f.t.tipo_personal === 'indirecto' ? 'INDIRECTOS' : f.t.tipo_personal === 'backoffice' ? 'BACK OFFICE' : 'DIRECTOS'} ({filas.filter(x => x.t.tipo_personal === f.t.tipo_personal).length})</div></td></tr>}
                 <tr style={{ borderTop: '1px solid #eef1f6' }}>
-                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '172px', minWidth: '172px', maxWidth: '172px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}><span style={{ display: 'inline-block', width: '20px', fontSize: '10px', color: '#98a2b3', textAlign: 'right', marginRight: '5px', verticalAlign: 'middle' }}>{nroGrupo[ix]}</span><PuntoExamen estado={f.t.examenes} /><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
+                  <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '172px', minWidth: '172px', maxWidth: '172px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }} title={f.t.nombre}>{f.t.activo && <button onClick={() => { setMsgRt(''); setRt({ t: f.t, fecha: hoy, motivo: 'Renuncia', nota: '' }) }} title="Registrar renuncia / término / retiro" style={{ float: 'right', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', padding: '0 0 0 2px', opacity: .55 }}>🚪</button>}<span style={{ display: 'inline-block', width: '20px', fontSize: '10px', color: '#98a2b3', textAlign: 'right', marginRight: '5px', verticalAlign: 'middle' }}>{nroGrupo[ix]}</span><PuntoExamen estado={f.t.examenes} /><Link href={`/operaciones/trabajadores/${f.t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{f.t.nombre}</Link></td>
                   <td style={{ ...CC, ...ST(172), width: '100px', minWidth: '100px', maxWidth: '100px', color: '#667085' }} title={f.t.cargo || ''}>{f.t.cargo || '—'}</td>
                   <td style={{ ...CC, ...ST(272), width: '96px', minWidth: '96px', maxWidth: '96px' }}>{!f.t.ciudad ? <span style={{ color: '#b7791f', fontSize: '10.5px' }}>sin definir</span> : f.t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '10.5px', padding: '1px 7px', borderRadius: '10px', background: '#e8f0fe', color: '#1B4F9C', fontWeight: 700, whiteSpace: 'nowrap' }} title={f.t.ciudad}>{f.t.ciudad}</span> : <span style={{ fontSize: '11px', color: '#667085' }} title={f.t.ciudad}>{f.t.ciudad}</span>}</td>
                   <td style={{ ...CC, ...ST(368), width: '118px', minWidth: '118px', maxWidth: '118px', borderRight: '1px solid #d0d5dd' }}>{(() => { const v = f.t.tipo_personal === 'backoffice' ? { bg: '#e8f0fe', col: '#1B4F9C', t: 'Back Office' } : venc(f.vista); return <><button onClick={() => f.t.tipo_personal !== 'backoffice' && abrirContrato(f)} title={f.t.tipo_personal === 'backoffice' ? 'Personal de casa matriz: sin contrato en este sistema' : `${nCont(f.vista.contrato_id)} · clic para editar`} style={{ border: 'none', cursor: f.t.tipo_personal === 'backoffice' ? 'default' : 'pointer', fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: v.bg, color: v.col, maxWidth: f.vista.estatus_contrato ? 'calc(100% - 20px)' : '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{v.t}</button>{f.vista.estatus_contrato && <span title={`${ESTATUS_CONTRATO[f.vista.estatus_contrato]}${f.vista.estatus_fecha ? ' · ' + fechaCorta(f.vista.estatus_fecha) : ''}`} style={{ marginLeft: '4px', fontSize: '13px', verticalAlign: 'middle', cursor: 'help' }}>{f.vista.estatus_contrato === 'proceso_finiquito' ? '⛔' : '✉️'}</span>}</> })()}</td>
-                  {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const fin = !!c.a && !!c.a.vence && c.a.vence === dias[i] && c.a.tipo_contrato !== 'indefinido'; const tip = [fin ? `Fin de contrato (${c.a?.tipo_contrato === 'pf1' ? 'PF1' : c.a?.tipo_contrato === 'pf2' ? 'PF2' : 'plazo'}) ${fechaCorta(c.a?.vence)}` : '', vs?.map(resumenVuelo).join(' / ')].filter(Boolean).join(' · ')
-                    return <td key={i} data-c={i} data-r={ix} onMouseDown={e => empezarSel(e, ix, i)} onClick={() => clicCelda(f, i)} title={tip} style={{ cursor: 'pointer', userSelect: 'none', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs ? '11px' : undefined }}>{vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
+                  {f.celdas.map((c, i) => { const vs = vueloDe.get(f.t.id + '|' + dias[i]); const fl = falloDe.get(f.t.id + '|' + dias[i]); const fin = !!c.a && !!c.a.vence && c.a.vence === dias[i] && c.a.tipo_contrato !== 'indefinido'; const tip = [fin ? `Fin de contrato (${c.a?.tipo_contrato === 'pf1' ? 'PF1' : c.a?.tipo_contrato === 'pf2' ? 'PF2' : 'plazo'}) ${fechaCorta(c.a?.vence)}` : '', vs?.map(resumenVuelo).join(' / ')].filter(Boolean).join(' · ')
+                    return <td key={i} data-c={i} data-r={ix} onMouseDown={e => empezarSel(e, ix, i)} onClick={() => clicCelda(f, i)} title={fl ? `Fallo: ${FALLOS[fl.motivo]?.t || fl.motivo}${tip ? ' · ' + tip : ''}` : tip} style={{ cursor: 'pointer', userSelect: 'none', width: W, minWidth: W, height: '22px', textAlign: 'center', fontWeight: 700, background: fl ? (FALLOS[fl.motivo]?.color || '#b42318') : vs ? (vs.some(v => v.estado === 'por_comprar') ? '#dc2626' : '#f59e0b') : c.en ? '#1e8e4e' : !c.a ? '#eef1f6' : fin ? '#fde2e1' : dias[i] === hoy ? '#fff8e5' : undefined, borderRight: fin ? '4px solid #7a1212' : undefined, color: '#fff', borderLeft: dias[i].endsWith('-01') ? '2px solid #98a2b3' : '1px solid #f2f4f7', fontSize: vs && !fl ? '11px' : undefined }}>{fl ? (FALLOS[fl.motivo]?.l || 'O') : vs ? (vs.some(v => v.estado === 'por_comprar') ? '⏳' : vs[0].medio === 'bus' ? '🚌' : '✈') : c.en ? '1' : ''}</td> })}
                 </tr></Fragment>))}
               {porContratar.length > 0 && <tr><td colSpan={dias.length + 4} style={{ background: '#fde2e1', fontWeight: 700, fontSize: '11px', padding: 0, color: '#7a1212' }}><div style={{ position: 'sticky', left: 12, width: 'fit-content', padding: '3px 0' }}>POR CONTRATAR ({porContratar.length}) · cargos vendidos sin trabajador o sin contrato</div></td></tr>}
-              {porContratar.map(c => { const t = c.trabajador_id ? trab.find(x => x.id === c.trabajador_id) : null; return (
+              {porContratar.map((c, cx) => { const t = c.trabajador_id ? trab.find(x => x.id === c.trabajador_id) : null; return (
                 <tr key={c.id} style={{ borderTop: '1px solid #eef1f6' }}>
                   <td style={{ position: 'sticky', left: 0, background: '#fff', padding: '3px 6px 3px 12px', width: '172px', minWidth: '172px', maxWidth: '172px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 1 }}>
+                    <span style={{ display: 'inline-block', width: '20px', fontSize: '10px', color: '#98a2b3', textAlign: 'right', marginRight: '5px', verticalAlign: 'middle' }}>{cx + 1}</span>
                     {t ? <><PuntoExamen estado={t.examenes} /><Link href={`/operaciones/trabajadores/${t.id}?desde=turnos`} style={{ color: AZUL, textDecoration: 'none', fontWeight: 600 }}>{t.nombre}</Link></>
                       : <button onClick={() => abrirCupo(c)} title="Cubrir este cupo con un trabajador" style={{ border: '1px dashed #b42318', background: '#fff5f5', color: '#b42318', borderRadius: '6px', fontSize: '11px', fontWeight: 700, padding: '1px 8px', cursor: 'pointer' }}>＋ Vacante</button>}
                   </td>
@@ -265,6 +306,33 @@ export default function GrillaTurnos() {
               </tr>
             </tbody>
           </table>
+        </div>
+      )}
+      {rt && (
+        <div onClick={() => setRt(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '420px' }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>Registrar salida de {rt.t.nombre}</p>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Se cierran su contrato y turno a esa fecha y se libera el cupo. No se borra nada: seguirá apareciendo en la nómina de ese mes.</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 140px' }}><label style={label}>Último día *</label><input type="date" min="2000-01-01" max="2100-12-31" value={rt.fecha} onChange={e => setRt({ ...rt, fecha: e.target.value })} style={input} /></div>
+              <div style={{ flex: '1 1 160px' }}><label style={label}>Motivo</label><select value={rt.motivo} onChange={e => setRt({ ...rt, motivo: e.target.value })} style={input}>{MOTIVOS_RETIRO.map(m => <option key={m}>{m}</option>)}</select></div>
+              <div style={{ flex: '1 1 100%' }}><label style={label}>Observación (opcional)</label><input value={rt.nota} onChange={e => setRt({ ...rt, nota: e.target.value })} style={input} /></div>
+            </div>
+            {msgRt && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msgRt}</p>}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}><button onClick={confirmarRetiro} style={btn(false, true)}>Confirmar salida</button><button onClick={() => setRt(null)} style={btn(false)}>Cancelar</button></div>
+          </div>
+        </div>
+      )}
+      {nm && (
+        <div onClick={() => setNm(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '430px' }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '14px' }}>Nómina mensual para sueldos</p>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#667085' }}>Excel con todos los que estuvieron en el contrato durante el mes (también los que salieron), calendario de días en faena, fallos descontados y columnas en blanco para trato, horas extras y otros montos.</p>
+            <label style={label}>Mes</label>
+            <select value={nm.mes} onChange={e => setNm({ mes: e.target.value })} style={input}>{Array.from({ length: 8 }, (_, i) => { const d = new Date(hoy.slice(0, 7) + '-01T12:00:00'); d.setMonth(d.getMonth() - 6 + i); const m = d.toISOString().slice(0, 7); return <option key={m} value={m}>{nombreMesLargo(m)}</option> })}</select>
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#475467' }}>Contratos: <strong>{contrato.length === 0 ? 'todos' : contrato.map(id => nCont(id)).join(' | ')}</strong> (según el filtro de arriba). El personal Back Office no se incluye (no tiene turnos).</p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}><button onClick={descargarNomina} style={btn()}>⬇ Descargar nómina</button><button onClick={() => setNm(null)} style={btn(false)}>Cancelar</button></div>
+          </div>
         </div>
       )}
       {cu && (

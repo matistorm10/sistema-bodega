@@ -3,18 +3,21 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { btn, input, label } from '@/components/programa/ui'
 import { useCiudades } from './useCiudades'
+import { formatearRut } from '@/lib/rut'
 import { fechaCorta, msgError, AEROLINEAS, LUGARES, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
 
 const vacioV = { estado: 'por_comprar', tipo: '', medio: 'vuelo', aerolinea: '', origen: '', destino: '', hora_salida: '', hora_llegada: '', reserva: '', notas: '' }
 const desde = (v: Vuelo) => ({ estado: v.estado || 'comprado', tipo: v.tipo || '', medio: v.medio || 'vuelo', aerolinea: v.aerolinea || '', origen: v.origen || '', destino: v.destino || '', hora_salida: v.hora_salida || '', hora_llegada: v.hora_llegada || '', reserva: v.reserva || '', notas: v.notas || '' })
 
 // Vuelo/bus de un trabajador en un día: solo uno por día. Si existe se edita; si no, se crea. «Por comprar» solo pide el tipo; «Comprado» exige todos los datos (salvo notas).
-export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { ciudad?: string | null, examenes?: string | null } }) {
+export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador }: { trabId: string, dia: string, vuelos: Vuelo[], onCambio: () => void, trabajador?: { id?: string, nombre?: string | null, rut?: string | null, fecha_nacimiento?: string | null, ciudad?: string | null, examenes?: string | null } }) {
   const { aeropuertoDe } = useCiudades()
   const existente = vuelos[0] || null
   const [f, setF] = useState(existente ? desde(existente) : { ...vacioV })
   const [msg, setMsg] = useState(''); const [ok, setOk] = useState(false)
   useEffect(() => { setF(existente ? desde(existente) : { ...vacioV }) }, [existente?.id, dia, trabId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [copiado, setCopiado] = useState('')
+  const copiar = async (k: string, v: string) => { try { await navigator.clipboard.writeText(v); setCopiado(k); setTimeout(() => setCopiado(''), 1500) } catch { /* sin permiso de portapapeles */ } }
   const esVuelo = f.medio === 'vuelo'
   const porComprar = f.estado === 'por_comprar'
   const faltan = porComprar ? [!f.tipo && 'tipo'].filter(Boolean) as string[] : [
@@ -44,6 +47,22 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
   if (trabajador && trabajador.examenes && trabajador.examenes !== 'aprobado') return <p style={{ margin: 0, fontSize: '13px', color: '#b7791f' }}>Los pasajes se habilitan cuando los exámenes del trabajador estén aprobados (hoy: {trabajador.examenes}). Cámbialo en su ficha.</p>
   return (
     <div>
+      {trabajador && (() => {
+        const rut = trabajador.rut ? formatearRut(trabajador.rut) : ''
+        const nac = trabajador.fecha_nacimiento ? fechaCorta(trabajador.fecha_nacimiento).replace(/-/g, '/') : ''
+        const dato = (k: string, t: string, v: string) => (
+          <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+            <div style={{ fontSize: '10.5px', color: '#667085', textTransform: 'uppercase', letterSpacing: '.03em' }}>{t}</div>
+            {v ? <button type="button" onClick={() => copiar(k, v)} title="Clic para copiar" style={{ all: 'unset', cursor: 'copy', fontSize: '13.5px', fontWeight: 700, color: '#16213E', wordBreak: 'break-word' }}>{v} <span style={{ fontSize: '11px', fontWeight: 600, color: copiado === k ? '#1e8e4e' : '#1B4F9C' }}>{copiado === k ? '✓ copiado' : '📋'}</span></button>
+              : <span style={{ fontSize: '13px', color: '#c5221f', fontWeight: 600 }}>Falta — complétalo en la ficha</span>}
+          </div>)
+        return (
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', background: '#f4f8fd', border: '1px solid #cfe0f5', borderRadius: '10px', padding: '9px 12px', margin: '0 0 10px' }}>
+            {dato('n', 'Nombre completo', trabajador.nombre || '')}
+            {dato('r', 'RUT', rut)}
+            {dato('f', 'Fecha de nacimiento', nac)}
+          </div>)
+      })()}
       <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '13px' }}>{existente ? 'Editar' : 'Agregar'} vuelo / bus del {fechaCorta(dia)}</p>
       {vuelos.length > 1 && <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#b7791f' }}>Este día tiene {vuelos.length} registros (de la carga inicial). Se edita el primero; deja solo uno.</p>}
       <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475467' }}>Origen: <strong>{trabajador?.ciudad || 'sin ciudad definida'}</strong>{aeropuerto ? ` · aeropuerto ${aeropuerto}` : ''}</p>

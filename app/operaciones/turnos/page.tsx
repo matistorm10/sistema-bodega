@@ -221,6 +221,13 @@ export default function GrillaTurnos() {
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
         <div style={{ ...card, padding: 0, overflow: 'auto', maxHeight: 'calc(100vh - 170px)' }}>
           <style ref={estiloRef} />
+          {(() => { const nc = cupos.filter(c => contrato.length === 0 || contrato.includes(c.contrato_id)).length; const vac = porContratar.filter(c => !c.trabajador_id).length; const chip = (n: number, t: string, bg: string, col: string) => <span style={{ background: bg, color: col, fontWeight: 700, fontSize: '12px', padding: '3px 10px', borderRadius: '999px' }}>{n} {t}</span>; return (
+            <div style={{ margin: '10px 10px 0', position: 'sticky', left: 10, display: 'flex', gap: '6px', flexWrap: 'wrap', width: 'fit-content', maxWidth: 'calc(100vw - 60px)' }}>
+              {chip(filas.length, 'trabajadores en la grilla', '#eef1f6', '#16213E')}
+              {nc > 0 && chip(nc, nc === 1 ? 'cupo contratado (dotación del contrato)' : 'cupos (dotación del contrato)', '#e8f0fb', '#1B4F9C')}
+              {vac > 0 && chip(vac, vac === 1 ? 'cupo vacante por rellenar' : 'cupos vacantes por rellenar', '#fde2e1', '#7a1212')}
+              {porContratar.length - vac > 0 && chip(porContratar.length - vac, 'por asignar al contrato', '#fff3cd', '#7a4b00')}
+            </div>) })()}
           <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
           <table onMouseOver={e => { alPasar(e); moverSel(e) }} onMouseLeave={alSalir} style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 486 + dias.length * W }}>
             <thead>

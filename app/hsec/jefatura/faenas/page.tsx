@@ -16,6 +16,7 @@ export default function FaenasAsignaciones() {
   const [ubics, setUbics] = useState<any[]>([])
   const [prevs, setPrevs] = useState<any[]>([])
   const [asig, setAsig] = useState<any[]>([])
+  const [admins, setAdmins] = useState<any[]>([]); const [asigAdm, setAsigAdm] = useState<any[]>([]); const [selAdm, setSelAdm] = useState<Record<string, string>>({})
   const [clientes, setClientes] = useState<any[]>([])
   const [fc, setFc] = useState<any[]>([])
   const [lugares, setLugares] = useState<any[]>([])
@@ -30,7 +31,7 @@ export default function FaenasAsignaciones() {
   const [nuevoCli, setNuevoCli] = useState<{ ub: string, nombre: string, dia: string, plazo: string, hora: string } | null>(null)
 
   const cargar = useCallback(async () => {
-    const [u, p, a, c, f, l, d, s, nm] = await Promise.all([
+    const [u, p, a, c, f, l, d, s, nm, ad, aa] = await Promise.all([
       supabase.from('ubicaciones').select('id,nombre,tipo,activa').order('nombre'),
       supabase.from('usuarios').select('id,nombre').eq('es_prevencionista', true).order('nombre'),
       supabase.from('pr_epp_ubicaciones').select('*'),
@@ -40,7 +41,10 @@ export default function FaenasAsignaciones() {
       supabase.from('pr_descriptores').select('id,usuario_id,ubicacion_id'),
       supabase.from('pr_semanal_asignaciones').select('*'),
       supabase.from('pr_faena_normativa').select('*'),
+      supabase.from('usuarios').select('id,nombre').eq('cargo_programa', 'administrador_faena').order('nombre'),
+      supabase.from('pr_admin_faenas').select('*'),
     ])
+    setAdmins(ad.data || []); setAsigAdm(aa.data || [])
     setNorm(nm.data || [])
     setUbics((u.data || []).filter((x: any) => x.activa !== false)); setPrevs(p.data || []); setAsig(a.data || []); setClientes(c.data || [])
     setFc(f.data || []); setLugares(l.data || []); setDescs(d.data || []); setSem(s.data || []); setCargando(false)
@@ -48,7 +52,9 @@ export default function FaenasAsignaciones() {
   useEffect(() => { if (usuario && puede) cargar() }, [usuario, puede, cargar])
 
   const err = (e: any) => { if (e) { alert(e.message); return true } return false }
-  const nombreU = (id: string) => prevs.find(p => p.id === id)?.nombre || '—'
+  const nombreU = (id: string) => prevs.find(p => p.id === id)?.nombre || admins.find(p => p.id === id)?.nombre || '—'
+  const agregarAdm = async (ub: string) => { const uid = selAdm[ub]; if (!uid) return; if (err((await supabase.from('pr_admin_faenas').upsert({ usuario_id: uid, ubicacion_id: ub }, { onConflict: 'usuario_id,ubicacion_id' })).error)) return; setSelAdm({ ...selAdm, [ub]: '' }); await cargar() }
+  const quitarAdm = async (id: string) => { if (err((await supabase.from('pr_admin_faenas').delete().eq('id', id)).error)) return; await cargar() }
 
   const setLugar = async (ub: string, lugar: string) => {
     const { error } = lugar ? await supabase.from('pr_cap_ubic_lugar').upsert({ ubicacion_id: ub, lugar }) : await supabase.from('pr_cap_ubic_lugar').delete().eq('ubicacion_id', ub)
@@ -179,6 +185,16 @@ export default function FaenasAsignaciones() {
                         <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: '#667085' }}>El formato del cliente (Word/Excel) se sube después en «Informes semanales por cliente».</p>
                       </div>
                     )}
+                    <label style={label}>Administrador de contrato / faena (firma las autoevaluaciones DS 594 y DS 132)</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px', alignItems: 'center' }}>
+                      {asigAdm.filter(x => x.ubicacion_id === u.id).length === 0 && <span style={{ fontSize: '12.5px', color: '#c5221f' }}>Sin administrador: nadie podrá firmar las autoevaluaciones de esta faena.</span>}
+                      {asigAdm.filter(x => x.ubicacion_id === u.id).map(x => (
+                        <span key={x.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', padding: '4px 6px 4px 10px', borderRadius: '20px', background: '#e6f4ea', color: '#137333', fontWeight: 600 }}>
+                          {nombreU(x.usuario_id)}<button onClick={() => quitarAdm(x.id)} title="Quitar" style={{ border: 'none', background: 'none', color: '#9b1c1c', cursor: 'pointer', fontSize: '15px', lineHeight: 1 }}>×</button>
+                        </span>))}
+                      <select value={selAdm[u.id] || ''} onChange={e => setSelAdm({ ...selAdm, [u.id]: e.target.value })} style={{ ...input, width: 'auto', flex: '0 1 200px' }}><option value="">Agregar administrador…</option>{admins.filter(a => !asigAdm.some(x => x.ubicacion_id === u.id && x.usuario_id === a.id)).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select>
+                      <button onClick={() => agregarAdm(u.id)} disabled={!selAdm[u.id]} style={{ ...btn(), padding: '8px 14px', fontSize: '12.5px', opacity: selAdm[u.id] ? 1 : 0.5 }}>Agregar</button>
+                    </div>
                     <label style={label}>Prevencionistas de esta faena</label>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                       {mias.length === 0 && <span style={{ fontSize: '12.5px', color: '#98a2b3' }}>Ninguno todavía.</span>}

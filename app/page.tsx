@@ -23,7 +23,7 @@ export default function Home() {
     { href:'/licitaciones', icon:'📋', label:'Licitaciones', desc:'Seguimiento de licitaciones y propuestas', visible: esAdmin || usuario?.accesoLicitaciones },
     { href:'/contabilidad', icon:'🧾', label:'Contabilidad', desc:'Rendiciones y guías de traslado', visible: esAdmin || usuario?.accesoContabilidad },
     { href:'/hsec', icon:'🦺', label:'Departamento Prevención de Riesgo', desc:'Panel de jefatura y espacio de cada prevencionista', visible: esAdmin || usuario?.accesoHsec || !!usuario?.cargoPrograma },
-    { href:'/operaciones', icon:'🛠️', label:'Operaciones', desc:'Módulo en construcción (solo administrador)', visible: esAdmin },
+    { href:'/operaciones', icon:'🛠️', label:'Operaciones', desc:'Personal, turnos, dotación, vuelos y pasajes', visible: esAdmin || usuario?.accesoOperaciones },
     { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles, permisos y centros de costo (CECO)', visible: esAdmin },
   ].filter(m => m.visible)
 

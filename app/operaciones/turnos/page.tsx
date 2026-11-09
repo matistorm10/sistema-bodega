@@ -31,7 +31,8 @@ export default function GrillaTurnos() {
   const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
   const [modo, setModo] = useState<'turno' | 'vuelo' | 'fallo'>('turno')
-  const [fallos, setFallos] = useState<Fallo[]>([]); const [motivoFallo, setMotivoFallo] = useState('inasistencia')
+  const [fallos, setFallos] = useState<Fallo[]>([])
+  const [menuF, setMenuF] = useState<{ x: number, y: number, cel: { trabId: string, fecha: string, hay: boolean }[] } | null>(null)
   const [rt, setRt] = useState<{ t: any, fecha: string, motivo: string, nota: string } | null>(null); const [msgRt, setMsgRt] = useState('')
   const [nm, setNm] = useState<{ mes: string } | null>(null)
   const [msg, setMsg] = useState('')
@@ -166,7 +167,7 @@ export default function GrillaTurnos() {
     if ((modo !== 'turno' && modo !== 'fallo') || e.button !== 0) return
     e.preventDefault(); setMsg('')
     const hay = falloDe.get(filas[ix].t.id + '|' + dias[i])
-    sel.current = { r0: ix, c0: i, r1: ix, c1: i, on: modo === 'fallo' ? hay?.motivo !== motivoFallo : !filas[ix].celdas[i].en }; pintarSel()
+    sel.current = { r0: ix, c0: i, r1: ix, c1: i, on: modo === 'fallo' ? !hay : !filas[ix].celdas[i].en }; pintarSel()
   }
   const moverSel = (e: React.MouseEvent) => {
     if (!sel.current) return
@@ -174,19 +175,18 @@ export default function GrillaTurnos() {
     const r = Number(el.getAttribute('data-r')), c = Number(el.getAttribute('data-c'))
     if (r !== sel.current.r1 || c !== sel.current.c1) { sel.current = { ...sel.current, r1: r, c1: c }; pintarSel() }
   }
-  const terminarSel = () => {
+  const terminarSel = (ev?: MouseEvent) => {
     const s = sel.current; sel.current = null; limpiarSel(); if (!s) return
     const [ra, rb] = [Math.min(s.r0, s.r1), Math.max(s.r0, s.r1)], [ca, cb] = [Math.min(s.c0, s.c1), Math.max(s.c0, s.c1)]
     if (modo === 'fallo') {
-      const cf: { trabId: string, fecha: string, motivo: string | null }[] = []; let fuera = 0
+      // al pinchar se abre la lista de motivos junto al cursor
+      const cel: { trabId: string, fecha: string, hay: boolean }[] = []; let fuera = 0
       for (let r = ra; r <= rb; r++) { const f = filas[r]; if (!f) continue; for (let c = ca; c <= cb; c++) {
-        const hay = falloDe.get(f.t.id + '|' + dias[c])
-        if (s.on) { if (f.celdas[c]?.en) cf.push({ trabId: f.t.id, fecha: dias[c], motivo: motivoFallo }); else fuera++ }
-        else if (hay) cf.push({ trabId: f.t.id, fecha: dias[c], motivo: null })
+        const hay = !!falloDe.get(f.t.id + '|' + dias[c])
+        if (f.celdas[c]?.en || hay) cel.push({ trabId: f.t.id, fecha: dias[c], hay }); else fuera++
       } }
-      if (cf.length === 0) { setMsg(fuera ? 'Los fallos se marcan solo en días de turno (celdas verdes).' : ''); return }
-      if (fuera) setMsg(`${fuera} celda(s) que no eran día de turno no se modificaron.`)
-      cambiarFallos(cf); return
+      if (cel.length === 0) { setMsg(fuera ? 'Los fallos se marcan solo en días de turno (celdas verdes).' : ''); return }
+      setMenuF({ x: ev?.clientX ?? 200, y: ev?.clientY ?? 200, cel }); return
     }
     const cambios: { trabId: string, a: string, b: string, on: boolean }[] = []; let sinContrato = 0
     for (let r = ra; r <= rb; r++) {
@@ -253,7 +253,6 @@ export default function GrillaTurnos() {
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
           {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
         </div>
-        {modo === 'fallo' && <select value={motivoFallo} onChange={e => setMotivoFallo(e.target.value)} style={{ ...input, width: 'auto', fontWeight: 700, borderColor: FALLOS[motivoFallo].color, color: FALLOS[motivoFallo].color }} title="Motivo con que se marcarán las celdas">{Object.entries(FALLOS).map(([k, v]) => <option key={k} value={k}>{v.l} · {v.t}</option>)}</select>}
         <button onClick={() => setNm({ mes: hoy.slice(0, 7) })} style={{ ...btn(), marginLeft: 'auto' }}>📑 Nómina mensual</button>
         <button onClick={descargar} style={btn(false)}>⬇ Descargar Excel</button>
       </div>
@@ -268,7 +267,7 @@ export default function GrillaTurnos() {
               {vac > 0 && chip(vac, vac === 1 ? 'cupo vacante por rellenar' : 'cupos vacantes por rellenar', '#fde2e1', '#7a1212')}
               {porContratar.length - vac > 0 && chip(porContratar.length - vac, 'por asignar al contrato', '#fff3cd', '#7a4b00')}
             </div>) })()}
-          <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : modo === 'fallo' ? 'Elige el motivo y haz clic (o arrastra) sobre días de turno en que el trabajador no se presentó; vuelve a hacer clic para quitar el fallo. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
+          <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : modo === 'fallo' ? 'Haz clic (o arrastra) sobre los días de turno en que el trabajador no se presentó: se abre la lista de motivos. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
           <table onMouseOver={e => { alPasar(e); moverSel(e) }} onMouseLeave={alSalir} style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 486 + dias.length * W }}>
             <thead>
               <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '172px', minWidth: '172px', maxWidth: '172px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 4, top: 0 }}>Trabajador</th><th style={{ ...CH, ...ST(172), width: '100px', minWidth: '100px', top: 0, zIndex: 4 }}>Cargo</th><th style={{ ...CH, ...ST(272), width: '96px', minWidth: '96px', top: 0, zIndex: 4 }}>Origen</th><th style={{ ...CH, ...ST(368), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd', top: 0, zIndex: 4 }}>Contrato / plazo</th>
@@ -306,6 +305,18 @@ export default function GrillaTurnos() {
               </tr>
             </tbody>
           </table>
+        </div>
+      )}
+      {menuF && (
+        <div onMouseDown={() => setMenuF(null)} style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
+          <div onMouseDown={e => e.stopPropagation()} style={{ position: 'fixed', left: Math.min(menuF.x + 6, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 210), top: Math.min(menuF.y + 6, (typeof window !== 'undefined' ? window.innerHeight : 800) - 300), width: '200px', background: '#fff', border: '1px solid #d0d5dd', borderRadius: '10px', boxShadow: '0 8px 28px rgba(16,24,40,.22)', padding: '6px' }}>
+            <p style={{ margin: '2px 6px 6px', fontSize: '11px', color: '#667085', fontWeight: 600 }}>Fallo · {menuF.cel.length} día{menuF.cel.length === 1 ? '' : 's'}</p>
+            {Object.entries(FALLOS).map(([k, v]) => (
+              <button key={k} onClick={() => { cambiarFallos(menuF.cel.map(c => ({ trabId: c.trabId, fecha: c.fecha, motivo: k }))); setMenuF(null) }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 8px', borderRadius: '6px', fontSize: '12.5px', textAlign: 'left' }} onMouseEnter={e => (e.currentTarget.style.background = '#f2f4f7')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                <span style={{ background: v.color, color: '#fff', width: '20px', height: '20px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px' }}>{v.l}</span>{v.t}
+              </button>))}
+            {menuF.cel.some(c => c.hay) && <button onClick={() => { cambiarFallos(menuF.cel.filter(c => c.hay).map(c => ({ trabId: c.trabId, fecha: c.fecha, motivo: null }))); setMenuF(null) }} style={{ display: 'block', width: '100%', border: 'none', borderTop: '1px solid #eef1f6', background: 'none', cursor: 'pointer', padding: '7px 8px', marginTop: '4px', fontSize: '12.5px', color: '#b42318', textAlign: 'left' }}>✕ Quitar fallo</button>}
+          </div>
         </div>
       )}
       {rt && (

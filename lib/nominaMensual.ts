@@ -16,11 +16,12 @@ export function construirNomina(X: any, p: { mes: string, trab: any[], asigs: As
   const porContrato = new Map<string, Fila[]>()
   for (const t of p.trab) {
     if (t.tipo_personal === 'backoffice') continue
-    const mias = p.asigs.filter(a => a.trabajador_id === t.id && a.desde <= fin && (!a.hasta || a.hasta >= ini) && (p.contratoSel.length === 0 || p.contratoSel.includes(a.contrato_id)))
+    const retiro: string | null = !t.activo ? (t.fecha_retiro || null) : null   // nada cuenta después de la fecha de retiro
+    const mias = p.asigs.filter(a => a.trabajador_id === t.id && (!retiro || a.desde <= retiro) && a.desde <= fin && (!a.hasta || a.hasta >= ini) && (p.contratoSel.length === 0 || p.contratoSel.includes(a.contrato_id)))
     const ts = p.turnos.filter(x => x.trabajador_id === t.id && x.sube <= fin && (!x.baja || x.baja >= ini))
     for (const a of mias) {
       const marcas = dias.map(d => {
-        const dentro = a.desde <= d && (!a.hasta || a.hasta >= d)
+        const dentro = a.desde <= d && (!a.hasta || a.hasta >= d) && (!retiro || d <= retiro)
         if (!dentro || !ts.some(x => x.sube <= d && (!x.baja || x.baja >= d))) return ''
         const f = falloDe.get(t.id + '|' + d)
         return f ? (FALLOS[f]?.l || 'O') : '1'
@@ -34,8 +35,7 @@ export function construirNomina(X: any, p: { mes: string, trab: any[], asigs: As
   const h = libro.addWorksheet('Nómina ' + p.mes, { views: [{ state: 'frozen', xSplit: 3, ySplit: 5 }] })
   const fallosCols = Object.keys(FALLOS)
   const cab = ['N°', 'Nombre', 'RUT', 'Cargo', 'Tipo', 'Inicio contrato', 'Salida', 'Motivo de salida', ...dias.map(d => String(Number(d.slice(8)))),
-    'Días en faena', ...fallosCols.map(k => FALLOS[k].t), 'Total fallos', 'DÍAS A PAGAR',
-    'Sueldo base ($)', 'Trato ($)', 'Horas extra (cant.)', 'Horas extra ($)', 'Bonos / otros ($)', 'Descuentos ($)', 'Observaciones']
+    'Días en faena', ...fallosCols.map(k => FALLOS[k].t), 'Total fallos', 'DÍAS A PAGAR']
   const cDia0 = 9, cDiaN = 8 + dias.length, cEn = cDiaN + 1, cF0 = cEn + 1, cFN = cEn + fallosCols.length, cTotF = cFN + 1, cPagar = cTotF + 1
   const totalCols = cab.length
   h.mergeCells(1, 1, 1, 8); h.getCell(1, 1).value = `NÓMINA MENSUAL DE ASISTENCIA · ${nombreMesLargo(p.mes).toUpperCase()}`; h.getCell(1, 1).font = { bold: true, size: 14 }
@@ -43,7 +43,7 @@ export function construirNomina(X: any, p: { mes: string, trab: any[], asigs: As
   h.getCell(3, 1).value = `Incluye a todos los trabajadores que estuvieron en el contrato durante el mes (también los que salieron). Fallos: ${fallosCols.map(k => `${FALLOS[k].l} = ${FALLOS[k].t}`).join(' · ')}. Generado el ${fechaCorta(new Date().toISOString().slice(0, 10))}.`
   h.getCell(3, 1).font = { size: 9, color: { argb: 'FF667085' } }
   const filaCab = 5
-  const c = h.getRow(filaCab); cab.forEach((v, i) => { const cell = c.getCell(i + 1); cell.value = v; cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i + 1 === cPagar ? 'FF1E8E4E' : i + 1 > cPagar ? 'FFB7791F' : i + 1 > cDiaN ? 'FF475467' : 'FF1B4F9C' } }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true } })
+  const c = h.getRow(filaCab); cab.forEach((v, i) => { const cell = c.getCell(i + 1); cell.value = v; cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i + 1 === cPagar ? 'FF1E8E4E' : i + 1 > cDiaN ? 'FF475467' : 'FF1B4F9C' } }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true } })
   c.height = 34
   dias.forEach((d, i) => { const dow = new Date(d + 'T12:00:00').getDay(); if (dow === 0 || dow === 6) h.getRow(filaCab).getCell(cDia0 + i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF98A2B3' } } })
 
@@ -69,14 +69,12 @@ export function construirNomina(X: any, p: { mes: string, trab: any[], asigs: As
       fila.getCell(cTotF).value = { formula: `SUM(${colLetra(cF0)}${r}:${colLetra(cFN)}${r})`, result: nf }
       fila.getCell(cPagar).value = { formula: `${colLetra(cEn)}${r}-${colLetra(cTotF)}${r}`, result: f.dEn - nf }
       fila.getCell(cPagar).font = { bold: true }; fila.getCell(cPagar).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F4EA' } }
-      if (a.sueldo) fila.getCell(cPagar + 1).value = Number(a.sueldo)
       f.marcas.forEach((m, i) => {
         const cell = fila.getCell(cDia0 + i); cell.alignment = { horizontal: 'center' }
         if (m === '1') cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB7E1C4' } }
         else if (m) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB42318' } }; cell.font = { bold: true, color: { argb: 'FFFFFFFF' } } }
       })
       if (salioMes && salioMes <= fin) { for (let i = 1; i <= 8; i++) fila.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE2E1' } } }
-      for (let i = cPagar + 1; i <= totalCols; i++) fila.getCell(i).border = { bottom: { style: 'hair' } }
       filasDatos.push(r); r++
     }
     // total del contrato
@@ -87,7 +85,7 @@ export function construirNomina(X: any, p: { mes: string, trab: any[], asigs: As
   }
   if (contratosOrden.length === 0) h.getCell(filaCab + 1, 2).value = 'No hay trabajadores con contrato en este mes para los contratos elegidos.'
   h.columns = [{ width: 5 }, { width: 30 }, { width: 13 }, { width: 22 }, { width: 10 }, { width: 11 }, { width: 11 }, { width: 24 }, ...dias.map(() => ({ width: 3.6 })),
-    { width: 9 }, ...fallosCols.map(() => ({ width: 11 })), { width: 8 }, { width: 11 }, { width: 13 }, { width: 12 }, { width: 11 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 30 }]
+    { width: 9 }, ...fallosCols.map(() => ({ width: 11 })), { width: 8 }, { width: 11 }]
   h.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   void TIPOS_CONTRATO
   return libro

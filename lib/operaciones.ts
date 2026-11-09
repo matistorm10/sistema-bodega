@@ -162,6 +162,9 @@ export async function retirarTrabajador(id: string, fecha: string, motivo: strin
     ])
     for (const x of a.data || []) if (x.desde <= fecha && (!x.hasta || x.hasta > fecha)) { const { error } = await supabase.from('op_asignaciones').update({ hasta: fecha }).eq('id', x.id); if (error) throw error }
     for (const x of tu.data || []) if (x.sube <= fecha && (!x.baja || x.baja > fecha)) { const { error } = await supabase.from('op_turnos').update({ baja: fecha }).eq('id', x.id); if (error) throw error }
+    // lo que empezaba después de la fecha de salida ya no corresponde
+    for (const x of a.data || []) if (x.desde > fecha) { const { error } = await supabase.from('op_asignaciones').delete().eq('id', x.id); if (error) throw error }
+    { const { error } = await supabase.from('op_turnos').delete().eq('trabajador_id', id).gt('sube', fecha); if (error) throw error }
     const cupo = cp.data?.[0]
     if (cupo) {
       // Si ya hay un cupo de reemplazo para este trabajador, el reemplazo pasa a ser el cupo base; si no, el cupo queda vacante

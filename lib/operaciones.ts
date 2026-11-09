@@ -8,8 +8,8 @@ export const TIPOS_PERSONAL: Record<string, string> = { indirecto: 'Indirecto', 
 // Contrato "virtual" para el personal Back Office (casa matriz): aparece en Turnos sin ser un contrato real
 export const BACKOFFICE_ID = '__backoffice__'
 export const ordenPersonal = (t: any) => (t?.tipo_personal === 'indirecto' ? 0 : t?.tipo_personal === 'backoffice' ? 2 : 1)
-// Indirectos primero, luego directos; dentro de cada grupo por nombre
-export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || String(a.nombre).localeCompare(String(b.nombre), 'es')
+// Indirectos primero, luego directos (ordenados por cargo), luego Back Office; dentro de cada grupo por nombre
+export const cmpPersonal = (a: any, b: any) => ordenPersonal(a) - ordenPersonal(b) || (a.tipo_personal === 'directo' && b.tipo_personal === 'directo' ? String(a.cargo || 'zzz').localeCompare(String(b.cargo || 'zzz'), 'es') : 0) || String(a.nombre).localeCompare(String(b.nombre), 'es')
 // Etiqueta de contrato: Cliente · Nombre del contrato · N°
 export function etiquetaContrato(c?: { nombre?: string, cliente?: { nombre?: string } | { nombre?: string }[] | null, referencia?: string | null } | null, largo = 60): string {
   if (!c) return '—'

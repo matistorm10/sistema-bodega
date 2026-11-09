@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
@@ -20,6 +21,7 @@ const ESTADO: Record<string, { t: string, bg: string, col: string }> = {
   faena: { t: 'En faena', bg: '#e6f4ea', col: '#1e8e4e' }, descanso: { t: 'Descanso', bg: '#e8f0fe', col: '#1B4F9C' }, sin_contrato: { t: 'Sin contrato', bg: '#f2f4f7', col: '#667085' },
 }
 export default function Trabajadores() {
+  const { usuario: usuarioOp } = useUsuarioActual(); const completo = !!usuarioOp?.operacionesCompleto
   const router = useRouter()
   const [trab, setTrab] = useState<any[]>([])
   const [asigs, setAsigs] = useState<Asig[]>([])
@@ -67,7 +69,7 @@ export default function Trabajadores() {
         {vista === 'terreno' && <select value={fEstado} onChange={e => setFEstado(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Todos los estados hoy</option><option value="faena">En faena</option><option value="descanso">Descanso</option><option value="sin_contrato">Sin contrato</option></select>}
         <select value={fExam} onChange={e => setFExam(e.target.value)} style={{ ...input, width: 'auto' }}><option value="">Exámenes: todos</option>{Object.entries(EXAMENES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />Ver retirados</label>
-        <button onClick={() => setNuevo(!nuevo)} style={{ ...btn(), marginLeft: 'auto' }}>{nuevo ? 'Cancelar' : '+ Nuevo trabajador'}</button>
+        {completo && <button onClick={() => setNuevo(!nuevo)} style={{ ...btn(), marginLeft: 'auto' }}>{nuevo ? 'Cancelar' : '+ Nuevo trabajador'}</button>}
       </div>
       {nuevo && (
         <div style={{ ...card, marginBottom: '12px' }}>

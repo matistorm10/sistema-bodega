@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AZUL } from '@/lib/theme'
 import { card, btn, input } from '@/components/programa/ui'
+import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import Marco from '@/components/operaciones/Marco'
 import { useCiudades } from '@/components/operaciones/useCiudades'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
@@ -12,6 +13,7 @@ import { BACKOFFICE_ID, traerTodo, hoyISO, fechaCorta, descargarXlsx, ESTADOS_VU
 
 export default function VuelosPasajes() {
   const ciu = useCiudades()
+  const { usuario } = useUsuarioActual(); const completo = !!usuario?.operacionesCompleto
   const hoy = hoyISO()
   const [vuelos, setVuelos] = useState<Vuelo[]>([]); const [trab, setTrab] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
@@ -62,7 +64,7 @@ export default function VuelosPasajes() {
                 <td style={th}>{v.origen && v.destino ? `${v.origen} → ${v.destino}` : '—'}</td>
                 <td style={th}>{v.medio === 'bus' ? 'Bus' : v.aerolinea || '—'}{v.hora_salida ? ` · ${v.hora_salida}${v.hora_llegada ? '–' + v.hora_llegada : ''}` : ''}</td>
                 <td style={th}>{v.reserva || '—'}</td>
-                <td style={th}><button onClick={() => setEd(v)} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>{pc ? 'Completar compra' : 'Editar'}</button></td>
+                <td style={th}>{completo && <button onClick={() => setEd(v)} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px' }}>{pc ? 'Completar compra' : 'Editar'}</button>}</td>
               </tr>) })}</tbody>
           </table>
         </div>

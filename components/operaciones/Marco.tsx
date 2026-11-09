@@ -4,7 +4,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 
 // Marco común del módulo Operaciones. Acceso: administrador o usuarios con «Operaciones» activado.
-export default function Marco({ titulo, volver = '/operaciones', volverTxt = '← Operaciones', ancho = 1100, children }: { titulo: string, volver?: string, volverTxt?: string, ancho?: number, children: React.ReactNode }) {
+export default function Marco({ titulo, volver = '/operaciones', volverTxt = '← Operaciones', ancho = 1100, soloCompleto = false, children }: { soloCompleto?: boolean, titulo: string, volver?: string, volverTxt?: string, ancho?: number, children: React.ReactNode }) {
   const { usuario, cargando } = useUsuarioActual()
   const puede = usuario?.rol === 'admin' || !!usuario?.accesoOperaciones
   return (
@@ -16,6 +16,7 @@ export default function Marco({ titulo, volver = '/operaciones', volverTxt = '�
         </div>
         {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p>
           : !puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso al módulo Operaciones. Pídelo a un administrador.</p>
+          : soloCompleto && !usuario?.operacionesCompleto ? <p style={{ fontSize: '13px', color: '#999' }}>Esta sección es solo para administración y reclutamiento.</p>
           : children}
       </div>
     </main>

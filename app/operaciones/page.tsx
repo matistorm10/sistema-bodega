@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { supabase } from '@/lib/supabase'
 import { AZUL } from '@/lib/theme'
 import { card } from '@/components/programa/ui'
@@ -9,6 +10,7 @@ import FiltroContratos from '@/components/operaciones/FiltroContratos'
 import { etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function Operaciones() {
+  const { usuario: usuarioOp } = useUsuarioActual(); const completo = !!usuarioOp?.operacionesCompleto
   const [trab, setTrab] = useState<any[]>([])
   const [asigs, setAsigs] = useState<Asig[]>([])
   const [turnos, setTurnos] = useState<Turno[]>([])
@@ -86,7 +88,7 @@ export default function Operaciones() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '10px', marginBottom: '14px' }}>
             {acceso('/operaciones/trabajadores', '👷', 'Trabajadores', 'Ficha, contratos, plazos y turnos de cada persona')}
             {acceso('/operaciones/turnos', '🗓️', 'Turnos', 'Grilla de quién está en faena cada día, por contrato, con descarga a Excel')}
-            {acceso('/operaciones/dotacion', '🧩', 'Dotación por contrato', 'Cargos vendidos por contrato, cupos con y sin nombre, reemplazos')}
+            {completo && acceso('/operaciones/dotacion', '🧩', 'Dotación por contrato', 'Cargos vendidos por contrato, cupos con y sin nombre, reemplazos')}
             {acceso('/operaciones/vuelos', '✈️', 'Vuelos y pasajes', 'Qué pasajes están por comprar y cuáles ya se compraron, con el aeropuerto de origen de cada trabajador')}
           </div>
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>Dónde está el personal hoy ({fechaCorta(hoy)})</p>

@@ -35,7 +35,7 @@ export default function Dotacion() {
   }
   const totVend = mios.filter(c => !c.es_reemplazo).length, totNombre = mios.filter(c => !c.es_reemplazo && c.trabajador_id).length
   return (
-    <Marco titulo="Dotación por contrato">
+    <Marco titulo="Dotación por contrato" soloCompleto>
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
         <>
           <div style={{ ...card, marginBottom: '12px' }}>

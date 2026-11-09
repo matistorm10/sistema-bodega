@@ -1,4 +1,5 @@
 'use client'
+import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -15,6 +16,7 @@ import { retirarTrabajador, MOTIVOS_RETIRO, ESTATUS_CONTRATO, EXAMENES, MODALIDA
 
 const vacio = { contrato_id: '', desde: hoyISO(), regimen: '', tipo_contrato: '', vence: '', sueldo: '', condiciones: '' }
 export default function Ficha() {
+  const { usuario: usuarioOp } = useUsuarioActual(); const completo = !!usuarioOp?.operacionesCompleto
   const { id } = useParams() as { id: string }
   const [t, setT] = useState<any | null>(null)
   const [d, setD] = useState<any>({})
@@ -143,6 +145,8 @@ export default function Ficha() {
 
   return (
     <Marco titulo={t.nombre} volver={volverA} volverTxt={volverT} ancho={960}>
+      {!completo && <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: '#7a5600', background: '#fff8e5', border: '1px solid #f0d98a', borderRadius: '8px', padding: '7px 10px' }}>Solo lectura: tu acceso es de consulta. Los cambios los hace administración o reclutamiento.</p>}
+      <fieldset disabled={!completo} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <p style={{ margin: '0 0 12px', fontSize: '12.5px', color: '#667085' }}>{t.ciudad ? <>Origen: <strong>{t.ciudad}</strong> </> : <span style={{ color: '#b7791f' }}>Sin ciudad de origen </span>}{t.modalidad_viaje === 'vuelo' ? <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: '#e8f0fe', color: '#1B4F9C' }}>✈ Vuelo</span> : t.modalidad_viaje === 'local' ? <span style={{ fontSize: '11.5px', color: '#667085' }}>(Local)</span> : <span style={{ color: '#b7791f' }}>(modalidad sin definir)</span>} · Hoy: <strong>{actual ? nCont(actual.contrato_id) : 'sin contrato'}</strong> · <strong>{!actual ? '—' : enTurno ? 'en faena' : 'en descanso'}</strong>{!t.activo && ' · FINIQUITADO'}</p>
 
       {!t.activo && <div style={{ background: '#fde2e1', border: '1px solid #f4b4b0', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '13px', color: '#7a1212', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -270,6 +274,7 @@ export default function Ficha() {
           </div>))}
       </div>
       </>)}
+      </fieldset>
     </Marco>
   )
 }

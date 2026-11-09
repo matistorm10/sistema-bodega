@@ -6,7 +6,7 @@ export type Permiso = { ubicacion_id: string, puede_origen: boolean, puede_desti
 export type UsuarioActual = {
   id: string, nombre: string, cargo: string | null, telefono: string | null, email: string, rol: string,
   accesoBodega: boolean, accesoVehiculos: boolean, accesoLicitaciones: boolean,
-  accesoContabilidad: boolean, accesoOperaciones: boolean, accesoHsec: boolean, puedeAprobar: boolean, esRevisor: boolean,
+  accesoContabilidad: boolean, accesoOperaciones: boolean, operacionesCompleto: boolean, accesoHsec: boolean, puedeAprobar: boolean, esRevisor: boolean,
   esJefeHsec: boolean, esPrevencionista: boolean, veDocumentos: boolean, cargoPrograma: string | null,
   permisos: Permiso[]
 }
@@ -34,7 +34,7 @@ export function useUsuarioActual() {
     const nuevo: UsuarioActual = {
       id: perfil.id, nombre: perfil.nombre, cargo: perfil.cargo, telefono: perfil.telefono, email: perfil.email, rol: perfil.rol,
       accesoBodega: perfil.acceso_bodega !== false, accesoVehiculos: !!perfil.acceso_vehiculos, accesoLicitaciones: !!perfil.acceso_licitaciones,
-      accesoContabilidad: !!perfil.acceso_contabilidad, accesoOperaciones: !!perfil.acceso_operaciones, accesoHsec: !!perfil.acceso_hsec,
+      accesoContabilidad: !!perfil.acceso_contabilidad, accesoOperaciones: !!perfil.acceso_operaciones, operacionesCompleto: perfil.rol === 'admin' || !!perfil.operaciones_completo, accesoHsec: !!perfil.acceso_hsec,
       puedeAprobar: !!perfil.puede_aprobar_contabilidad, esRevisor: !!perfil.es_revisor_contabilidad,
       esJefeHsec: !!perfil.es_jefe_hsec, esPrevencionista: !!perfil.es_prevencionista, veDocumentos: !!perfil.ve_documentos_contratos, cargoPrograma: perfil.cargo_programa || null,
       permisos: perfil.usuario_ubicaciones || []

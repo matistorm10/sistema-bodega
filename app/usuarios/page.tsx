@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
+import AccesoOperaciones from '@/components/operaciones/AccesoOperaciones'
 import { CARGOS_PROGRAMA } from '@/lib/programa'
 
 export default function Usuarios() {
@@ -25,6 +26,7 @@ export default function Usuarios() {
   const [accesoLicitaciones, setAccesoLicitaciones] = useState(false)
   const [accesoContabilidad, setAccesoContabilidad] = useState(false)
   const [accesoOperaciones, setAccesoOperaciones] = useState(false)
+  const [opCompleto, setOpCompleto] = useState(false); const [opContratos, setOpContratos] = useState<string[]>([])
   const [accesoHsec, setAccesoHsec] = useState(false)
   const [puedeAprobar, setPuedeAprobar] = useState(false)
   const [esRevisor, setEsRevisor] = useState(false)
@@ -50,6 +52,7 @@ export default function Usuarios() {
   const [editAccesoLicitaciones, setEditAccesoLicitaciones] = useState(false)
   const [editAccesoContabilidad, setEditAccesoContabilidad] = useState(false)
   const [editAccesoOperaciones, setEditAccesoOperaciones] = useState(false)
+  const [editOpCompleto, setEditOpCompleto] = useState(false); const [editOpContratos, setEditOpContratos] = useState<string[]>([])
   const [editAccesoHsec, setEditAccesoHsec] = useState(false)
   const [editPuedeAprobar, setEditPuedeAprobar] = useState(false)
   const [editEsRevisor, setEditEsRevisor] = useState(false)
@@ -115,14 +118,14 @@ export default function Usuarios() {
     const res = await fetch('/api/admin/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoOperaciones, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, veDocumentosContratos: veDocs, cargoPrograma: cargoPrograma || null, permisos: permisosArr })
+      body: JSON.stringify({ nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoOperaciones, opCompleto, opContratos, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, veDocumentosContratos: veDocs, cargoPrograma: cargoPrograma || null, permisos: permisosArr })
     })
     const json = await res.json()
     setGuardando(false)
     if (!res.ok) { setError(json.error || 'No se pudo crear el usuario.'); return }
     setExito(`${nombre} creado correctamente.`); setNuevoAbierto(false)
     setNombre(''); setCargo(''); setTelefono(''); setEmail(''); setPassword(''); setRol('')
-    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoOperaciones(false); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setCargoPrograma(''); setPermisos({})
+    setAccesoBodega(true); setAccesoVehiculos(false); setAccesoLicitaciones(false); setAccesoContabilidad(false); setAccesoOperaciones(false); setOpCompleto(false); setOpContratos([]); setAccesoHsec(false); setPuedeAprobar(false); setEsRevisor(false); setEsJefeHsec(false); setEsPrevencionista(false); setCargoPrograma(''); setPermisos({})
     cargar()
   }
 
@@ -160,7 +163,8 @@ export default function Usuarios() {
     setEditAccesoVehiculos(!!u.acceso_vehiculos)
     setEditAccesoLicitaciones(!!u.acceso_licitaciones)
     setEditAccesoContabilidad(!!u.acceso_contabilidad)
-    setEditAccesoOperaciones(!!u.acceso_operaciones)
+    setEditAccesoOperaciones(!!u.acceso_operaciones); setEditOpCompleto(!!u.operaciones_completo); setEditOpContratos([])
+    supabase.from('op_usuario_contratos').select('contrato_id').eq('usuario_id', u.id).then(({ data }) => setEditOpContratos((data || []).map((x: any) => x.contrato_id)))
     setEditAccesoHsec(!!u.acceso_hsec)
     setEditPuedeAprobar(!!u.puede_aprobar_contabilidad)
     setEditEsRevisor(!!u.es_revisor_contabilidad)
@@ -184,12 +188,20 @@ export default function Usuarios() {
     const { error: errPerfil } = await supabase.from('usuarios').update({
       nombre: editNombre.trim(), cargo: editCargo || null, telefono: editTelefono || null, rol: editRol,
       acceso_bodega: editAccesoBodega, acceso_vehiculos: editAccesoVehiculos, acceso_licitaciones: editAccesoLicitaciones,
-      acceso_contabilidad: editAccesoContabilidad, acceso_operaciones: editAccesoOperaciones, acceso_hsec: editAccesoHsec,
+      acceso_contabilidad: editAccesoContabilidad, acceso_operaciones: editAccesoOperaciones, operaciones_completo: editAccesoOperaciones && editOpCompleto, acceso_hsec: editAccesoHsec,
       puede_aprobar_contabilidad: editPuedeAprobar, es_revisor_contabilidad: editEsRevisor,
       es_jefe_hsec: editEsJefeHsec, es_prevencionista: editEsPrevencionista, ve_documentos_contratos: editVeDocs, cargo_programa: editCargoPrograma || null
     }).eq('id', usuarioId)
     if (errPerfil) { setGuardandoEdicion(false); setErrorEdicion('No se pudo actualizar el perfil: ' + errPerfil.message); return }
 
+    {
+      const d = await supabase.from('op_usuario_contratos').delete().eq('usuario_id', usuarioId)
+      if (d.error) { setGuardandoEdicion(false); setErrorEdicion('No se pudieron actualizar los contratos de Operaciones: ' + d.error.message); return }
+      if (editAccesoOperaciones && !editOpCompleto && editOpContratos.length) {
+        const i = await supabase.from('op_usuario_contratos').insert(editOpContratos.map(c => ({ usuario_id: usuarioId, contrato_id: c })))
+        if (i.error) { setGuardandoEdicion(false); setErrorEdicion('No se pudieron guardar los contratos de Operaciones: ' + i.error.message); return }
+      }
+    }
     const { error: errDel } = await supabase.from('usuario_ubicaciones').delete().eq('usuario_id', usuarioId)
     if (errDel) { setGuardandoEdicion(false); setErrorEdicion('No se pudieron actualizar los permisos: ' + errDel.message); return }
 
@@ -394,6 +406,7 @@ export default function Usuarios() {
               <label style={checkboxLabel}><input type="checkbox" checked={accesoVehiculos} onChange={e=>setAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoLicitaciones} onChange={e=>setAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
               <label style={checkboxLabel}><input type="checkbox" checked={accesoOperaciones} onChange={e=>setAccesoOperaciones(e.target.checked)}/>🛠️ Operaciones</label>
+              {accesoOperaciones && <AccesoOperaciones completo={opCompleto} contratos={opContratos} onChange={v => { setOpCompleto(v.completo); setOpContratos(v.contratos) }} />}
               <label style={checkboxLabel}><input type="checkbox" checked={accesoContabilidad} onChange={e=>setAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
         {accesoContabilidad && (
           <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
@@ -474,6 +487,7 @@ export default function Usuarios() {
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoVehiculos} onChange={e=>setEditAccesoVehiculos(e.target.checked)}/>🚚 Vehículos y Maquinaria</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoLicitaciones} onChange={e=>setEditAccesoLicitaciones(e.target.checked)}/>📋 Licitaciones</label>
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoOperaciones} onChange={e=>setEditAccesoOperaciones(e.target.checked)}/>🛠️ Operaciones</label>
+                        {editAccesoOperaciones && <AccesoOperaciones completo={editOpCompleto} contratos={editOpContratos} onChange={v => { setEditOpCompleto(v.completo); setEditOpContratos(v.contratos) }} />}
                         <label style={checkboxLabel}><input type="checkbox" checked={editAccesoContabilidad} onChange={e=>setEditAccesoContabilidad(e.target.checked)}/>🧾 Contabilidad</label>
                   {editAccesoContabilidad && (
                     <div style={{marginLeft:'12px',paddingLeft:'12px',borderLeft:'3px solid #dbe5f5'}}>
@@ -520,7 +534,7 @@ export default function Usuarios() {
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px',marginTop:'6px'}}>
                       {u.acceso_bodega !== false && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>📦 Bodega</span>}
                       {u.acceso_vehiculos && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fce8e6',color:'#c5221f'}}>🚚 Vehículos</span>}
-                      {u.acceso_operaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🛠️ Operaciones</span>}
+                      {u.acceso_operaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🛠️ Operaciones{u.operaciones_completo || u.rol === 'admin' ? ' (completo)' : ' (terreno)'}</span>}
                       {u.acceso_licitaciones && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e8f0fe',color:AZUL}}>📋 Licitaciones</span>}
                       {u.acceso_contabilidad && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#fef7e0',color:'#986a00'}}>🧾 Contabilidad</span>}
                       {u.acceso_hsec && <span style={{fontSize:'11px',padding:'2px 8px',borderRadius:'20px',background:'#e6f4ea',color:'#137333'}}>🦺 Prevención de Riesgo</span>}

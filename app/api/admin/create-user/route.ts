@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoOperaciones, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, veDocumentosContratos, cargoPrograma, permisos } = body
+    const { nombre, cargo, telefono, email, password, rol, accesoBodega, accesoVehiculos, accesoLicitaciones, accesoContabilidad, accesoOperaciones, opCompleto, opContratos, accesoHsec, puedeAprobar, esRevisor, esJefeHsec, esPrevencionista, veDocumentosContratos, cargoPrograma, permisos } = body
     if (!nombre || !email || !password || !rol) {
       return NextResponse.json({ error: 'Faltan campos obligatorios.' }, { status: 400 })
     }
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const { data: perfil, error: errPerfil } = await supabaseAdmin.from('usuarios').insert({
       auth_id: nuevoAuth.user.id, nombre, cargo: cargo || null, telefono: telefono || null, email, rol,
       acceso_bodega: accesoBodega !== false, acceso_vehiculos: !!accesoVehiculos, acceso_licitaciones: !!accesoLicitaciones,
-      acceso_contabilidad: !!accesoContabilidad, acceso_operaciones: !!accesoOperaciones, acceso_hsec: !!accesoHsec,
+      acceso_contabilidad: !!accesoContabilidad, acceso_operaciones: !!accesoOperaciones, operaciones_completo: !!accesoOperaciones && !!opCompleto, acceso_hsec: !!accesoHsec,
       puede_aprobar_contabilidad: !!puedeAprobar, es_revisor_contabilidad: !!esRevisor,
       es_jefe_hsec: !!esJefeHsec, es_prevencionista: !!esPrevencionista, ve_documentos_contratos: !!veDocumentosContratos, cargo_programa: cargoPrograma || null
     }).select().single()
@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se pudo crear el perfil: ' + errPerfil?.message }, { status: 400 })
     }
 
+    if (accesoOperaciones && !opCompleto && Array.isArray(opContratos) && opContratos.length > 0) {
+      const { error: errOp } = await supabaseAdmin.from('op_usuario_contratos').insert(opContratos.map((c: string) => ({ usuario_id: perfil.id, contrato_id: c })))
+      if (errOp) return NextResponse.json({ error: 'Usuario creado, pero no se pudieron guardar sus contratos de Operaciones: ' + errOp.message }, { status: 207 })
+    }
     if (Array.isArray(permisos) && permisos.length > 0) {
       const filas = permisos.map((p: any) => ({
         usuario_id: perfil.id, ubicacion_id: p.ubicacion_id, puede_origen: !!p.puede_origen, puede_destino: !!p.puede_destino

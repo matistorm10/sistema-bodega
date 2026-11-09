@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { btn, input, label } from '@/components/programa/ui'
 import { useCiudades } from './useCiudades'
+import Hora24 from './Hora24'
 import { formatearRut } from '@/lib/rut'
 import { fechaCorta, msgError, AEROLINEAS, LUGARES, ESTADOS_VUELO, type Vuelo } from '@/lib/operaciones'
 
@@ -73,8 +74,8 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
         {esVuelo && <div style={{ flex: '1 1 120px' }}><label style={label}>Aerolínea{porComprar ? '' : ' *'}</label><select value={f.aerolinea} onChange={e => setF({ ...f, aerolinea: e.target.value })} style={input}><option value="">—</option>{AEROLINEAS.map(a => <option key={a}>{a}</option>)}</select></div>}
         <div style={{ flex: '1 1 140px' }}><label style={label}>Origen{porComprar ? '' : ' *'}</label>{lugar(f.origen, 'origen')}</div>
         <div style={{ flex: '1 1 140px' }}><label style={label}>Destino{porComprar ? '' : ' *'}</label>{lugar(f.destino, 'destino')}</div>
-        <div style={{ flex: '1 1 110px' }}><label style={label}>Hora salida{porComprar ? '' : ' *'}</label><input type="time" value={f.hora_salida} onChange={e => setF({ ...f, hora_salida: e.target.value })} style={input} /></div>
-        <div style={{ flex: '1 1 110px' }}><label style={label}>Hora llegada{porComprar ? '' : ' *'}</label><input type="time" value={f.hora_llegada} onChange={e => setF({ ...f, hora_llegada: e.target.value })} style={input} /></div>
+        <div style={{ flex: '1 1 110px' }}><label style={label}>Hora salida{porComprar ? '' : ' *'}</label><Hora24 value={f.hora_salida} onChange={v => setF(x => ({ ...x, hora_salida: v }))} /></div>
+        <div style={{ flex: '1 1 110px' }}><label style={label}>Hora llegada{porComprar ? '' : ' *'}</label><Hora24 value={f.hora_llegada} onChange={v => setF(x => ({ ...x, hora_llegada: v }))} /></div>
         <div style={{ flex: '1 1 110px' }}><label style={label}>Reserva{esVuelo && !porComprar ? ' *' : ''}</label><input value={f.reserva} onChange={e => setF({ ...f, reserva: e.target.value })} style={input} /></div>
         <div style={{ flex: '2 1 200px' }}><label style={label}>Notas (opcional)</label><input value={f.notas} onChange={e => setF({ ...f, notas: e.target.value })} style={input} /></div>
       </div>

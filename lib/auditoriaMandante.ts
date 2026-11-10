@@ -2,7 +2,7 @@ import { hoyISO } from './estadoPlan'
 
 export type AudItem = { id: string, formato_id: string, orden: number, seccion: string, numero: string | null, texto: string, orientacion: string | null, puntaje: number, requiere_trabajador?: boolean, fuente?: string | null }
 export type AudResp = { id?: string, levantamiento_id: string, item_id: string, estado: 'pendiente' | 'cumple' | 'no_cumple' | 'na', obs?: string | null, accion?: string | null, responsable?: string | null, plazo?: string | null, plan_estado?: string }
-export type AudDoc = { id: string, levantamiento_id: string, item_id: string, path: string, nombre: string, vence: string | null, subido_por: string, subido_at: string, revision: 'pendiente' | 'aprobado' | 'rechazado', comentario: string | null, revisado_por: string | null, revisado_at: string | null, trabajador_id?: string | null, trab_ids?: string[] }
+export type AudDoc = { id: string, levantamiento_id: string, item_id: string, path: string, nombre: string, vence: string | null, revision_doc?: string | null, subido_por: string, subido_at: string, revision: 'pendiente' | 'aprobado' | 'rechazado', comentario: string | null, revisado_por: string | null, revisado_at: string | null, trabajador_id?: string | null, trab_ids?: string[] }
 
 export const sumaDias = (f: string, n: number) => { const [y, m, d] = f.split('-').map(Number); const t = new Date(y, m - 1, d + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` }
 export type Vig = 'vigente' | 'por_vencer' | 'vencido' | 'sin_fecha'

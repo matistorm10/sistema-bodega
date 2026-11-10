@@ -6,6 +6,7 @@ import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, input, Barra } from '@/components/programa/ui'
+import RegenerarPdfs from '@/components/programa/RegenerarPdfs'
 import EditorMetas from '@/components/programa/EditorMetas'
 import MiFirma from '@/components/programa/MiFirma'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
@@ -117,6 +118,7 @@ export default function JefaturaPrograma() {
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: '900px', margin: '0 auto' }}>
         {cab}
+        <RegenerarPdfs />
         {!puede ? <p style={{ fontSize: '13px', color: '#999' }}>No tienes acceso a esta sección.</p> : cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : (
           <>
             {prevPend.length > 0 && (() => { const pl = estadoPlazo(mesAnterior(mesActual()), 'abierto'); return (

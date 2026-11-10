@@ -8,6 +8,7 @@ import { misUbicacionesIds } from '@/lib/prevencion'
 import FormActividad from '@/components/programa/FormActividad'
 import { card, btn, Barra } from '@/components/programa/ui'
 import FirmaPreview from '@/components/programa/FirmaPreview'
+import OportunidadesPendientes from '@/components/programa/OportunidadesPendientes'
 import FirmasAdministrador from '@/components/programa/FirmasAdministrador'
 import { generarRegistroActividad } from '@/lib/generarRegistroActividad'
 import { descargarProgramaMensual } from '@/lib/generarProgramaMensual'
@@ -236,6 +237,7 @@ export default function Programa() {
               {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
             </div>
 
+            <OportunidadesPendientes usuario={usuario!} faenas={faenas} onCambio={cargar} />
             {cargo === 'administrador_faena' && <FirmasAdministrador usuario={usuario!} faenas={faenas} />}
             <div style={{ display: 'grid', gap: '8px' }}>
               {filas.map(f => {

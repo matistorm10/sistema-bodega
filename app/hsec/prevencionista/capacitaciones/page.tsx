@@ -15,7 +15,7 @@ import { desdeCiclo, etiquetaMes, mesHoy, aplica, estadoCelda, COLOR_CELDA } fro
 
 const AvisoFirma = ({ pendiente }: { pendiente: any }) => pendiente ? (
   <div style={{ ...card, background: '#fff8e5', borderColor: '#f0d98a', marginBottom: '12px' }}>
-    <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>🔒 El calendario de capacitaciones está en firma (versión {pendiente.numero})</p>
+    <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '13px', color: '#7a5600' }}>🔒 El calendario de capacitaciones está en firma (revisión {(pendiente.revision || '').trim() || pendiente.numero})</p>
     <p style={{ margin: 0, fontSize: '12.5px', color: '#7a5600' }}>Mientras falten las firmas del Jefe, el Administrador de Faena y el Gerente General no se pueden registrar nuevas capacitaciones ni descargar el PDF. Se habilita solo cuando estén las tres.</p>
   </div>) : null
 

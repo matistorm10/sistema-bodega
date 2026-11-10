@@ -179,6 +179,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
   const [abierta, setAbierta] = useState<Record<string, boolean>>({})
   const [orient, setOrient] = useState<Record<string, boolean>>({})
   const [venceNuevo, setVenceNuevo] = useState<Record<string, string>>({})
+  const [revNueva, setRevNueva] = useState<Record<string, string>>({})   // revisión del documento: la escribe quien lo sube
   const [subiendo, setSubiendo] = useState('')
   const [msg, setMsg] = useState('')
   const [auto, setAuto] = useState<any>(null)
@@ -246,10 +247,10 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
     const path = `auditoria/${lev.id}/${it.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
     const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
     if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return }
-    const { error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, path, nombre: f.name, vence: venceNuevo[it.id] || null, subido_por: usuarioId })
+    const { error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, path, nombre: f.name, vence: venceNuevo[it.id] || null, revision_doc: (revNueva[it.id] || '').trim() || null, subido_por: usuarioId })
     setSubiendo('')
     if (error) { setMsg('No se pudo registrar: ' + error.message); return }
-    setVenceNuevo({ ...venceNuevo, [it.id]: '' }); await recargar()
+    setVenceNuevo({ ...venceNuevo, [it.id]: '' }); setRevNueva({ ...revNueva, [it.id]: '' }); await recargar()
   }
   // Un solo documento puede respaldar a varios trabajadores: se suben N vínculos
   const subirVarios = async (it: AudItem, ids: string[], f: File): Promise<boolean> => {
@@ -259,7 +260,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
     const path = `auditoria/${lev.id}/${it.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
     const up = await supabase.storage.from('hsec-documentos').upload(path, f, { contentType: f.type || undefined })
     if (up.error) { setSubiendo(''); setMsg('No se pudo subir: ' + up.error.message); return false }
-    const { data, error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, path, nombre: f.name, subido_por: usuarioId }).select('id').maybeSingle()
+    const { data, error } = await supabase.from('aud_documentos').insert({ levantamiento_id: lev.id, item_id: it.id, path, nombre: f.name, revision_doc: (revNueva[it.id] || '').trim() || null, subido_por: usuarioId }).select('id').maybeSingle()
     if (error || !data) { setSubiendo(''); setMsg('No se pudo registrar: ' + (error?.message || '')); return false }
     const { error: e2 } = await supabase.from('aud_doc_trabajadores').insert(ids.map(t => ({ documento_id: data.id, trabajador_id: t, levantamiento_id: lev.id })))
     setSubiendo('')
@@ -358,6 +359,7 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                     <div key={d.id} style={{ background: '#fafbfd', border: '1px solid #eef1f6', borderRadius: '8px', padding: '6px 9px', marginBottom: '5px', fontSize: '12.5px' }}>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button type="button" onClick={() => abrirArchivo(d.path)} style={{ border: 'none', background: 'none', color: AZUL, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: '12.5px', textAlign: 'left' }}>📎 {d.nombre}</button>
+                        {d.revision_doc && <span style={{ fontSize: '10.5px', color: '#667085' }}>Rev. {d.revision_doc}</span>}
                         <span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: rb, color: rf }}>{rt}</span>
                         <span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: vb, color: vf }}>{d.vence ? `${vt} · ${fcl(d.vence)}` : vt}</span>
                         <span style={{ fontSize: '11px', color: '#98a2b3' }}>{nombreDe(d.subido_por)} · {new Date(d.subido_at).toLocaleDateString('es-CL')}</span>
@@ -379,6 +381,8 @@ function Levantamiento({ lev, fm, items, resps, docs, trabs, eppEst, contratoTxt
                   </label>
                   <span style={{ fontSize: '11.5px', color: '#667085' }}>Vence (si aplica):</span>
                   <input type="date" value={venceNuevo[it.id] || ''} onChange={ev => setVenceNuevo({ ...venceNuevo, [it.id]: ev.target.value })} style={{ ...input, width: 'auto', padding: '5px 8px', fontSize: '12px' }} />
+                  <span style={{ fontSize: '11.5px', color: '#667085' }}>Revisión:</span>
+                  <input value={revNueva[it.id] || ''} onChange={ev => setRevNueva({ ...revNueva, [it.id]: ev.target.value })} maxLength={10} placeholder="ej. 2" style={{ ...input, width: '70px', padding: '5px 8px', fontSize: '12px' }} />
                 </div>}
 
                 {e === 'no_cumple' && (

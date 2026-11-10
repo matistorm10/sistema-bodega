@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export type VersionCap = {
-  id: string, numero: number, estado: 'pendiente' | 'vigente', motivo: string | null, desde: string | null, snapshot: any[] | null, creado_at: string,
+  id: string, numero: number, revision?: string | null, estado: 'pendiente' | 'vigente', motivo: string | null, desde: string | null, snapshot: any[] | null, creado_at: string,
   elabora_por: string | null, elabora_nombre: string | null, elabora_cargo: string | null, elabora_firma: string | null, elabora_at: string | null,
   revisa_por: string | null, revisa_nombre: string | null, revisa_cargo: string | null, revisa_firma: string | null, revisa_at: string | null,
   aprueba_por: string | null, aprueba_nombre: string | null, aprueba_cargo: string | null, aprueba_firma: string | null, aprueba_at: string | null,
@@ -49,3 +49,6 @@ export function useVersionesCap(activo = true) {
   const vigente = versiones.find(v => v.estado === 'vigente') || null
   return { versiones, pendiente, vigente, cargado, recargar, requeridos }
 }
+
+// Revisión que escribe el Jefe al enviar el calendario a firma (ya no se numera sola)
+export const revCap = (v?: { numero: number, revision?: string | null } | null) => v ? ((v.revision || '').trim() || String(v.numero)) : ''

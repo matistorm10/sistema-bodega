@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { AZUL, fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
-import { card, btn } from '@/components/programa/ui'
+import { card, btn, input } from '@/components/programa/ui'
 import FirmaCanvas from '@/components/programa/FirmaCanvas'
-import { useVersionesCap, FIRMAS_CAP, firmaDe, siguienteFirma, rolQuePuedeFirmar, VersionCap } from '@/lib/capVersiones'
+import { revCap, useVersionesCap, FIRMAS_CAP, firmaDe, siguienteFirma, rolQuePuedeFirmar, VersionCap } from '@/lib/capVersiones'
 import { ventana12, etiquetaMes, desdeCiclo, LUGARES } from '@/lib/capacitaciones'
 import { generarCalendarioCapacitaciones } from '@/lib/generarCalendarioCap'
 import { abrirVentanaPDF } from '@/lib/abrirPDF'
@@ -42,8 +42,10 @@ export default function FirmaCalendario() {
     const ven = abrirVentanaPDF()
     try { await generarCalendarioCapacitaciones({ prog: v.snapshot || [], desde: v.desde || desdeCiclo(config, prog), version: v }, ven) } catch (e: any) { ven?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e)) }
   }
+  const [revNueva, setRevNueva] = useState('')
   const abrirFirma = async () => {
-    setMsg(''); const { error } = await supabase.rpc('cap_abrir_version')
+    setMsg(''); if (!revNueva.trim()) { setMsg('Escribe la revisión del calendario antes de enviarlo a firma.'); return }
+    const { error } = await supabase.rpc('cap_abrir_version', { p_revision: revNueva.trim() })
     if (error) { setMsg(error.message); return }
     await recargar()
   }
@@ -120,7 +122,7 @@ export default function FirmaCalendario() {
 
           {pendiente ? (
             <div style={{ ...card, marginBottom: '12px', borderColor: '#f0d98a' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#7a5600' }}>⏳ Versión {pendiente.numero} del calendario · en firma</p>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#7a5600' }}>⏳ Revisión {revCap(pendiente)} del calendario · en firma</p>
               {caja(pendiente)}
               {meToca && (
                 <div style={{ marginTop: '12px', borderTop: '1px solid #eef1f6', paddingTop: '10px' }}>
@@ -145,11 +147,11 @@ export default function FirmaCalendario() {
             </div>
           ) : (
             <div style={{ ...card, marginBottom: '12px', borderColor: '#b9e2c8' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#14532d' }}>✅ Calendario vigente: versión {vigente?.numero}{vigente?.aprueba_at ? ` · aprobado el ${fh(vigente.aprueba_at)}` : ' · calendario inicial, sin firmas'}</p>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#14532d' }}>✅ Calendario vigente: revisión {revCap(vigente)}{vigente?.aprueba_at ? ` · aprobado el ${fh(vigente.aprueba_at)}` : ' · calendario inicial, sin firmas'}</p>
               {vigente && vigente.aprueba_at && caja(vigente)}
               <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                 {vigente && <button onClick={() => bajar(vigente)} style={btn(false)}>📄 Descargar PDF</button>}
-                {esJefe && <button onClick={abrirFirma} style={btn()}>Enviar el calendario a firma</button>}
+                {esJefe && <><input value={revNueva} onChange={e => setRevNueva(e.target.value)} placeholder="Revisión (ej. 3)" maxLength={10} style={{ ...input, width: '130px' }} title="Revisión del calendario, la escribes tú" /><button onClick={abrirFirma} style={btn()}>Enviar el calendario a firma</button></>}
               </div>
             </div>
           )}
@@ -174,7 +176,7 @@ export default function FirmaCalendario() {
               <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '13.5px' }}>Versiones anteriores</summary>
               {anteriores.map(v => (
                 <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', padding: '6px 0', borderTop: '1px solid #f0f2f6', fontSize: '12.5px' }}>
-                  <span>Versión {v.numero} · {v.aprueba_at ? `aprobada ${fh(v.aprueba_at)}` : 'calendario inicial (sin firmas)'}</span>
+                  <span>Revisión {revCap(v)} · {v.aprueba_at ? `aprobada ${fh(v.aprueba_at)}` : 'calendario inicial (sin firmas)'}</span>
                   <button onClick={() => bajar(v)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>📄 PDF</button>
                 </div>
               ))}

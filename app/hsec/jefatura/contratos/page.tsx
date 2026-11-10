@@ -118,6 +118,12 @@ export default function JefaturaContratos() {
     }
     setOcupado(''); await cargar()
   }
+  // La revisión la escribe el usuario (ya no sube sola). Se puede cambiar mientras el documento no esté aprobado.
+  const cambiarRev = async (d: any, txt: string) => {
+    const n = parseInt(txt.replace(/\D/g, ''), 10)
+    if (isNaN(n) || n === d.rev) { await cargar(); return }
+    if (!err((await supabase.from('pr_contrato_documentos').update({ rev: n }).eq('id', d.id)).error)) await cargar()
+  }
   const aprobar = (d: any) => {
     if (!d.path || (d.pdf_rev || 0) < d.rev) { alert('Para marcarlo aprobado carga primero el PDF oficial firmado (escaneado) de esta revisión.'); return }
     cambiar([d.id], 'Aprobado')
@@ -246,7 +252,7 @@ export default function JefaturaContratos() {
                                 {renombrar && renombrar.id === d.id ? (
                                   <><input value={renombrar.nombre} onChange={e => { const v = e.target.value; setRenombrar(x => x && { ...x, nombre: v }) }} onKeyDown={e => { if (e.key === 'Enter') renombrarDoc() }} style={{ ...input, flex: '1 1 200px', width: 'auto' }} autoFocus /><button onClick={renombrarDoc} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>OK</button><button onClick={() => setRenombrar(null)} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>×</button></>
                                 ) : (
-                                  <span style={{ fontSize: '13px', flex: '1 1 200px', fontWeight: 600 }}>{d.nombre} <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '11px' }}>Rev. {d.rev}</span> <button onClick={() => setRenombrar({ id: d.id, nombre: d.nombre })} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>
+                                  <span style={{ fontSize: '13px', flex: '1 1 200px', fontWeight: 600 }}>{d.nombre} <span style={{ fontWeight: 400, color: '#98a2b3', fontSize: '11px' }}>Rev. {d.estado === 'Aprobado' ? d.rev : <input key={d.id + '-' + d.rev} type="text" inputMode="numeric" maxLength={2} defaultValue={d.rev} title="Revisión del documento (la escribes tú)" onBlur={e => cambiarRev(d, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} style={{ width: '30px', textAlign: 'center', fontSize: '11px', border: '1px solid #d0d5dd', borderRadius: '4px', padding: '1px 2px' }} />}</span> <button onClick={() => setRenombrar({ id: d.id, nombre: d.nombre })} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}>✏️</button></span>
                                 )}
                                 <Chip e={d.estado} />
                                 {d.estado === 'Enviado a aprobación' && <span style={{ fontSize: '11px', color: diasDesde(d.fecha_envio) > 7 ? '#9b1c1c' : '#667085' }}>hace {diasDesde(d.fecha_envio)} día(s)</span>}
@@ -259,7 +265,7 @@ export default function JefaturaContratos() {
                               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0 0 24px' }}>
                                 {(d.estado === 'En creación' || d.estado === 'Observado' || d.estado === 'En modificación') && <button onClick={() => cambiar([d.id], 'Enviado a aprobación')} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>{d.estado === 'En creación' ? 'Enviar a aprobación' : 'Reenviar a aprobación'}</button>}
                                 {d.estado === 'Enviado a aprobación' && <><button onClick={() => aprobar(d)} style={{ ...btn(), padding: '4px 10px', fontSize: '12px' }}>✓ Aprobado por el cliente</button><button onClick={() => observar(d)} style={{ ...btn(false, true), padding: '4px 10px', fontSize: '12px' }}>Observado</button></>}
-                                {d.estado === 'Aprobado' && <button onClick={() => { if (confirm('Se abrirá una nueva revisión: descarga el editable, haz los cambios y vuelve a pasar el documento por aprobación. Mientras tanto no estará disponible para los APR. ¿Continuar?')) cambiar([d.id], 'En modificación', null) }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir para modificar</button>}
+                                {d.estado === 'Aprobado' && <button onClick={() => { if (confirm('Se abrirá el documento para modificarlo: descarga el editable, haz los cambios, escribe el N° de la nueva revisión (casilla «Rev.»), carga el PDF firmado y vuelve a pasar el documento por aprobación. Mientras tanto no estará disponible para los APR. ¿Continuar?')) cambiar([d.id], 'En modificación', null) }} style={{ ...btn(false), padding: '4px 10px', fontSize: '12px' }}>Abrir para modificar</button>}
                                 <label style={{ ...btn(false), padding: '4px 10px', fontSize: '12px', opacity: ocupado === d.id + 'pdf' ? 0.5 : 1 }}>{ocupado === d.id + 'pdf' ? 'Subiendo...' : d.path ? '⬆ Reemplazar PDF firmado' : '⬆ Subir PDF firmado'}
                                   <input type="file" accept=".pdf,application/pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) subirArchivo(c, d, f, 'pdf'); e.target.value = '' }} />
                                 </label>

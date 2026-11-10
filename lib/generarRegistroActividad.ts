@@ -1,4 +1,5 @@
 import { estadoPlan } from './estadoPlan'
+import { supabase } from '@/lib/supabase'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { cargarLogo, normalizarImagen } from '@/lib/generarGuiaTraslado'
@@ -16,6 +17,23 @@ export type RegistroPDF = {
 }
 const R: Record<string, string> = { si: 'SÍ', no: 'NO', na: 'N/A', C: 'C', NC: 'NC', NA: 'NA' }
 const fcl = (f?: string | null) => f ? f.slice(0, 10).split('-').reverse().join('-') : ''
+
+// Foto de respaldo → JPEG liviano para incrustar en el PDF (null si no es una imagen que el navegador pueda abrir)
+async function cargarFoto(path: string): Promise<{ data: string, w: number, h: number } | null> {
+  try {
+    const { data, error } = await supabase.storage.from('hsec-documentos').download(path)
+    if (error || !data) return null
+    if (!(data.type || '').startsWith('image/') && !/\.(jpe?g|png|webp|gif|bmp)$/i.test(path)) return null
+    const url = URL.createObjectURL(data)
+    try {
+      const img: HTMLImageElement = await new Promise((res, rej) => { const i = new Image(); const t = setTimeout(() => rej(new Error('timeout')), 8000); i.onload = () => { clearTimeout(t); res(i) }; i.onerror = () => { clearTimeout(t); rej(new Error('error')) }; i.src = url })
+      const esc = Math.min(1, 1100 / Math.max(img.width, img.height)), c = document.createElement('canvas')
+      c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc)
+      const g = c.getContext('2d')!; g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height)
+      return { data: c.toDataURL('image/jpeg', 0.78), w: c.width, h: c.height }
+    } finally { URL.revokeObjectURL(url) }
+  } catch { return null }
+}
 
 export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -107,10 +125,45 @@ export async function generarRegistroActividad(r: RegistroPDF): Promise<Blob> {
   if (d.oport_levantadas || d.oport_vencidas) libres.push(['Oportunidades', `Levantadas: ${d.oport_levantadas || 0} · Vencidas: ${d.oport_vencidas || 0}`])
   if (libres.length) autoTable(doc, { ...base, startY: titulo('Observaciones'), theme: 'grid', body: libres.map(([a, b]) => [{ content: a, styles: k }, b]), columnStyles: { 0: { cellWidth: 40 } } })
 
+  // Respaldos (fotos) y cierre de oportunidades de mejora, con sus evidencias
+  let yExtra: number | null = null
+  const respaldos: string[] = (d.respaldos || []).filter(Boolean)
+  const cierres: { rot: string, texto: string, resp: string, plazo: string, c: any }[] = []
+  Object.entries(d.det || {}).forEach(([n, v]: any) => { if (v?.cierre) cierres.push({ rot: `Ítem ${n}`, texto: v.accion || v.justif || '', resp: v.responsable || '', plazo: v.fecha || '', c: v.cierre }) })
+  ;(d.compromisos_lista || []).forEach((c: any, i: number) => { if (c?.cierre) cierres.push({ rot: `Compromiso ${i + 1}`, texto: c.texto || '', resp: c.responsable || '', plazo: c.plazo || '', c: c.cierre }) })
+  if (respaldos.length || cierres.length) {
+    let yy = fin() + 8
+    const nueva = () => { doc.addPage(); encabezado(); yy = 40 }
+    const tit = (t: string) => { if (yy > 262) nueva(); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...AZUL); doc.text(t, M, yy); doc.setTextColor(0); yy += 4 }
+    const fotos = async (lista: { path: string, pie: string }[]) => {
+      const cw = (W - 2 * M - 6) / 2, maxH = 62
+      for (let i = 0; i < lista.length; i += 2) {
+        const par = lista.slice(i, i + 2), imgs = await Promise.all(par.map(x => cargarFoto(x.path)))
+        const alto = imgs.some(Boolean) ? maxH + 8 : 14
+        if (yy + alto > 284) nueva()
+        par.forEach((x, j) => {
+          const im = imgs[j], px = M + j * (cw + 6)
+          if (im) { const sc = Math.min(cw / im.w, maxH / im.h), w = im.w * sc, h = im.h * sc; doc.addImage(im.data, 'JPEG', px, yy, w, h); doc.setDrawColor(190); doc.rect(px, yy, w, h) }
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(100)
+          doc.text(im ? x.pie : `${x.pie}: archivo adjunto (${x.path.split('/').pop()}), no se puede mostrar como imagen`, px, im ? yy + maxH + 3.5 : yy + 4, { maxWidth: cw }); doc.setTextColor(0)
+        })
+        yy += alto
+      }
+    }
+    if (cierres.length) {
+      tit('Cierre de oportunidades de mejora'); yy -= 2
+      autoTable(doc, { ...base, startY: yy, head: [['Ref.', 'Oportunidad / acción', 'Responsable', 'Plazo', 'Cerrada el', 'Comentario de cierre']], body: cierres.map(c => [c.rot, c.texto, c.resp, fcl(c.plazo), fcl(c.c.fecha), c.c.comentario || '']), columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 28 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 } } })
+      yy = fin() + 6
+      for (const c of cierres) { const ev = (c.c.evidencia || []).filter(Boolean); if (ev.length) { tit(`Evidencia de cierre · ${c.rot}`); await fotos(ev.map((path: string, i: number) => ({ path, pie: `Evidencia ${i + 1}` }))) } }
+    }
+    if (respaldos.length) { tit('Respaldos y evidencias'); await fotos(respaldos.map((path, i) => ({ path, pie: `Respaldo ${i + 1}` }))) }
+    yExtra = yy - 2
+  }
+
   // Resultado y firma
-  let y = fin() + 8
+  let y = (yExtra ?? fin()) + 8
   if (y > 235) { doc.addPage(); encabezado(); y = 40 }
-  if (r.porcentaje !== null && r.porcentaje !== undefined) {
+  if (r.actividad !== 'cdp_tarea_critica' && r.porcentaje !== null && r.porcentaje !== undefined) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...AZUL)
     doc.text(`Porcentaje de cumplimiento: ${r.porcentaje}%`, M, y); doc.setTextColor(0); y += 9
   }

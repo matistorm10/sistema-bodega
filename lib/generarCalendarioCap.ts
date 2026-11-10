@@ -78,7 +78,7 @@ export async function generarCalendarioCapacitaciones(o: { prog: any[], desde: s
   for (let i = 1; i <= n; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90)
     doc.text('Celda azul = mes en que se realiza la capacitación. Los APR registran cada capacitación realizada, con su asistencia firmada, en el sistema.', M, 205)
-    doc.text(`${o.version ? `Versión ${o.version.numero} · ` : ''}Impreso el ${new Date().toLocaleDateString('es-CL')} · Página ${i} de ${n}`, W - M, 205, { align: 'right' })
+    doc.text(`${o.version ? `Revisión ${(o.version.revision || '').trim() || o.version.numero} · ` : ''}Impreso el ${new Date().toLocaleDateString('es-CL')} · Página ${i} de ${n}`, W - M, 205, { align: 'right' })
   }
   entregarPDF(doc, `Calendario_Capacitaciones_${cols[0]}.pdf`, ventana)
 }

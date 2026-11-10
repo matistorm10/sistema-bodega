@@ -138,7 +138,7 @@ export default function FormActividad({ actividad, usuario, faenas, inicial, sol
     } else if (actividad === 'cdp_tarea_critica') {
       if (!tarea.trim()) { setMsg('Indica la tarea observada.'); return }
       const s = fort.filter(x => x.trim()).length, o = oport.filter(x => x.trim()).length
-      porcentaje = pct(s, s + o)
+      porcentaje = null   // el CdP de tarea crítica no se evalúa con porcentaje
       if (comps.some(c => c.texto.trim() && c.plazo && c.plazo < (retroOk ? fecha : hoy()))) { setMsg('La fecha de un compromiso no puede ser anterior a hoy.'); return }
       datos = { ...datos, hora: h, empresa, lugar, tarea, n_seguros: String(fort.filter(x => x.trim()).length), n_oport: String(oport.filter(x => x.trim()).length), fortalezas: fort.filter(x => x.trim()), oportunidades: oport.filter(x => x.trim()), compromisos_lista: comps.filter(c => c.texto.trim()) }
     } else if (actividad === 'inspeccion_epp' || actividad === 'inspeccion_bloqueo') {

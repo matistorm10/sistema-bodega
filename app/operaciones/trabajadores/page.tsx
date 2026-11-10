@@ -37,6 +37,7 @@ export default function Trabajadores() {
   const car = useCargos()
   const [f, setF] = useState({ nombre: '', rut: '', cargo: '', ciudad: '', modalidad: '', examenes: 'pendiente', tipo: 'directo', calzado: '', ropa: '', nacimiento: '' })
   const [msg, setMsg] = useState('')
+  const [existente, setExistente] = useState<any>(null)
   const hoy = hoyISO()
 
   const cargar = async () => {
@@ -55,7 +56,14 @@ export default function Trabajadores() {
   const crear = async () => {
     if (!f.nombre.trim()) { setMsg('Escribe el nombre.'); return }
     const { data, error } = await supabase.from('op_trabajadores').insert({ nombre: f.nombre.trim(), rut: f.rut.trim() || null, fecha_nacimiento: f.nacimiento || null, cargo: f.cargo || null, ciudad: f.ciudad || null, modalidad_viaje: f.modalidad || null, tipo_personal: f.tipo, examenes: f.examenes, examenes_fecha: hoyISO(), talla_calzado: f.calzado || null, talla_ropa: f.ropa || null }).select('id').single()
-    if (error) { setMsg(msgError(error)); return }
+    if (error) {
+      setMsg(msgError(error)); setExistente(null)
+      if (error.message.includes('duplicate key') && f.rut.trim()) {
+        const { data: ex } = await supabase.from('op_trabajadores').select('id,nombre,activo').eq('rut', f.rut.trim()).limit(1)
+        if (ex && ex[0]) setExistente(ex[0])
+      }
+      return
+    }
     router.push(`/operaciones/trabajadores/${data.id}`)
   }
   return (
@@ -87,6 +95,7 @@ export default function Trabajadores() {
             <div style={{ flex: '0 1 100px' }}><label style={label}>Talla ropa</label><select value={f.ropa} onChange={e => setF({ ...f, ropa: e.target.value })} style={input}><option value="">—</option>{tallasDe({ usa_talla: true, tipo_talla: 'ropa' }).map(t => <option key={t}>{t}</option>)}</select></div>
           </div>
           {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
+          {existente && <p style={{ fontSize: '12.5px', margin: '6px 0 0', color: '#344054' }}>Ese RUT corresponde a <strong>{existente.nombre}</strong>{existente.activo ? '' : ' (retirado)'}. Para reincorporarlo no se crea de nuevo: <a href={`/operaciones/trabajadores/${existente.id}`} style={{ color: '#1B4F9C', fontWeight: 700 }}>abrir su ficha</a>{existente.activo ? '' : ' y usar «Reintegrar»'}.</p>}
           <button onClick={crear} style={{ ...btn(), marginTop: '10px' }}>Crear y abrir ficha</button>
           <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#667085' }}>Después de crearlo podrás asignarle contrato y turnos en su ficha.</p>
         </div>

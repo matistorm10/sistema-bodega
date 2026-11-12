@@ -17,6 +17,18 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
   const [f, setF] = useState(existente ? desde(existente) : { ...vacioV })
   const [msg, setMsg] = useState(''); const [ok, setOk] = useState(false)
   useEffect(() => { setF(existente ? desde(existente) : { ...vacioV }) }, [existente?.id, dia, trabId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Otros trabajadores con un pasaje «por comprar» ese mismo día: se pueden marcar para guardar la misma compra a todos de una vez
+  const [otros, setOtros] = useState<{ id: string, trabajador_id: string, tipo: string | null, nombre: string, rut: string | null }[]>([])
+  const [sel, setSel] = useState<string[]>([])
+  useEffect(() => {
+    let vivo = true; setSel([])
+    supabase.from('op_vuelos').select('id,trabajador_id,tipo,trabajador:op_trabajadores(nombre,rut,examenes,activo)').eq('fecha', dia).eq('estado', 'por_comprar').neq('trabajador_id', trabId).then(({ data }) => {
+      if (!vivo) return
+      setOtros(((data as any[]) || []).filter(x => x.trabajador?.activo !== false && (!x.trabajador?.examenes || x.trabajador.examenes === 'aprobado')).map(x => ({ id: x.id, trabajador_id: x.trabajador_id, tipo: x.tipo, nombre: x.trabajador?.nombre || '—', rut: x.trabajador?.rut || null })).sort((a, b) => a.nombre.localeCompare(b.nombre)))
+    })
+    return () => { vivo = false }
+  }, [dia, trabId, existente?.id])
+  const visibles = otros.filter(o => !f.tipo || !o.tipo || o.tipo === f.tipo)
   const [copiado, setCopiado] = useState('')
   const copiar = async (k: string, v: string) => { try { await navigator.clipboard.writeText(v); setCopiado(k); setTimeout(() => setCopiado(''), 1500) } catch { /* sin permiso de portapapeles */ } }
   const esVuelo = f.medio === 'vuelo'
@@ -41,7 +53,12 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
       ? await supabase.from('op_vuelos').update(fila).eq('id', existente.id)
       : await supabase.from('op_vuelos').insert({ ...fila, trabajador_id: trabId, fecha: dia })
     if (error) { setMsg(msgError(error)); return }
-    setMsg(''); setOk(true); onCambio()
+    const extra = visibles.filter(o => sel.includes(o.id))
+    if (extra.length) {
+      const { error: e2 } = await supabase.from('op_vuelos').update(fila).in('id', extra.map(o => o.id))
+      if (e2) { setMsg('Se guardó este pasaje, pero no se pudo aplicar a los otros seleccionados: ' + msgError(e2)); onCambio(); return }
+    }
+    setMsg(''); setOk(true); setSel([]); onCambio()
   }
   const borrar = async () => { if (!existente || !confirm('¿Eliminar este vuelo/bus?')) return; const { error } = await supabase.from('op_vuelos').delete().eq('id', existente.id); if (error) setMsg(msgError(error)); else onCambio() }
   const lugar = (v: string, k: 'origen' | 'destino') => <select value={v} onChange={e => setF({ ...f, [k]: e.target.value })} style={input}><option value="">— elegir —</option>{v && !LUGARES.includes(v) && <option>{v}</option>}{LUGARES.map(l => <option key={l}>{l}</option>)}</select>
@@ -79,10 +96,18 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
         <div style={{ flex: '1 1 110px' }}><label style={label}>Reserva{esVuelo && !porComprar ? ' *' : ''}</label><input value={f.reserva} onChange={e => setF({ ...f, reserva: e.target.value })} style={input} /></div>
         <div style={{ flex: '2 1 200px' }}><label style={label}>Notas (opcional)</label><input value={f.notas} onChange={e => setF({ ...f, notas: e.target.value })} style={input} /></div>
       </div>
+      {visibles.length > 0 && (
+        <div style={{ marginTop: '10px', background: '#f8fafc', border: '1px solid #e2e6ed', borderRadius: '10px', padding: '8px 12px' }}>
+          <p style={{ margin: '0 0 6px', fontSize: '12.5px', fontWeight: 700, color: '#16213E' }}>Misma compra para otros ({sel.length} marcados) <span style={{ fontWeight: 400, color: '#667085' }}>· pasajes «por comprar» del {fechaCorta(dia)}; al guardar se les aplican los mismos datos</span></p>
+          <div style={{ display: 'flex', gap: '4px 16px', flexWrap: 'wrap' }}>
+            {visibles.map(o => <label key={o.id} style={{ fontSize: '12.5px', display: 'flex', gap: '5px', alignItems: 'center', cursor: 'pointer' }}><input type="checkbox" checked={sel.includes(o.id)} onChange={e => setSel(x => e.target.checked ? [...x, o.id] : x.filter(y => y !== o.id))} />{o.nombre}{o.tipo ? <span style={{ color: '#98a2b3', fontSize: '11px' }}> · {o.tipo}</span> : null}</label>)}
+          </div>
+          <button type="button" onClick={() => setSel(sel.length === visibles.length ? [] : visibles.map(o => o.id))} style={{ ...btn(false), padding: '3px 10px', fontSize: '11.5px', marginTop: '6px' }}>{sel.length === visibles.length ? 'Quitar todos' : 'Marcar todos'}</button>
+        </div>)}
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
       {ok && <p style={{ fontSize: '12.5px', color: '#1e8e4e', margin: '8px 0 0' }}>Guardado ✓</p>}
       <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-        <button onClick={guardar} disabled={faltan.length > 0} style={{ ...btn(), opacity: faltan.length ? 0.5 : 1, cursor: faltan.length ? 'not-allowed' : 'pointer' }}>{existente ? 'Guardar cambios' : porComprar ? 'Guardar como por comprar' : 'Guardar vuelo'}</button>
+        <button onClick={guardar} disabled={faltan.length > 0} style={{ ...btn(), opacity: faltan.length ? 0.5 : 1, cursor: faltan.length ? 'not-allowed' : 'pointer' }}>{existente ? 'Guardar cambios' : porComprar ? 'Guardar como por comprar' : 'Guardar vuelo'}{sel.length ? ` (+${sel.length})` : ''}</button>
         {existente && <button onClick={borrar} style={btn(false, true)}>Eliminar</button>}
       </div>
     </div>

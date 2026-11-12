@@ -12,6 +12,7 @@ export default function Administracion() {
   const items = [
     {href:'/usuarios',icon:'👥',label:'Usuarios',desc:'Personas, roles y permisos de acceso a cada módulo'},
     {href:'/ubicaciones',icon:'📍',label:'Centros de Costo (CECO)',desc:'Bodegas y centros de costo (faenas)'},
+    {href:'/administracion/respaldo',icon:'💾',label:'Respaldo de archivos',desc:'Descarga en ZIP las fotos, PDFs firmados y documentos subidos'},
   ]
 
   if (cargando) return <main style={fondoPagina}><div style={{padding:'1.5rem',fontFamily:'system-ui,sans-serif'}}><p style={{fontSize:'13px',color:'#999'}}>Cargando...</p></div></main>

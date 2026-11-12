@@ -8,7 +8,7 @@ import { AZUL } from '@/lib/theme'
 import { card } from '@/components/programa/ui'
 import Marco from '@/components/operaciones/Marco'
 import FiltroContratos from '@/components/operaciones/FiltroContratos'
-import { etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
+import { descargarXlsx, etiquetaContrato, traerTodo, hoyISO, sumarDias, fechaCorta, estadoEn, asigEn, type Asig, type Turno, type Vuelo } from '@/lib/operaciones'
 
 export default function Operaciones() {
   const { usuario: usuarioOp } = useUsuarioActual(); const completo = !!usuarioOp?.operacionesCompleto
@@ -82,6 +82,25 @@ export default function Operaciones() {
     </Link>
   )
 
+  const [respaldando, setRespaldando] = useState(false)
+  const respaldo = async () => {
+    setRespaldando(true)
+    try {
+      const tablas = ['op_trabajadores', 'op_asignaciones', 'op_turnos', 'op_vuelos', 'op_cupos', 'op_fallos', 'pr_contratos']
+      const datos: Record<string, any[]> = {}
+      for (const t of tablas) datos[t] = await traerTodo(t)
+      await descargarXlsx(`Respaldo_Operaciones_${hoy}.xlsx`, async (X) => {
+        const wb = new X.Workbook()
+        for (const t of tablas) {
+          const filas = datos[t]; const cols = filas.length ? Object.keys(filas[0]) : ['(sin datos)']
+          const ws = wb.addWorksheet(t.replace(/^(op|pr)_/, '')); ws.addRow(cols).font = { bold: true }
+          filas.forEach(f => ws.addRow(cols.map(c => { const v = f[c]; return v !== null && typeof v === 'object' ? JSON.stringify(v) : v })))
+          ws.views = [{ state: 'frozen', ySplit: 1 }]
+        }
+        return wb
+      })
+    } catch (e: any) { alert('No se pudo generar el respaldo: ' + (e?.message || e)) } finally { setRespaldando(false) }
+  }
   return (
     <Marco titulo="Operaciones" volver="/" volverTxt="← Inicio">
       {cargando ? <p style={{ fontSize: '13px', color: '#999' }}>Cargando...</p> : error ? <p style={{ fontSize: '13px', color: '#c5221f' }}>{error}</p> : (
@@ -92,6 +111,7 @@ export default function Operaciones() {
             {completo && acceso('/operaciones/dotacion', '🧩', 'Dotación por contrato', 'Cargos vendidos por contrato, cupos con y sin nombre, reemplazos')}
             {acceso('/operaciones/vuelos', '✈️', 'Vuelos y pasajes', 'Qué pasajes están por comprar y cuáles ya se compraron, con el aeropuerto de origen de cada trabajador')}
           </div>
+          {completo && <div style={{ margin: '-4px 0 14px' }}><button onClick={respaldo} disabled={respaldando} style={{ border: '1px solid #d0d5dd', background: '#fff', borderRadius: '8px', padding: '7px 12px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', color: '#475467' }}>{respaldando ? 'Preparando respaldo…' : '💾 Descargar respaldo de datos (Excel)'}</button> <span style={{ fontSize: '11.5px', color: '#98a2b3' }}>trabajadores, contratos, turnos, vuelos y cupos, para guardar una copia propia</span></div>}
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '14px', color: '#16213E' }}>Dónde está el personal hoy ({fechaCorta(hoy)})</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>
             {kpi(totEn, 'En faena', '#1e8e4e')}{kpi(totDesc, 'En descanso', '#1B4F9C')}{kpi(activos.length, 'Trabajadores activos')}{kpi(nBO, 'Back Office', '#1B4F9C')}{kpi(sinContratoHoy, 'Activos sin contrato hoy', sinContratoHoy ? '#b7791f' : '#1e8e4e')}{kpi(activos.filter(t => t.examenes === 'pendiente').length, 'Exámenes pendientes', '#b7791f')}

@@ -49,8 +49,9 @@ export default function Trabajadores() {
 
   const filas = useMemo(() => trab.filter(t => (verInactivos || t.activo) && ((t.tipo_personal === 'backoffice') === (vista === 'backoffice'))).map(t => {
     const a = asigEn(asigs, t.id, hoy)
-    return { t, a, est: estadoEn(asigs, turnos, t.id, hoy) }
-  }).sort((x, y) => cmpPersonal(x.t, y.t)).filter(r => (fContrato.length === 0 || (!!r.a && fContrato.includes(r.a.contrato_id))) && (!fTipo || r.t.tipo_personal === fTipo) && (!fExam || r.t.examenes === fExam) && (!fEstado || r.est === fEstado) &&
+    const prox = a ? undefined : asigs.filter(x => x.trabajador_id === t.id && x.desde > hoy).sort((x, y) => x.desde.localeCompare(y.desde))[0]
+    return { t, a, prox, est: estadoEn(asigs, turnos, t.id, hoy) }
+  }).sort((x, y) => cmpPersonal(x.t, y.t)).filter(r => (fContrato.length === 0 || (!!(r.a || r.prox) && fContrato.includes((r.a || r.prox)!.contrato_id))) && (!fTipo || r.t.tipo_personal === fTipo) && (!fExam || r.t.examenes === fExam) && (!fEstado || r.est === fEstado) &&
     (!q.trim() || `${r.t.nombre} ${r.t.rut || ''} ${r.t.cargo || ''}`.toLowerCase().includes(q.trim().toLowerCase()))), [trab, asigs, turnos, q, fExam, fContrato, fEstado, verInactivos, hoy, vista])
 
   const crear = async () => {
@@ -105,14 +106,14 @@ export default function Trabajadores() {
           <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#667085' }}>{filas.length} trabajador{filas.length === 1 ? '' : 'es'}</p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
             <thead><tr style={{ textAlign: 'left', color: '#667085' }}><th style={{ padding: '6px 8px' }}>Nombre</th><th style={{ padding: '6px 8px' }}>Tipo</th><th style={{ padding: '6px 8px' }}>Exámenes</th><th style={{ padding: '6px 8px' }}>Cargo</th><th style={{ padding: '6px 8px' }}>Contrato hoy</th><th style={{ padding: '6px 8px' }}>Plazo</th><th style={{ padding: '6px 8px' }}>Hoy</th><th style={{ padding: '6px 8px' }}>Tallas</th></tr></thead>
-            <tbody>{filas.map(({ t, a, est }) => (
+            <tbody>{filas.map(({ t, a, prox, est }) => (
               <tr key={t.id} style={{ borderTop: '1px solid #eef1f6', opacity: t.activo ? 1 : 0.55 }}>
                 <td style={{ padding: '7px 8px', fontWeight: 600 }}><PuntoExamen estado={t.examenes} /><Link href={`/operaciones/trabajadores/${t.id}`} style={{ color: AZUL, textDecoration: 'none' }}>{t.nombre}</Link><span style={{ display: 'block', fontWeight: 400, fontSize: '11px', color: '#98a2b3' }}>{t.rut || 'sin RUT'}</span></td>
                 <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.tipo_personal === 'indirecto' ? '#fff3cd' : t.tipo_personal === 'backoffice' ? '#e8f0fe' : '#f2f4f7', color: t.tipo_personal === 'indirecto' ? '#8a5a00' : t.tipo_personal === 'backoffice' ? '#1B4F9C' : '#667085' }}>{TIPOS_PERSONAL[t.tipo_personal] || 'Directo'}</span></td>
                 <td style={{ padding: '7px 8px' }}><span style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: t.examenes === 'aprobado' ? '#e6f4ea' : t.examenes === 'rechazado' ? '#fde2e1' : '#fff3cd', color: t.examenes === 'aprobado' ? '#1e8e4e' : t.examenes === 'rechazado' ? '#b42318' : '#8a5a00' }}>{EXAMENES[t.examenes] || 'Pendiente'}</span></td>
                 <td style={{ padding: '7px 8px' }}>{t.cargo || '—'}</td>
-                <td style={{ padding: '7px 8px' }}>{t.tipo_personal === 'backoffice' ? <span style={{ color: '#667085' }}>Casa matriz</span> : nCont(a?.contrato_id)}</td>
-                <td style={{ padding: '7px 8px' }}>{a?.tipo_contrato ? `${TIPOS_CONTRATO[a.tipo_contrato]}${a.vence ? ' · ' + fechaCorta(a.vence) : ''}` : '—'}</td>
+                <td style={{ padding: '7px 8px' }}>{t.tipo_personal === 'backoffice' ? <span style={{ color: '#667085' }}>Casa matriz</span> : a ? nCont(a.contrato_id) : prox ? <span style={{ color: '#667085' }}>{nCont(prox.contrato_id)} <em style={{ fontSize: '11px' }}>(desde {fechaCorta(prox.desde)})</em></span> : '—'}</td>
+                <td style={{ padding: '7px 8px' }}>{(a || prox)?.tipo_contrato ? `${TIPOS_CONTRATO[(a || prox)!.tipo_contrato!]}${(a || prox)!.vence ? ' · ' + fechaCorta((a || prox)!.vence) : ''}` : '—'}</td>
                 <td style={{ padding: '7px 8px' }}>{t.tipo_personal === 'backoffice' ? '—' : <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '20px', background: ESTADO[est].bg, color: ESTADO[est].col }}>{ESTADO[est].t}</span>}</td>
                 <td style={{ padding: '7px 8px', color: '#667085' }}>{t.talla_calzado || '—'} / {t.talla_ropa || '—'}</td>
               </tr>))}

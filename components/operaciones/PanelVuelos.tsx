@@ -44,13 +44,20 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
     if (aeropuerto) { if (tipo === 'subida' && !f.origen) n.origen = aeropuerto; if (tipo === 'bajada' && !f.destino) n.destino = aeropuerto }
     setF(n)
   }
+  const [guardando, setGuardando] = useState(false)
   const guardar = async () => {
+    if (guardando) return
     setOk(false)
     if (faltan.length) { setMsg('Falta completar: ' + faltan.join(', ') + '.'); return }
     if (f.origen && f.origen === f.destino) { setMsg('El origen y el destino no pueden ser iguales.'); return }
     const fila = { estado: f.estado, tipo: f.tipo, medio: f.medio, aerolinea: esVuelo ? (f.aerolinea || null) : null, origen: f.origen || null, destino: f.destino || null, hora_salida: f.hora_salida || null, hora_llegada: f.hora_llegada || null, reserva: f.reserva.trim() || null, notas: f.notas.trim() || null }
-    const { error } = existente
-      ? await supabase.from('op_vuelos').update(fila).eq('id', existente.id)
+    setGuardando(true)
+    try {
+    // Solo un pasaje por trabajador y día: si ya existe en la base (aunque esta pantalla no se haya refrescado), se actualiza en vez de duplicar
+    let idExistente = existente?.id
+    if (!idExistente) { const { data: ya } = await supabase.from('op_vuelos').select('id').eq('trabajador_id', trabId).eq('fecha', dia).limit(1); idExistente = ya?.[0]?.id }
+    const { error } = idExistente
+      ? await supabase.from('op_vuelos').update(fila).eq('id', idExistente)
       : await supabase.from('op_vuelos').insert({ ...fila, trabajador_id: trabId, fecha: dia })
     if (error) { setMsg(msgError(error)); return }
     const extra = visibles.filter(o => sel.includes(o.id))
@@ -59,6 +66,7 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
       if (e2) { setMsg('Se guardó este pasaje, pero no se pudo aplicar a los otros seleccionados: ' + msgError(e2)); onCambio(); return }
     }
     setMsg(''); setOk(true); setSel([]); onCambio()
+    } finally { setGuardando(false) }
   }
   const borrar = async () => { if (!existente || !confirm('¿Eliminar este vuelo/bus?')) return; const { error } = await supabase.from('op_vuelos').delete().eq('id', existente.id); if (error) setMsg(msgError(error)); else onCambio() }
   const lugar = (v: string, k: 'origen' | 'destino') => <select value={v} onChange={e => setF({ ...f, [k]: e.target.value })} style={input}><option value="">— elegir —</option>{v && !LUGARES.includes(v) && <option>{v}</option>}{LUGARES.map(l => <option key={l}>{l}</option>)}</select>
@@ -107,7 +115,7 @@ export default function PanelVuelos({ trabId, dia, vuelos, onCambio, trabajador 
       {msg && <p style={{ fontSize: '12.5px', color: '#c5221f', margin: '8px 0 0' }}>{msg}</p>}
       {ok && <p style={{ fontSize: '12.5px', color: '#1e8e4e', margin: '8px 0 0' }}>Guardado ✓</p>}
       <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-        <button onClick={guardar} disabled={faltan.length > 0} style={{ ...btn(), opacity: faltan.length ? 0.5 : 1, cursor: faltan.length ? 'not-allowed' : 'pointer' }}>{existente ? 'Guardar cambios' : porComprar ? 'Guardar como por comprar' : 'Guardar vuelo'}{sel.length ? ` (+${sel.length})` : ''}</button>
+        <button onClick={guardar} disabled={faltan.length > 0 || guardando} style={{ ...btn(), opacity: faltan.length ? 0.5 : 1, cursor: faltan.length ? 'not-allowed' : 'pointer' }}>{existente ? 'Guardar cambios' : porComprar ? 'Guardar como por comprar' : 'Guardar vuelo'}{sel.length ? ` (+${sel.length})` : ''}</button>
         {existente && <button onClick={borrar} style={btn(false, true)}>Eliminar</button>}
       </div>
     </div>

@@ -36,8 +36,9 @@ export default function Operaciones() {
   const nCont = (id?: string) => etiquetaContrato(contratos.find(x => x.id === id))
   const activos = trab.filter(t => t.activo && t.tipo_personal !== 'backoffice')
   const nBO = trab.filter(t => t.activo && t.tipo_personal === 'backoffice').length
+  const idsActivos = new Set(activos.map(t => t.id)) // solo personal de contratos activo: sin Back Office ni retirados
   const filas = contratos.map(c => {
-    const ids = asigs.filter(a => a.contrato_id === c.id && a.desde <= hoy && (!a.hasta || a.hasta >= hoy)).map(a => a.trabajador_id)
+    const ids = asigs.filter(a => a.contrato_id === c.id && idsActivos.has(a.trabajador_id) && a.desde <= hoy && (!a.hasta || a.hasta >= hoy)).map(a => a.trabajador_id)
     const enFaena = ids.filter(id => estadoEn(asigs, turnos, id, hoy) === 'faena').length
     return { c, total: ids.length, enFaena, descanso: ids.length - enFaena }
   }).filter(f => f.total > 0)
@@ -50,12 +51,12 @@ export default function Operaciones() {
   const diasMes = useMemo(() => { const d = new Date(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)), 0).getDate(); return Array.from({ length: d }, (_, i) => sumarDias(mesIni, i)) }, [hoy]) // eslint-disable-line react-hooks/exhaustive-deps
   const serie = useMemo(() => {
     const porC: Record<string, number[]> = {}; const total = diasMes.map(() => 0)
-    diasMes.forEach((d, i) => trab.forEach(t => {
+    diasMes.forEach((d, i) => activos.forEach(t => {
       const a = asigEn(asigs, t.id, d); if (!a || estadoEn(asigs, turnos, t.id, d) !== 'faena') return
       ;(porC[a.contrato_id] ||= diasMes.map(() => 0))[i]++; total[i]++
     }))
     return { porC, total }
-  }, [trab, asigs, turnos, diasMes])
+  }, [trab, asigs, turnos, diasMes]) // eslint-disable-line react-hooks/exhaustive-deps
   const PALETA = ['#1B4F9C', '#e8710a', '#0f9d9a', '#9334e6', '#c5221f', '#7a8a00', '#d6409f', '#5f6b7a']
   const lineas = contratos.filter(c => serie.porC[c.id] && (fc.length === 0 || fc.includes(c.id))).map((c, i) => ({ id: c.id, nombre: etiquetaContrato(c, 50), datos: serie.porC[c.id], col: PALETA[i % PALETA.length] }))
   const ymax = Math.max(5, ...serie.total, ...lineas.flatMap(l => l.datos)); const yTope = Math.ceil(ymax / 5) * 5

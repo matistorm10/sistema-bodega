@@ -203,7 +203,7 @@ export default function CalendarioInformes({ informes, cierres = [], plazoDias =
             {selRs.length === 0 && (
               puedeCrear(sel)
                 ? <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}><span style={{ fontSize: '13px', color: '#9b1c1c' }}>{sel === hoy ? 'Aún no hay informe de hoy.' : 'Este día no tiene informe.'}</span><button onClick={() => onNuevo(sel)} style={{ ...btn(), padding: '6px 14px', fontSize: '12.5px' }}>+ Crear informe de este día</button></div>
-                : <span style={{ fontSize: '12.5px', color: '#98a2b3' }}>{sel > hoy ? 'Es un día futuro.' : `Sin informe. Ya pasó el plazo de ${plazoDias} días para crearlo.`}</span>
+                : <span style={{ fontSize: '12.5px', color: '#98a2b3' }}>{sel > hoy ? 'Es un día futuro.' : (sel >= sumaDias(hoy, -plazoDias) ? `Sin informe. Aún está dentro del plazo (hasta el ${fcl(sumaDias(sel, plazoDias))}), pero solo el APR autor puede crearlo.` : `Sin informe. Ya pasó el plazo de ${plazoDias} días para crearlo.`)}</span>
             )}
             {selVenc.length > 0 && (
               <div style={{ marginTop: '8px' }}>

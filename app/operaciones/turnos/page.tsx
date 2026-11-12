@@ -72,11 +72,12 @@ export default function GrillaTurnos() {
   const hasta = dias[dias.length - 1]
   const segMeses = useMemo(() => { const r: { k: string, n: number, i: number }[] = []; dias.forEach((d, i) => { const k = d.slice(0, 7); const u = r[r.length - 1]; if (u && u.k === k) u.n++; else r.push({ k, n: 1, i }) }); return r }, [dias])
 
-  const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).map(t => {
+  const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo || modo === 'vuelo').map(t => {
     // Back Office: sin contrato real; se muestra bajo el «contrato» virtual Back Office
     const as: Asig[] = t.tipo_personal === 'backoffice'
       ? ((contrato.length === 0 || contrato.includes(BACKOFFICE_ID)) ? [{ id: 'bo-' + t.id, trabajador_id: t.id, contrato_id: BACKOFFICE_ID, desde: '2000-01-01', hasta: null, tipo_contrato: 'indefinido', vence: null, regimen: null, sueldo: null, condiciones: null } as Asig] : [])
-      : asigs.filter(a => a.trabajador_id === t.id && a.desde <= hasta && (!a.hasta || a.hasta >= desde) && (contrato.length === 0 || contrato.includes(a.contrato_id)))
+      // En modo Vuelos, quien terminó contrato hasta 10 días antes sigue visible: el pasaje (p. ej. el de bajada) es independiente de la vigencia del contrato
+      : asigs.filter(a => a.trabajador_id === t.id && a.desde <= hasta && (!a.hasta || a.hasta >= (modo === 'vuelo' ? sumarDias(desde, -10) : desde)) && (contrato.length === 0 || contrato.includes(a.contrato_id)))
     if (as.length === 0) return null
     const ts = turnos.filter(x => x.trabajador_id === t.id && x.sube <= hasta && (!x.baja || x.baja >= desde))
     const celdas = dias.map(d => {
@@ -86,7 +87,7 @@ export default function GrillaTurnos() {
     })
     const vista = as.find(x => x.desde <= hoy && (!x.hasta || x.hasta >= hoy)) || as[as.length - 1]
     return { t, celdas, contratoPrincipal: vista.contrato_id, vista }
-  }).filter(Boolean) as { t: any, celdas: { a?: Asig, en: boolean }[], contratoPrincipal: string, vista: Asig }[], [trab, asigs, turnos, contrato, dias, desde, hasta, soloActivos])
+  }).filter(Boolean) as { t: any, celdas: { a?: Asig, en: boolean }[], contratoPrincipal: string, vista: Asig }[], [trab, asigs, turnos, contrato, dias, desde, hasta, soloActivos, modo])
   // Cupos (cargos vendidos) sin cubrir o cuyo trabajador aún no tiene contrato en ese contrato
   const porContratar = useMemo(() => cupos.filter(c => (contrato.length === 0 || contrato.includes(c.contrato_id)) && (() => {
     if (!c.trabajador_id) return true

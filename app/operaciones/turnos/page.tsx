@@ -30,7 +30,8 @@ export default function GrillaTurnos() {
   const mesIni = hoy.slice(0, 7) + '-01'
   const [desde, setDesde] = useState(mesIni)
   // Hasta el último día del mes 12 (el mes actual + 11 meses)
-  const finVentana = (() => { const d = new Date(mesIni + 'T12:00:00'); d.setMonth(d.getMonth() + 12); d.setDate(0); return d.toISOString().slice(0, 10) })()
+  const [meses, setMeses] = useState(4)
+  const finVentana = (() => { const d = new Date(mesIni + 'T12:00:00'); d.setMonth(d.getMonth() + meses); d.setDate(0); return d.toISOString().slice(0, 10) })()
   const ndias = diasEntre(desde, finVentana) + 1
   const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
@@ -53,12 +54,12 @@ export default function GrillaTurnos() {
   const [listo, setListo] = useState(false)
   useEffect(() => {
     if (!listo) return
-    try { sessionStorage.setItem('op_turnos_estado', JSON.stringify({ contrato, desde, soloActivos, modo })) } catch {}
-  }, [listo, contrato, desde, soloActivos, modo])
+    try { sessionStorage.setItem('op_turnos_estado', JSON.stringify({ contrato, desde, soloActivos, modo, meses })) } catch {}
+  }, [listo, contrato, desde, soloActivos, modo, meses])
   useEffect(() => {
     try {
       const g = sessionStorage.getItem('op_turnos_estado')
-      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (e.modo === 'turno' || e.modo === 'vuelo' || e.modo === 'fallo') setModo(e.modo) }
+      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (typeof e.meses === 'number' && e.meses >= 1 && e.meses <= 12) setMeses(e.meses); if (e.modo === 'turno' || e.modo === 'vuelo' || e.modo === 'fallo') setModo(e.modo) }
     } catch {}
     try { const c = new URLSearchParams(window.location.search).get('contrato'); if (c) setContrato(c.split(',').filter(Boolean)) } catch {}
     setListo(true)
@@ -69,6 +70,7 @@ export default function GrillaTurnos() {
   const falloDe = useMemo(() => { const m = new Map<string, Fallo>(); fallos.forEach(f => m.set(f.trabajador_id + '|' + f.fecha, f)); return m }, [fallos])
   const dias = useMemo(() => Array.from({ length: ndias }, (_, i) => sumarDias(desde, i)), [desde, ndias])
   const hasta = dias[dias.length - 1]
+  const segMeses = useMemo(() => { const r: { k: string, n: number, i: number }[] = []; dias.forEach((d, i) => { const k = d.slice(0, 7); const u = r[r.length - 1]; if (u && u.k === k) u.n++; else r.push({ k, n: 1, i }) }); return r }, [dias])
 
   const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).map(t => {
     // Back Office: sin contrato real; se muestra bajo el «contrato» virtual Back Office
@@ -251,8 +253,10 @@ export default function GrillaTurnos() {
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
         <FiltroContratos contratos={contratos} sel={contrato} onChange={setContrato} />
         <button onClick={mesAnterior} style={{ ...btn(false), padding: '8px 12px' }}>← Mes anterior</button>
+        {meses < 12 && <button onClick={() => setMeses(m => Math.min(12, m + 3))} style={{ ...btn(false), padding: '8px 12px' }}>Ver 3 meses más →</button>}
+        {meses > 4 && <button onClick={() => setMeses(4)} style={{ ...btn(false), padding: '8px 12px' }}>Ver menos</button>}
         {desde !== mesIni && <button onClick={() => setDesde(mesIni)} style={{ ...btn(false), padding: '8px 12px' }}>Volver al mes actual</button>}
-        <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} · desplázate a la derecha</span>
+        <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} ({meses} meses; con menos meses la grilla carga más rápido) · desplázate a la derecha</span>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={soloActivos} onChange={e => setSoloActivos(e.target.checked)} />Solo activos</label>
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
           {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).filter(([k]) => completo || k !== 'vuelo').map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
@@ -274,8 +278,11 @@ export default function GrillaTurnos() {
           <p style={{ margin: '10px 10px 8px', position: 'sticky', left: 10, fontSize: '12px', color: '#667085' }}>{filas.length} trabajadores · del {fechaCorta(desde)} al {fechaCorta(hasta)} · {modo === 'turno' ? 'Haz clic en una celda, o arrastra sobre varias (también de varias filas), para marcar/desmarcar en faena. ' : modo === 'fallo' ? 'Haz clic (o arrastra) sobre los días de turno en que el trabajador no se presentó: se abre la lista de motivos. ' : 'Haz clic en una celda para ver o agregar el vuelo/bus de ese día. '}<span style={{ background: '#1e8e4e', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>1</span> en faena · <span style={{ background: '#f59e0b', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>✈</span> vuelo/bus comprado · <span style={{ background: '#dc2626', color: '#fff', padding: '0 6px', borderRadius: '4px' }}>⏳</span> por comprar · <span style={{ background: '#fde2e1', borderRight: '4px solid #7a1212', padding: '0 6px', borderRadius: '2px' }}>&nbsp;</span> fin de contrato (plazo fijo) · <span style={{ background: '#eef1f6', padding: '0 6px', borderRadius: '4px' }}>gris</span> sin contrato ese día</p>
           <table onMouseOver={e => { alPasar(e); moverSel(e) }} onMouseLeave={alSalir} style={{ borderCollapse: 'collapse', fontSize: '11.5px', tableLayout: 'fixed', width: 486 + dias.length * W }}>
             <thead>
-              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '172px', minWidth: '172px', maxWidth: '172px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 4, top: 0 }}>Trabajador</th><th style={{ ...CH, ...ST(172), width: '100px', minWidth: '100px', top: 0, zIndex: 4 }}>Cargo</th><th style={{ ...CH, ...ST(272), width: '96px', minWidth: '96px', top: 0, zIndex: 4 }}>Origen</th><th style={{ ...CH, ...ST(368), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd', top: 0, zIndex: 4 }}>Contrato / plazo</th>
-                {dias.map((d, ci) => { const dt = new Date(d + 'T12:00:00'); const esHoy = d === hoy; return <th key={d} data-c={ci} style={{ position: 'sticky', top: 0, zIndex: 3, minWidth: W, width: W, padding: '2px 0', textAlign: 'center', background: esHoy ? '#fff3cd' : dt.getDay() === 0 || dt.getDay() === 6 ? '#f8fafc' : '#fff', fontWeight: esHoy ? 700 : 500, color: '#667085', lineHeight: 1.15 }}>{dt.getDate() === 1 || d === desde ? <div style={{ fontSize: '9px', color: AZUL }}>{dt.toLocaleDateString('es-CL', { month: 'short' })}</div> : <div style={{ fontSize: '9px' }}>&nbsp;</div>}<div>{dt.getDate()}</div><div style={{ fontSize: '9px' }}>{DIAS_SEM[dt.getDay()]}</div></th> })}
+              <tr><th style={{ position: 'sticky', left: 0, background: '#fff', width: '172px', minWidth: '172px', maxWidth: '172px', textAlign: 'left', padding: '4px 6px 4px 12px', zIndex: 4, top: 0 }} rowSpan={2}>Trabajador</th><th style={{ ...CH, ...ST(172), width: '100px', minWidth: '100px', top: 0, zIndex: 4 }} rowSpan={2}>Cargo</th><th style={{ ...CH, ...ST(272), width: '96px', minWidth: '96px', top: 0, zIndex: 4 }} rowSpan={2}>Origen</th><th style={{ ...CH, ...ST(368), width: '118px', minWidth: '118px', borderRight: '1px solid #d0d5dd', top: 0, zIndex: 4 }} rowSpan={2}>Contrato / plazo</th>
+                {segMeses.map((m, j) => { const dt = new Date(m.k + '-01T12:00:00'); const nom = dt.toLocaleDateString('es-CL', { month: m.n >= 8 ? 'long' : 'short' }).replace('.', ''); return <th key={m.k} colSpan={m.n} style={{ position: 'sticky', top: 0, zIndex: 3, height: '20px', padding: '2px 0', textAlign: 'left', background: j % 2 === 0 ? '#dbe7fb' : '#eef2f9', color: AZUL, fontSize: '11px', fontWeight: 700, borderLeft: '2px solid #98a2b3', textTransform: 'capitalize' }}><span style={{ position: 'sticky', left: 490, padding: '0 8px' }}>{nom} {dt.getFullYear()}</span></th> })}
+              </tr>
+              <tr>
+                {dias.map((d, ci) => { const dt = new Date(d + 'T12:00:00'); const esHoy = d === hoy; return <th key={d} data-c={ci} style={{ position: 'sticky', top: 20, zIndex: 3, minWidth: W, width: W, padding: '2px 0', textAlign: 'center', background: esHoy ? '#fff3cd' : dt.getDay() === 0 || dt.getDay() === 6 ? '#f8fafc' : '#fff', fontWeight: esHoy ? 700 : 500, color: '#667085', lineHeight: 1.15 }}><div>{dt.getDate()}</div><div style={{ fontSize: '9px' }}>{DIAS_SEM[dt.getDay()]}</div></th> })}
               </tr>
             </thead>
             <tbody>

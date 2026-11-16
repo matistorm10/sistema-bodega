@@ -171,6 +171,7 @@ export default function GrillaTurnos() {
   }
   const empezarSel = (e: React.MouseEvent, ix: number, i: number) => {
     if ((modo !== 'turno' && modo !== 'fallo') || e.button !== 0) return
+    if (modo === 'turno' && !completo) { setMsg('Solo los usuarios con acceso completo pueden marcar turnos. Tú puedes ver la grilla y registrar fallos.'); return }
     e.preventDefault(); setMsg('')
     const hay = falloDe.get(filas[ix].t.id + '|' + dias[i])
     sel.current = { r0: ix, c0: i, r1: ix, c1: i, on: modo === 'fallo' ? !hay : !filas[ix].celdas[i].en }; pintarSel()
@@ -259,7 +260,7 @@ export default function GrillaTurnos() {
         <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} ({meses} meses; con menos meses la grilla carga más rápido) · desplázate a la derecha</span>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={soloActivos} onChange={e => setSoloActivos(e.target.checked)} />Solo activos</label>
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
-          {([['turno', 'Marcar turno'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).filter(([k]) => completo || k !== 'vuelo').map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
+          {([['turno', completo ? 'Marcar turno' : 'Ver turnos'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).filter(([k]) => completo || k !== 'vuelo').map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
         </div>
         <button onClick={() => setNm({ mes: hoy.slice(0, 7) })} style={{ ...btn(), marginLeft: 'auto' }}>📑 Nómina mensual</button>
         <button onClick={descargar} style={btn(false)}>⬇ Descargar Excel</button>

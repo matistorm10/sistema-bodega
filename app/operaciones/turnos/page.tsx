@@ -35,6 +35,8 @@ export default function GrillaTurnos() {
   const ndias = diasEntre(desde, finVentana) + 1
   const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
+  const [fCargo, setFCargo] = useState('')
+  const cargos = useMemo(() => Array.from(new Set([...trab.map(t => t.cargo), ...cupos.map(c => c.cargo)].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')) as string[], [trab, cupos])
   const [modo, setModo] = useState<'turno' | 'vuelo' | 'fallo'>('turno')
   const [fallos, setFallos] = useState<Fallo[]>([])
   const [menuF, setMenuF] = useState<{ x: number, y: number, cel: { trabId: string, fecha: string, hay: boolean }[] } | null>(null)
@@ -54,12 +56,12 @@ export default function GrillaTurnos() {
   const [listo, setListo] = useState(false)
   useEffect(() => {
     if (!listo) return
-    try { sessionStorage.setItem('op_turnos_estado', JSON.stringify({ contrato, desde, soloActivos, modo, meses })) } catch {}
-  }, [listo, contrato, desde, soloActivos, modo, meses])
+    try { sessionStorage.setItem('op_turnos_estado', JSON.stringify({ contrato, desde, soloActivos, modo, meses, fCargo })) } catch {}
+  }, [listo, contrato, desde, soloActivos, modo, meses, fCargo])
   useEffect(() => {
     try {
       const g = sessionStorage.getItem('op_turnos_estado')
-      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (typeof e.meses === 'number' && e.meses >= 1 && e.meses <= 12) setMeses(e.meses); if (e.modo === 'turno' || e.modo === 'vuelo' || e.modo === 'fallo') setModo(e.modo) }
+      if (g) { const e = JSON.parse(g); if (Array.isArray(e.contrato)) setContrato(e.contrato); if (typeof e.desde === 'string') setDesde(e.desde); if (typeof e.soloActivos === 'boolean') setSoloActivos(e.soloActivos); if (typeof e.fCargo === 'string') setFCargo(e.fCargo); if (typeof e.meses === 'number' && e.meses >= 1 && e.meses <= 12) setMeses(e.meses); if (e.modo === 'turno' || e.modo === 'vuelo' || e.modo === 'fallo') setModo(e.modo) }
     } catch {}
     try { const c = new URLSearchParams(window.location.search).get('contrato'); if (c) setContrato(c.split(',').filter(Boolean)) } catch {}
     setListo(true)
@@ -72,7 +74,7 @@ export default function GrillaTurnos() {
   const hasta = dias[dias.length - 1]
   const segMeses = useMemo(() => { const r: { k: string, n: number, i: number }[] = []; dias.forEach((d, i) => { const k = d.slice(0, 7); const u = r[r.length - 1]; if (u && u.k === k) u.n++; else r.push({ k, n: 1, i }) }); return r }, [dias])
 
-  const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).map(t => {
+  const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).filter(t => !fCargo || (t.cargo || '') === fCargo).map(t => {
     // Back Office: sin contrato real; se muestra bajo el «contrato» virtual Back Office
     const as: Asig[] = t.tipo_personal === 'backoffice'
       ? ((contrato.length === 0 || contrato.includes(BACKOFFICE_ID)) ? [{ id: 'bo-' + t.id, trabajador_id: t.id, contrato_id: BACKOFFICE_ID, desde: '2000-01-01', hasta: null, tipo_contrato: 'indefinido', vence: null, regimen: null, sueldo: null, condiciones: null } as Asig] : [])
@@ -86,13 +88,13 @@ export default function GrillaTurnos() {
     })
     const vista = as.find(x => x.desde <= hoy && (!x.hasta || x.hasta >= hoy)) || as[as.length - 1]
     return { t, celdas, contratoPrincipal: vista.contrato_id, vista }
-  }).filter(Boolean) as { t: any, celdas: { a?: Asig, en: boolean }[], contratoPrincipal: string, vista: Asig }[], [trab, asigs, turnos, contrato, dias, desde, hasta, soloActivos])
+  }).filter(Boolean) as { t: any, celdas: { a?: Asig, en: boolean }[], contratoPrincipal: string, vista: Asig }[], [trab, asigs, turnos, contrato, dias, desde, hasta, soloActivos, fCargo])
   // Cupos (cargos vendidos) sin cubrir o cuyo trabajador aún no tiene contrato en ese contrato
-  const porContratar = useMemo(() => cupos.filter(c => (contrato.length === 0 || contrato.includes(c.contrato_id)) && (() => {
+  const porContratar = useMemo(() => cupos.filter(c => (contrato.length === 0 || contrato.includes(c.contrato_id)) && (!fCargo || c.cargo === fCargo) && (() => {
     if (!c.trabajador_id) return true
     const t = trab.find(x => x.id === c.trabajador_id); if (!t || (soloActivos && !t.activo)) return false
     return !asigs.some(a => a.trabajador_id === c.trabajador_id && a.contrato_id === c.contrato_id && (!a.hasta || a.hasta >= hoy))
-  })()).sort((a, b) => a.cargo.localeCompare(b.cargo, 'es') || (a.trabajador_id ? 1 : 0) - (b.trabajador_id ? 1 : 0)), [cupos, trab, asigs, contrato, soloActivos, hoy])
+  })()).sort((a, b) => a.cargo.localeCompare(b.cargo, 'es') || (a.trabajador_id ? 1 : 0) - (b.trabajador_id ? 1 : 0)), [cupos, trab, asigs, contrato, soloActivos, hoy, fCargo])
   const abrirCupo = (c: Cupo) => { setCu(c); setFcu({ nombre: '', rut: '', tipo: 'directo', existente: '' }); setMsgCu('') }
   const cubrirNuevo = async () => {
     if (!cu) return
@@ -259,6 +261,7 @@ export default function GrillaTurnos() {
         {desde !== mesIni && <button onClick={() => setDesde(mesIni)} style={{ ...btn(false), padding: '8px 12px' }}>Volver al mes actual</button>}
         <span style={{ fontSize: '12px', color: '#667085' }}>Desde {fechaCorta(desde)} hasta {fechaCorta(finVentana)} ({meses} meses; con menos meses la grilla carga más rápido) · desplázate a la derecha</span>
         <label style={{ fontSize: '12px', display: 'flex', gap: '4px', alignItems: 'center' }}><input type="checkbox" checked={soloActivos} onChange={e => setSoloActivos(e.target.checked)} />Solo activos</label>
+        <select value={fCargo} onChange={e => setFCargo(e.target.value)} style={{ ...input, width: 'auto', padding: '6px 8px', fontSize: '12px', marginBottom: 0 }} title="Filtrar por cargo"><option value="">Todos los cargos</option>{cargos.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <div style={{ display: 'flex', border: '1px solid #d0d5dd', borderRadius: '8px', overflow: 'hidden' }}>
           {([['turno', completo ? 'Marcar turno' : 'Ver turnos'], ['vuelo', 'Vuelos'], ['fallo', 'Fallos']] as const).filter(([k]) => completo || k !== 'vuelo').map(([k, t]) => <button key={k} onClick={() => setModo(k)} style={{ padding: '8px 12px', fontSize: '12.5px', border: 'none', cursor: 'pointer', background: modo === k ? AZUL : '#fff', color: modo === k ? '#fff' : '#475467', fontWeight: 600 }}>{t}</button>)}
         </div>

@@ -36,7 +36,6 @@ export default function GrillaTurnos() {
   const mesAnterior = () => { const d = new Date(desde + 'T12:00:00'); d.setMonth(d.getMonth() - 1); setDesde(d.toISOString().slice(0, 7) + '-01') }
   const [soloActivos, setSoloActivos] = useState(true)
   const [fCargo, setFCargo] = useState('')
-  const cargos = useMemo(() => Array.from(new Set([...trab.map(t => t.cargo), ...cupos.map(c => c.cargo)].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')) as string[], [trab, cupos])
   const [modo, setModo] = useState<'turno' | 'vuelo' | 'fallo'>('turno')
   const [fallos, setFallos] = useState<Fallo[]>([])
   const [menuF, setMenuF] = useState<{ x: number, y: number, cel: { trabId: string, fecha: string, hay: boolean }[] } | null>(null)
@@ -72,6 +71,12 @@ export default function GrillaTurnos() {
   const falloDe = useMemo(() => { const m = new Map<string, Fallo>(); fallos.forEach(f => m.set(f.trabajador_id + '|' + f.fecha, f)); return m }, [fallos])
   const dias = useMemo(() => Array.from({ length: ndias }, (_, i) => sumarDias(desde, i)), [desde, ndias])
   const hasta = dias[dias.length - 1]
+  // Cargos del personal que está en la grilla (activos y del/los contratos elegidos), más los cupos de esos contratos
+  const cargos = useMemo(() => Array.from(new Set([
+    ...trab.filter(t => (!soloActivos || t.activo) && (t.tipo_personal === 'backoffice' ? (contrato.length === 0 || contrato.includes(BACKOFFICE_ID)) : asigs.some(a => a.trabajador_id === t.id && a.desde <= hasta && (!a.hasta || a.hasta >= desde) && (contrato.length === 0 || contrato.includes(a.contrato_id))))).map(t => t.cargo),
+    ...cupos.filter(c => contrato.length === 0 || contrato.includes(c.contrato_id)).map(c => c.cargo)
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es')) as string[], [trab, cupos, asigs, contrato, soloActivos, desde, hasta])
+  useEffect(() => { if (!cargando && fCargo && !cargos.includes(fCargo)) setFCargo('') }, [cargando, cargos, fCargo])
   const segMeses = useMemo(() => { const r: { k: string, n: number, i: number }[] = []; dias.forEach((d, i) => { const k = d.slice(0, 7); const u = r[r.length - 1]; if (u && u.k === k) u.n++; else r.push({ k, n: 1, i }) }); return r }, [dias])
 
   const filas = useMemo(() => [...trab].sort(cmpPersonal).filter(t => !soloActivos || t.activo).filter(t => !fCargo || (t.cargo || '') === fCargo).map(t => {

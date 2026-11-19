@@ -76,6 +76,7 @@ export async function generarProgramaMantencion(params: {
   doc.setFont('helvetica', 'bold')
   doc.text(`Frecuencia de revisión: ${frecuencia}`, colIzq, y)
   doc.setFont('helvetica', 'normal')
+  doc.text(`Fecha de emisión: ${new Date().toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}`, colDer, y)
   y += 10
 
   const hoy = new Date()

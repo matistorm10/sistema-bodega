@@ -1,12 +1,11 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { supabase } from '@/lib/supabase'
-import { esMobile } from '@/lib/abrirPDF'
+import { descargarBlob } from '@/lib/abrirPDF'
 
 const fechaCL = (f?: string | null) => f ? new Date(f).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : ''
 
 // Descriptor de cargo firmado: el mismo PDF del descriptor con los datos y la firma estampados en el punto IX (última página).
 export async function descargarDescriptorFirmado(d: { desc: any, nombre: string, faena: string, doc: any | null, verificador?: string }) {
-  const ventana = esMobile() ? window.open('', '_blank') : null
   try {
     if (!d.doc?.path) throw new Error('No hay documento de descriptor cargado.')
     const { data, error } = await supabase.storage.from('hsec-documentos').download(d.doc.path)
@@ -62,10 +61,8 @@ export async function descargarDescriptorFirmado(d: { desc: any, nombre: string,
 
     const bytes = await pdf.save()
     const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    if (ventana) ventana.location.href = url
-    else { const a = document.createElement('a'); a.href = url; a.download = `Descriptor_firmado_${d.nombre.replace(/\s+/g, '_')}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000) }
+    descargarBlob(blob, `Descriptor_firmado_${d.nombre.replace(/\s+/g, '_')}.pdf`)
   } catch (e: any) {
-    ventana?.close(); alert('No se pudo generar el PDF: ' + (e?.message || e))
+    alert('No se pudo generar el PDF: ' + (e?.message || e))
   }
 }

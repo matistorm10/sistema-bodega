@@ -1,30 +1,31 @@
-// En celular, jsPDF (.save()) suele abrir una pestaña en blanco antes de mostrar el documento,
-// o mostrarlo como un link en vez de un PDF real. Para evitar eso, en celular abrimos
-// una pestaña ANTES de generar el PDF (para que el navegador no la bloquee), y una vez listo el
-// documento, la llenamos con el PDF real. En computador se mantiene la descarga normal.
+// Entrega de PDFs generados en el navegador.
+// En celular ya no se abre una pestaña con una dirección "blob:" (se veía el link en vez del documento y el
+// archivo quedaba con el nombre "unknown"). Ahora se descarga directamente un archivo PDF con su nombre,
+// igual que en computador; el celular lo guarda en Descargas / Archivos y se abre desde ahí.
 
 export function esMobile(): boolean {
   if (typeof navigator === 'undefined') return false
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 }
 
-// Llamar ANTES de generar el PDF (de forma sincrónica, apenas se hace clic), para que el
-// navegador no bloquee la ventana por considerarla un popup no solicitado.
+// Se mantiene por compatibilidad con las pantallas que la llaman antes de generar el PDF: ya no abre ninguna pestaña.
 export function abrirVentanaPDF(): Window | null {
-  if (!esMobile()) return null
-  return window.open('', '_blank')
+  return null
 }
 
-// Llamar DESPUÉS de generar el PDF (el doc de jsPDF), con la ventana que abrió abrirVentanaPDF().
-export function entregarPDF(doc: any, nombreArchivo: string, ventana: Window | null) {
-  if (esMobile()) {
-    const blobUrl = doc.output('bloburl') as unknown as string
-    if (ventana) {
-      ventana.location.href = blobUrl
-    } else {
-      window.open(blobUrl, '_blank')
-    }
-  } else {
-    doc.save(nombreArchivo)
-  }
+// Descarga un archivo con nombre a partir de un Blob (funciona en computador, Android y iPhone).
+export function descargarBlob(blob: Blob, nombreArchivo: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = nombreArchivo; a.rel = 'noopener'
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+}
+
+// Llamar DESPUÉS de generar el PDF (el doc de jsPDF).
+export function entregarPDF(doc: any, nombreArchivo: string, ventana?: Window | null) {
+  try { ventana?.close() } catch {}
+  const nombre = /\.pdf$/i.test(nombreArchivo) ? nombreArchivo : nombreArchivo + '.pdf'
+  const blob = doc.output('blob') as Blob
+  descargarBlob(new Blob([blob], { type: 'application/pdf' }), nombre)
 }

@@ -42,7 +42,7 @@ export default function FirmaPreview({ registro, generar, usuarioId, exigeDescri
       {url ? (
         <>
           <iframe src={url} title="Vista previa" style={{ width: '100%', height: '520px', border: '1px solid #e2e6ed', borderRadius: '8px', background: '#f3f5f9' }} />
-          <a href={url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', margin: '6px 0 10px', fontSize: '12.5px', color: '#1B4F9C' }}>↗ Abrir la vista previa en otra pestaña</a>
+          <a href={url} download="Vista_previa_registro.pdf" style={{ display: 'inline-block', margin: '6px 0 10px', fontSize: '12.5px', color: '#1B4F9C' }}>⬇ Descargar la vista previa (PDF)</a>
         </>
       ) : <p style={{ fontSize: '13px', color: '#999' }}>{msg || 'Generando vista previa...'}</p>}
 

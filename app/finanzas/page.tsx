@@ -16,7 +16,7 @@ const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, color: '#6670
 const td: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderBottom: '1px solid #f2f4f7' }
 const der: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 
-type Unidad = { id: string, nombre: string, grupo: string | null, activa: boolean, monto_contrato_base: number }
+type Unidad = { id: string, nombre: string, grupo: string | null, activa: boolean, monto_contrato_base: number, presupuesto_desde?: string | null, presupuesto_hasta?: string | null }
 type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'resultado' | 'kame'
 
 export default function Finanzas() {
@@ -167,92 +167,178 @@ function Unidades({ unidades, recargar }: { unidades: Unidad[], recargar: () => 
 }
 
 // ───────────────────────── Presupuesto ─────────────────────────
+// Nombre normalizado para impedir duplicados tipo "Cubierta" / "cubiertas" / "CUBIERTAS "
+const normNombre = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(w => w.length > 4 ? w.replace(/(es|s)$/, '') : w).join(' ')
+const nombreMes = (m: string) => { const [y, mm] = m.split('-').map(Number); return new Date(y, mm - 1, 1).toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }).replace('.', '') }
+const rangoMeses = (d?: string | null, h?: string | null) => { const out: string[] = []; if (!d || !h) return out; let [y, m] = d.split('-').map(Number); const [yh, mh] = h.split('-').map(Number); while ((y < yh || (y === yh && m <= mh)) && out.length < 48) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++ } } return out }
+const prefijos = (c: string) => String(c || '').split(',').map(x => x.trim()).filter(Boolean)
+
 function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () => void }) {
   const [uid, setUid] = useState('')
+  const [catalogo, setCatalogo] = useState<any[]>([])
   const [partidas, setPartidas] = useState<any[]>([])
   const [versiones, setVersiones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
-  const [lineas, setLineas] = useState<any[]>([])
-  const [remUnidad, setRemUnidad] = useState(0)
   const [asientos, setAsientos] = useState<any[]>([])
-  const [nueva, setNueva] = useState('')
-  const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [vDeltas, setVDeltas] = useState<Record<string, string>>({})
+  const [rem, setRem] = useState<any[]>([])
+  const [elegida, setElegida] = useState('')
+  const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [draft, setDraft] = useState<Record<string, string>>({})
+  const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
+  const [nuevoNombre, setNuevoNombre] = useState(''); const [nuevasCuentas, setNuevasCuentas] = useState('')
   const unidad = unidades.find(u => u.id === uid)
+  const meses = useMemo(() => rangoMeses(unidad?.presupuesto_desde, unidad?.presupuesto_hasta), [unidad])
+
+  const cargarCatalogo = useCallback(async () => { const { data } = await supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'); setCatalogo(data || []) }, [])
+  useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
   const cargar = useCallback(async () => {
     if (!uid) return
-    const [p, v, l] = await Promise.all([
-      supabase.from('fin_partidas').select('*').eq('unidad_id', uid).order('orden').order('nombre'),
+    const [p, v, a, r] = await Promise.all([
+      supabase.from('fin_partidas').select('*, catalogo:fin_catalogo_partidas(nombre,cuentas,fuente)').eq('unidad_id', uid).order('orden').order('nombre'),
       supabase.from('fin_versiones').select('*').eq('unidad_id', uid).order('numero'),
-      supabase.from('fin_lineas').select('id,monto,concepto,detalle,partida_id,documento:fin_documentos(sentido,razon_social,folio,fecha_doc)').eq('unidad_id', uid).limit(5000),
+      supabase.from('fin_asientos').select('kame_id,fecha,cuenta,debe,haber').eq('unidad_id', uid).like('cuenta', '4.%').limit(20000),
+      supabase.from('fin_remuneraciones').select('periodo,costo_empresa').eq('unidad_id', uid).limit(20000),
     ])
-    const { data: rm } = await supabase.from('fin_remuneraciones').select('costo_empresa').eq('unidad_id', uid).limit(5000)
-    setRemUnidad((rm || []).reduce((a, r) => a + Number(r.costo_empresa), 0))
-    const { data: as } = await supabase.from('fin_asientos').select('cuenta,nombre_cuenta,debe,haber').eq('unidad_id', uid).like('cuenta', '4.%').limit(20000)
-    setAsientos(as || [])
-    setPartidas(p.data || []); setVersiones(v.data || []); setLineas((l.data || []).filter((x: any) => x.documento?.sentido === 'compra'))
+    setPartidas(p.data || []); setVersiones(v.data || []); setAsientos(a.data || []); setRem(r.data || [])
     const ids = (v.data || []).map(x => x.id)
-    if (ids.length) { const { data } = await supabase.from('fin_version_items').select('*').in('version_id', ids); setItems(data || []) } else setItems([])
+    if (ids.length) { const { data } = await supabase.from('fin_version_items').select('*').in('version_id', ids).limit(20000); setItems(data || []) } else setItems([])
   }, [uid])
   useEffect(() => { cargar() }, [cargar])
 
-  const presup = useMemo(() => { const m: Record<string, number> = {}; items.forEach(i => { m[i.partida_id] = (m[i.partida_id] || 0) + Number(i.delta) }); return m }, [items])
-  const real = useMemo(() => { const m: Record<string, number> = {}; lineas.forEach(l => { if (l.partida_id) m[l.partida_id] = (m[l.partida_id] || 0) + Number(l.monto) }); return m }, [lineas])
-  const sinClas = lineas.filter(l => !l.partida_id)
-  const contrato = (unidad?.monto_contrato_base || 0) + versiones.reduce((a, v) => a + Number(v.delta_contrato), 0)
-  const totPres = Object.values(presup).reduce((a, b) => a + b, 0)
+  const pres = useMemo(() => { const m: Record<string, number> = {}; items.forEach(i => { const k = i.partida_id + '|' + i.mes; m[k] = (m[k] || 0) + Number(i.delta) }); return m }, [items])
+  const realDe = (p: any, mes: string) => p.catalogo?.fuente === 'remuneraciones'
+    ? rem.filter(r => r.periodo === mes).reduce((t, r) => t + Number(r.costo_empresa), 0)
+    : asientos.filter(a => String(a.fecha).slice(0, 7) === mes && prefijos(p.catalogo?.cuentas).some(x => a.cuenta.startsWith(x))).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0)
+  const cubiertas = useMemo(() => partidas.flatMap(p => prefijos(p.catalogo?.cuentas)), [partidas])
+  const sinPartida = (mes: string) => asientos.filter(a => String(a.fecha).slice(0, 7) === mes && !cubiertas.some(x => a.cuenta.startsWith(x))).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0)
+  const fueraDePeriodo = useMemo(() => asientos.filter(a => !meses.includes(String(a.fecha).slice(0, 7))).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0), [asientos, meses])
 
-  const agregarPartida = async () => { if (!nueva.trim()) return; await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: nueva.trim(), orden: partidas.length }); setNueva(''); cargar() }
-  const agregarRem = async () => { await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: 'Remuneraciones', orden: partidas.length, fuente: 'remuneraciones' }); cargar() }
+  const contrato = (unidad?.monto_contrato_base || 0) + versiones.reduce((a, v) => a + Number(v.delta_contrato), 0)
+  const totPres = items.reduce((a, i) => a + Number(i.delta), 0)
+
+  const guardarPeriodo = async (campo: 'presupuesto_desde' | 'presupuesto_hasta', valor: string) => { await supabase.from('fin_unidades').update({ [campo]: valor || null }).eq('id', uid); recargar() }
+  const agregarPartida = async () => {
+    if (!elegida) return
+    const c = catalogo.find(x => x.id === elegida); if (!c) return
+    const { error } = await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: c.nombre, catalogo_id: c.id, fuente: c.fuente === 'remuneraciones' ? 'remuneraciones' : 'manual', orden: partidas.length })
+    if (error) setMsg('No se pudo agregar: ' + error.message); else { setElegida(''); setMsg(''); cargar() }
+  }
+  const quitarPartida = async (p: any) => {
+    if (!confirm(`¿Quitar «${p.nombre}» de este proyecto? Se borra también su presupuesto.`)) return
+    await supabase.from('fin_partidas').delete().eq('id', p.id); cargar()
+  }
   const guardarVersion = async () => {
+    const celdas = Object.entries(draft).filter(([, v]) => v !== '' && !isNaN(Number(v)) && Number(v) !== 0)
+    if (!celdas.length && !Number(vContrato)) { setMsg('Escribe al menos un monto en la grilla o una variación del contrato.'); return }
+    if (vTipo === 'base' && versiones.some(v => v.tipo === 'base') && !confirm('Este proyecto ya tiene un presupuesto base. Si guardas otro, los montos se SUMAN. ¿Es lo que quieres? (Para modificar usa «Adicional», con montos positivos o negativos).')) return
+    setGuardando(true)
     const numero = (versiones[versiones.length - 1]?.numero || 0) + 1
     const { data: v, error } = await supabase.from('fin_versiones').insert({ unidad_id: uid, numero, tipo: vTipo, descripcion: vDesc || (vTipo === 'base' ? 'Presupuesto base' : 'Adicional'), delta_contrato: Number(vContrato) || 0 }).select('id').single()
-    if (error || !v) { alert('No se pudo guardar: ' + error?.message); return }
-    const rows = Object.entries(vDeltas).filter(([, x]) => Number(x)).map(([partida_id, x]) => ({ version_id: v.id, partida_id, delta: Number(x) }))
-    if (rows.length) await supabase.from('fin_version_items').insert(rows)
-    setVDesc(''); setVContrato(''); setVDeltas({}); cargar(); recargar()
+    if (error || !v) { setMsg('No se pudo guardar: ' + error?.message); setGuardando(false); return }
+    const rows = celdas.map(([k, x]) => { const [partida_id, mes] = k.split('|'); return { version_id: v.id, partida_id, mes, delta: Number(x) } })
+    if (rows.length) { const { error: e2 } = await supabase.from('fin_version_items').insert(rows); if (e2) { setMsg('No se pudieron guardar los montos: ' + e2.message); setGuardando(false); return } }
+    setDraft({}); setVDesc(''); setVContrato(''); setMsg('Versión guardada.'); setGuardando(false); cargar(); recargar()
   }
-  const clasificar = async (id: string, partida_id: string) => { await supabase.from('fin_lineas').update({ partida_id: partida_id || null }).eq('id', id); cargar() }
+  const borrarVersion = async (v: any) => { if (!confirm(`¿Borrar la versión #${v.numero} («${v.descripcion}»)? Se quitan sus montos del presupuesto.`)) return; await supabase.from('fin_versiones').delete().eq('id', v.id); cargar(); recargar() }
+
+  // Catálogo oficial de partidas
+  const agregarCatalogo = async () => {
+    const nombre = nuevoNombre.trim().replace(/\s+/g, ' '); if (!nombre) return
+    const norm = normNombre(nombre); const ya = catalogo.find(c => c.nombre_norm === norm)
+    if (ya) { setMsg(`Ya existe la partida «${ya.nombre}». Usa esa en vez de crear «${nombre}».`); return }
+    const { error } = await supabase.from('fin_catalogo_partidas').insert({ nombre, nombre_norm: norm, cuentas: nuevasCuentas, orden: catalogo.length })
+    if (error) setMsg('No se pudo crear: ' + error.message); else { setNuevoNombre(''); setNuevasCuentas(''); setMsg(`Partida «${nombre}» creada en el catálogo.`); cargarCatalogo() }
+  }
+  const dispo = catalogo.filter(c => !partidas.some(p => p.catalogo_id === c.id))
+  const celda: React.CSSProperties = { ...td, padding: '4px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontSize: 12 }
 
   return (
     <>
       <div style={card}>
-        <select value={uid} onChange={e => setUid(e.target.value)} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
-        {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente: <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
+        <select value={uid} onChange={e => { setUid(e.target.value); setDraft({}); setMsg('') }} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+        {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente: <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
+        {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: msg.startsWith('No') || msg.startsWith('Ya') || msg.startsWith('Escribe') ? '#b42318' : '#067647' }}>{msg}</p>}
       </div>
+
+      <details style={card}>
+        <summary style={{ fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Catálogo oficial de partidas ({catalogo.length})</summary>
+        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0' }}>Todos los proyectos usan estas partidas, así nadie escribe «Cubierta» y otro «Cubiertas». En «Cuentas Kame» pon las cuentas (o prefijos) que alimentan su costo real, separadas por coma. «Remuneraciones» se alimenta de la planilla de RR.HH.</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={th}>Cuentas Kame</th><th style={th}>Fuente del real</th></tr></thead>
+          <tbody>{catalogo.map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
+            <td style={td}>{c.fuente === 'remuneraciones' ? <span style={{ color: '#667085' }}>{c.cuentas || '—'}</span> : <input defaultValue={c.cuentas} placeholder="ej. 4.01.02.02, 4.01.03.18" onBlur={async e => { if (e.target.value !== c.cuentas) { await supabase.from('fin_catalogo_partidas').update({ cuentas: e.target.value }).eq('id', c.id); cargarCatalogo(); cargar() } }} style={{ ...inp, width: 300, padding: '4px 6px' }} />}</td>
+            <td style={td}>{c.fuente === 'remuneraciones' ? 'Planilla RR.HH. (BUK)' : 'Contabilidad Kame'}</td></tr>)}</tbody></table>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nueva partida (ej. Hormigón)" style={{ ...inp, width: 240 }} />
+          <input value={nuevasCuentas} onChange={e => setNuevasCuentas(e.target.value)} placeholder="Cuentas Kame (opcional)" style={{ ...inp, width: 260 }} />
+          <button onClick={agregarCatalogo} style={btn()}>Crear en el catálogo</button>
+        </div>
+      </details>
+
       {unidad && <>
         <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Partidas: presupuesto vigente vs real</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={th}>Cuentas Kame</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th><th style={{ ...th, textAlign: 'right' }}>Real</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th><th style={{ ...th, textAlign: 'right' }}>% usado</th></tr></thead>
-            <tbody>{partidas.map(p => { const pr = presup[p.id] || 0, pref = String(p.cuentas || '').split(',').map((x: string) => x.trim()).filter(Boolean); const re = p.fuente === 'remuneraciones' ? remUnidad : (real[p.id] || 0) + asientos.filter(a => pref.some((x: string) => a.cuenta.startsWith(x))).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0); const pct = pr ? (re / pr) * 100 : 0; return <tr key={p.id}>
-              <td style={td}>{p.nombre}{p.fuente === 'remuneraciones' && <span style={{ fontSize: 11, color: '#667085' }}> · automática (BUK / planilla)</span>}</td><td style={td}>{p.fuente === 'remuneraciones' ? '—' : <input defaultValue={p.cuentas || ''} placeholder="ej. 4.01.02.02" onBlur={async e => { if (e.target.value !== (p.cuentas || '')) { await supabase.from('fin_partidas').update({ cuentas: e.target.value }).eq('id', p.id); cargar() } }} style={{ ...inp, width: 150, padding: '4px 6px' }} />}</td><td style={der}>{$(pr)}</td><td style={der}>{$(re)}</td>
-              <td style={{ ...der, color: pr - re < 0 ? '#b42318' : '#067647' }}>{$(pr - re)}</td>
-              <td style={{ ...der, color: pct > 100 ? '#b42318' : undefined }}>{pr ? pct.toFixed(0) + '%' : '—'}</td></tr> })}
-              <tr><td style={{ ...td, color: '#92400e' }}>Sin clasificar ({sinClas.length} líneas de Excel)</td><td style={td} /><td style={der}>—</td><td style={der}>{$(sinClas.reduce((a, l) => a + Number(l.monto), 0))}</td><td style={der} colSpan={2} /></tr>
-            </tbody></table>
-          {asientos.length > 0 && <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, cursor: 'pointer' }}>Cuentas de costo con movimiento en este proyecto</summary><ul style={{ fontSize: 12 }}>{Object.entries(asientos.reduce((m: Record<string, { n: string, v: number }>, a) => { m[a.cuenta] = { n: a.nombre_cuenta, v: (m[a.cuenta]?.v || 0) + Number(a.debe) - Number(a.haber) }; return m }, {})).sort().map(([c, x]: any) => <li key={c}>{c} · {x.n} · ${$(x.v)}</li>)}</ul><p style={{ fontSize: 11, color: '#667085' }}>En «Cuentas Kame» de una partida escribe una o varias cuentas o prefijos separados por coma (ej. 4.01.02.02, 4.01.03). Su costo real se llena solo.</p></details>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><input value={nueva} onChange={e => setNueva(e.target.value)} placeholder="Nueva partida (ej. Hormigón)" style={{ ...inp, width: 260 }} /><button onClick={agregarPartida} style={btn()}>Agregar partida</button>{!partidas.some(p => p.fuente === 'remuneraciones') && <button onClick={agregarRem} style={btn(false)}>+ Partida de remuneraciones</button>}</div>
-        </div>
-        <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Versiones del presupuesto</h2>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>El presupuesto base y cada adicional / nota de venta se suman. Ejemplo: contrato +100.000 y Hormigón +50.000.</p>
-          {versiones.map(v => <div key={v.id} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f2f4f7' }}>#{v.numero} · {v.tipo === 'base' ? 'Base' : 'Adicional'} · {v.descripcion} · {new Date(v.fecha + 'T12:00').toLocaleDateString('es-CL')} · contrato {Number(v.delta_contrato) >= 0 ? '+' : ''}{$(Number(v.delta_contrato))}</div>)}
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <select value={vTipo} onChange={e => setVTipo(e.target.value as any)} style={inp}><option value="base">Presupuesto base</option><option value="adicional">Adicional / nota de venta</option></select>
-            <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción" style={{ ...inp, width: 240 }} />
-            <input type="number" value={vContrato} onChange={e => setVContrato(e.target.value)} placeholder="Variación del contrato $" style={{ ...inp, width: 190 }} />
+          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>1. Período del presupuesto</h2>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+            Desde <input type="month" defaultValue={unidad.presupuesto_desde || ''} onBlur={e => e.target.value !== (unidad.presupuesto_desde || '') && guardarPeriodo('presupuesto_desde', e.target.value)} style={inp} />
+            hasta <input type="month" defaultValue={unidad.presupuesto_hasta || ''} onBlur={e => e.target.value !== (unidad.presupuesto_hasta || '') && guardarPeriodo('presupuesto_hasta', e.target.value)} style={inp} />
+            <span style={{ color: '#667085', fontSize: 12 }}>{meses.length ? `${meses.length} meses` : 'Define el primer y último mes del proyecto para ver las columnas.'}</span>
           </div>
-          {partidas.length > 0 && <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 6 }}>
-            {partidas.map(p => <label key={p.id} style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>{p.nombre}<input type="number" value={vDeltas[p.id] || ''} onChange={e => setVDeltas(d => ({ ...d, [p.id]: e.target.value }))} placeholder="$ variación" style={{ ...inp, width: 120 }} /></label>)}
-          </div>}
-          <button onClick={guardarVersion} style={{ ...btn(), marginTop: 12 }}>Guardar versión</button>
         </div>
+
         <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Líneas por clasificar ({sinClas.length})</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Proveedor</th><th style={th}>Folio</th><th style={th}>Concepto</th><th style={{ ...th, textAlign: 'right' }}>Neto</th><th style={th}>Partida</th></tr></thead>
-            <tbody>{sinClas.slice(0, 200).map(l => <tr key={l.id}><td style={td}>{l.documento?.fecha_doc}</td><td style={td}>{l.documento?.razon_social}</td><td style={td}>{l.documento?.folio}</td><td style={td}>{l.concepto}</td><td style={der}>{$(l.monto)}</td>
-              <td style={td}><select value="" onChange={e => clasificar(l.id, e.target.value)} style={inp}><option value="">Elegir…</option>{partidas.filter(p => p.fuente !== 'remuneraciones').map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td></tr>)}</tbody></table>
+          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>2. Partidas de este proyecto</h2>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {partidas.map(p => <span key={p.id} style={{ background: '#eef4ff', borderRadius: 99, padding: '4px 10px', fontSize: 13 }}>{p.nombre} <button onClick={() => quitarPartida(p)} title="Quitar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#667085' }}>✕</button></span>)}
+            {partidas.length === 0 && <span style={{ fontSize: 12, color: '#667085' }}>Aún no hay partidas.</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <select value={elegida} onChange={e => setElegida(e.target.value)} style={{ ...inp, minWidth: 260 }}><option value="">Agregar partida del catálogo…</option>{dispo.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+            <button onClick={agregarPartida} disabled={!elegida} style={btn(true, !elegida)}>Agregar</button>
+          </div>
         </div>
+
+        {partidas.length > 0 && meses.length > 0 && <>
+          <div style={card}>
+            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>3. Ingresar presupuesto por mes</h2>
+            <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Escribe el monto (neto) de cada partida en cada mes. Primero guarda el <b>presupuesto base</b>. Si después hay un adicional o nota de venta, guarda una versión <b>adicional</b> con la <b>variación</b> (positiva o negativa) y la del contrato.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <select value={vTipo} onChange={e => setVTipo(e.target.value as any)} style={inp}><option value="base">Presupuesto base</option><option value="adicional">Adicional / nota de venta</option></select>
+              <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción (ej. Adicional pozo 2)" style={{ ...inp, width: 280 }} />
+              <input type="number" value={vContrato} onChange={e => setVContrato(e.target.value)} placeholder={vTipo === 'base' ? 'Valor del contrato $' : 'Variación del contrato $'} style={{ ...inp, width: 220 }} />
+            </div>
+            <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th>{meses.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{nombreMes(m)}</th>)}</tr></thead>
+              <tbody>{partidas.map(p => <tr key={p.id}><td style={{ ...td, whiteSpace: 'nowrap' }}>{p.nombre}</td>{meses.map(m => <td key={m} style={{ ...td, padding: 3 }}>
+                <input type="number" value={draft[p.id + '|' + m] ?? ''} onChange={e => setDraft(d => ({ ...d, [p.id + '|' + m]: e.target.value }))} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right' }} /></td>)}</tr>)}</tbody></table></div>
+            <button onClick={guardarVersion} disabled={guardando} style={{ ...btn(true, guardando), marginTop: 12 }}>{guardando ? 'Guardando…' : `Guardar ${vTipo === 'base' ? 'presupuesto base' : 'adicional'}`}</button>
+          </div>
+
+          <div style={card}>
+            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Presupuesto vigente vs real</h2>
+            <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>En cada mes: arriba lo presupuestado, abajo lo real (rojo si se pasó). «Sin partida» son costos de cuentas que ninguna partida del proyecto cubre.</p>
+            <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead><tr><th style={th}>Partida</th>{meses.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{nombreMes(m)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total presup.</th><th style={{ ...th, textAlign: 'right' }}>Total real</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th><th style={{ ...th, textAlign: 'right' }}>% usado</th></tr></thead>
+              <tbody>{(() => {
+                let gp = 0, gr = 0
+                const filas = partidas.map(p => {
+                  let tp = 0, tr = 0
+                  const cs = meses.map(m => { const a = pres[p.id + '|' + m] || 0, r = realDe(p, m); tp += a; tr += r; return <td key={m} style={celda}><div style={{ color: '#1B4F9C' }}>{a ? $(a) : '·'}</div><div style={{ color: r > a && a > 0 ? '#b42318' : (r ? '#344054' : '#98a2b3') }}>{r ? $(r) : '·'}</div></td> })
+                  gp += tp; gr += tr
+                  return <tr key={p.id}><td style={{ ...td, whiteSpace: 'nowrap' }}>{p.nombre}</td>{cs}<td style={celda}>{$(tp)}</td><td style={celda}>{$(tr)}</td><td style={{ ...celda, color: tp - tr < 0 ? '#b42318' : '#067647' }}>{$(tp - tr)}</td><td style={{ ...celda, color: tp && tr > tp ? '#b42318' : undefined }}>{tp ? (tr / tp * 100).toFixed(0) + '%' : '—'}</td></tr>
+                })
+                let tsp = 0
+                const sp = <tr key="sp"><td style={{ ...td, color: '#92400e', whiteSpace: 'nowrap' }}>Sin partida</td>{meses.map(m => { const v = sinPartida(m); tsp += v; return <td key={m} style={{ ...celda, color: '#92400e' }}>{v ? $(v) : '·'}</td> })}<td style={celda} /><td style={{ ...celda, color: '#92400e' }}>{$(tsp)}</td><td style={celda} colSpan={2} /></tr>
+                const tot = <tr key="t"><td style={{ ...td, fontWeight: 600 }}>Total</td>{meses.map(m => <td key={m} style={celda} />)}<td style={{ ...celda, fontWeight: 600 }}>{$(gp)}</td><td style={{ ...celda, fontWeight: 600 }}>{$(gr + tsp)}</td><td style={{ ...celda, fontWeight: 600, color: gp - gr - tsp < 0 ? '#b42318' : '#067647' }}>{$(gp - gr - tsp)}</td><td style={celda}>{gp ? ((gr + tsp) / gp * 100).toFixed(0) + '%' : '—'}</td></tr>
+                return [...filas, sp, tot]
+              })()}</tbody></table></div>
+            {Math.abs(fueraDePeriodo) > 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '8px 0 0' }}>Hay ${$(fueraDePeriodo)} de costos de este proyecto en meses fuera del período definido arriba (no aparecen en las columnas).</p>}
+          </div>
+        </>}
+
+        {versiones.length > 0 && <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Historial de versiones</h2>
+          {versiones.map(v => <div key={v.id} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f2f4f7', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>#{v.numero} · {v.tipo === 'base' ? 'Base' : 'Adicional'} · {v.descripcion} · {new Date(v.fecha + 'T12:00').toLocaleDateString('es-CL')} · contrato {Number(v.delta_contrato) >= 0 ? '+' : ''}{$(Number(v.delta_contrato))} · montos {$(items.filter(i => i.version_id === v.id).reduce((a, i) => a + Number(i.delta), 0))}</span>
+            <button onClick={() => borrarVersion(v)} style={btn(false)}>Borrar</button></div>)}
+        </div>}
       </>}
     </>
   )

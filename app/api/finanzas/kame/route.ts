@@ -64,6 +64,22 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ ok: true, probadas: out.length, distintas: out.filter(x => x.status !== 404) })
     }
+    if (b.accion === 'parametros') {
+      const ruta = String(b.ruta || ''); if (!ruta.startsWith('/') || ruta.includes('..')) return NextResponse.json({ error: 'Ruta inválida.' }, { status: 400 })
+      const t = await obtenerToken()
+      const d = String(b.desde || '2026-10-01'), h = String(b.hasta || '2026-10-31')
+      const pares: [string, string][] = [['fechaDesde', 'fechaHasta'], ['fechaInicio', 'fechaFin'], ['fechaInicial', 'fechaFinal'], ['desde', 'hasta'], ['fecha_desde', 'fecha_hasta'], ['FechaDesde', 'FechaHasta'], ['fechaIni', 'fechaFin'], ['fechaEmisionDesde', 'fechaEmisionHasta'], ['fechaContableDesde', 'fechaContableHasta'], ['fechaVencimientoDesde', 'fechaVencimientoHasta']]
+      const out: any[] = []
+      for (const [a1, a2] of pares) {
+        const r = await fetch(`${BASE}${ruta}?${new URLSearchParams({ [a1]: d, [a2]: h })}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } })
+        const txt = await r.text()
+        let estado = ''; try { estado = JSON.parse(txt).Estado || '' } catch {}
+        const msg = txt.includes('SqlDateTime') ? 'sigue faltando fecha' : txt.slice(0, 250)
+        out.push({ parametros: `${a1} / ${a2}`, status: r.status, estado, largo: txt.length, msg })
+        if (r.ok && !txt.includes('SqlDateTime') && estado !== 'Error') break
+      }
+      return NextResponse.json({ ok: true, intentos: out })
+    }
     return NextResponse.json({ error: 'Acción desconocida.' }, { status: 400 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || String(e) }, { status: 500 })

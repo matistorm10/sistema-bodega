@@ -64,6 +64,21 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ ok: true, probadas: out.length, distintas: out.filter(x => x.status !== 404) })
     }
+    if (b.accion === 'resumen_diario') {
+      const t = await obtenerToken()
+      const d = String(b.desde || '2026-10-01'), h = String(b.hasta || '2026-10-31')
+      const r = await fetch(`${BASE}/api/Contabilidad/getLibroDiario?${new URLSearchParams({ fechaDesde: d, fechaHasta: h })}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } })
+      const j: any = await r.json().catch(() => null)
+      const items: any[] = j?.items || []
+      if (!items.length) return NextResponse.json({ ok: false, status: r.status, resumen: 'Sin items. Respuesta: ' + JSON.stringify(j).slice(0, 500) })
+      const campos = Object.keys(items[0])
+      const claves = campos.filter(c => /unidad|centro|costo|ceco|proyecto|glosa|rut|documento|folio/i.test(c))
+      const distintos: Record<string, any> = {}
+      claves.forEach(c => { const v = [...new Set(items.map(x => x[c]))]; distintos[c] = { cantidad: v.length, ejemplos: v.slice(0, 8) } })
+      const tipos: Record<string, number> = {}; items.forEach(x => { tipos[x.TipoComprobante] = (tipos[x.TipoComprobante] || 0) + 1 })
+      const gastos = items.filter(x => /^[5-6]/.test(String(x.Cuenta))).slice(0, 6)
+      return NextResponse.json({ ok: true, status: r.status, resumen: JSON.stringify({ totalLineas: items.length, campos, tiposComprobante: tipos, camposClave: distintos, ejemploPrimeraLinea: items[0], ejemplosGasto: gastos }, null, 2) })
+    }
     if (b.accion === 'parametros') {
       const ruta = String(b.ruta || ''); if (!ruta.startsWith('/') || ruta.includes('..')) return NextResponse.json({ error: 'Ruta inválida.' }, { status: 400 })
       const t = await obtenerToken()

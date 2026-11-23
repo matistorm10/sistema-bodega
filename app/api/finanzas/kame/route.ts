@@ -79,6 +79,49 @@ export async function POST(req: NextRequest) {
       const gastos = items.filter(x => /^[5-6]/.test(String(x.Cuenta))).slice(0, 6)
       return NextResponse.json({ ok: true, status: r.status, resumen: JSON.stringify({ totalLineas: items.length, campos, tiposComprobante: tipos, camposClave: distintos, ejemploPrimeraLinea: items[0], ejemplosGasto: gastos }, null, 2) })
     }
+    if (b.accion === 'sync_pagina') {
+      // Trae UNA página (1000 líneas) del Libro Diario y guarda las cuentas de ingresos (3.x) y egresos (4.x).
+      const desde = String(b.desde || ''), hasta = String(b.hasta || ''), page = Math.max(1, Number(b.page) || 1)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return NextResponse.json({ error: 'Fechas inválidas.' }, { status: 400 })
+      const t = await obtenerToken()
+      const r = await fetch(`${BASE}/api/Contabilidad/getLibroDiario?${new URLSearchParams({ fechaDesde: desde, fechaHasta: hasta, page: String(page), per_page: '1000' })}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } })
+      const j: any = await r.json().catch(() => null)
+      if (!r.ok || !j || j.Estado === 'Error') return NextResponse.json({ error: 'Kame respondió con error: ' + JSON.stringify(j).slice(0, 300) }, { status: 502 })
+      const items: any[] = j.items || []
+      if (page === 1) {
+        const { error } = await supabaseAdmin.from('fin_asientos').delete().gte('fecha', desde).lte('fecha', hasta)
+        if (error) return NextResponse.json({ error: 'No se pudo limpiar el rango: ' + error.message }, { status: 500 })
+      }
+      const utiles = items.filter(x => /^[34]\./.test(String(x.Cuenta)))
+      const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+      // Unidades de negocio: se crean las que falten
+      const nombres = [...new Set(utiles.map(x => String(x.UnidadNegocio || '').trim()).filter(Boolean))]
+      const { data: us } = await supabaseAdmin.from('fin_unidades').select('id,nombre')
+      const mapa = new Map((us || []).map(u => [norm(u.nombre), u.id as string]))
+      const faltan = nombres.filter(n => !mapa.has(norm(n)))
+      if (faltan.length) {
+        const { data: nu, error } = await supabaseAdmin.from('fin_unidades').insert(faltan.map(nombre => ({ nombre }))).select('id,nombre')
+        if (error) return NextResponse.json({ error: 'No se pudieron crear unidades: ' + error.message }, { status: 500 })
+        ;(nu || []).forEach(u => mapa.set(norm(u.nombre), u.id))
+      }
+      const filas = utiles.map(x => {
+        // El comentario trae el documento: "Factura Electrónica #21053 Ficha 76.340.983-K PROVEEDOR"
+        const m = String(x.Comentario || '').match(/^(.*?)\s*#\s*(\d+)\s*,?\s*ficha\s+([0-9.]+-[0-9kK])\s*(.*)$/i)
+        const u = String(x.UnidadNegocio || '').trim()
+        return {
+          kame_id: Math.round(Number(x.Id)), fecha: String(x.Fecha).slice(0, 10), tipo_comprobante: x.TipoComprobante || null, folio_comprobante: x.Folio ?? null,
+          cuenta: String(x.Cuenta), nombre_cuenta: x.NombreCuenta || null, debe: Number(x.Debe) || 0, haber: Number(x.Haber) || 0,
+          comentario: x.Comentario || null, comentario_det: x.ComentarioDet || null, unidad_texto: u || null, unidad_id: u ? (mapa.get(norm(u)) || null) : null,
+          doc_tipo: m ? norm(m[1]) : null, doc_folio: m ? m[2] : null, doc_rut: m ? m[3].replace(/\./g, '').toUpperCase() : null, doc_nombre: m ? m[4].trim() : null,
+          sincronizado_en: new Date().toISOString(),
+        }
+      })
+      for (let i = 0; i < filas.length; i += 500) {
+        const { error } = await supabaseAdmin.from('fin_asientos').upsert(filas.slice(i, i + 500), { onConflict: 'kame_id' })
+        if (error) return NextResponse.json({ error: 'No se pudo guardar: ' + error.message }, { status: 500 })
+      }
+      return NextResponse.json({ ok: true, lineas: items.length, guardadas: filas.length, hayMas: items.length >= 1000, unidadesNuevas: faltan.length })
+    }
     if (b.accion === 'paginar') {
       const t = await obtenerToken()
       const base = { fechaDesde: String(b.desde || '2026-10-01'), fechaHasta: String(b.hasta || '2026-10-31') }

@@ -174,6 +174,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const [items, setItems] = useState<any[]>([])
   const [lineas, setLineas] = useState<any[]>([])
   const [remUnidad, setRemUnidad] = useState(0)
+  const [asientos, setAsientos] = useState<any[]>([])
   const [nueva, setNueva] = useState('')
   const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [vDeltas, setVDeltas] = useState<Record<string, string>>({})
   const unidad = unidades.find(u => u.id === uid)
@@ -187,6 +188,8 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
     ])
     const { data: rm } = await supabase.from('fin_remuneraciones').select('costo_empresa').eq('unidad_id', uid).limit(5000)
     setRemUnidad((rm || []).reduce((a, r) => a + Number(r.costo_empresa), 0))
+    const { data: as } = await supabase.from('fin_asientos').select('cuenta,nombre_cuenta,debe,haber').eq('unidad_id', uid).like('cuenta', '4.%').limit(20000)
+    setAsientos(as || [])
     setPartidas(p.data || []); setVersiones(v.data || []); setLineas((l.data || []).filter((x: any) => x.documento?.sentido === 'compra'))
     const ids = (v.data || []).map(x => x.id)
     if (ids.length) { const { data } = await supabase.from('fin_version_items').select('*').in('version_id', ids); setItems(data || []) } else setItems([])
@@ -220,13 +223,14 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
       {unidad && <>
         <div style={card}>
           <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Partidas: presupuesto vigente vs real</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th><th style={{ ...th, textAlign: 'right' }}>Real (compras)</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th><th style={{ ...th, textAlign: 'right' }}>% usado</th></tr></thead>
-            <tbody>{partidas.map(p => { const pr = presup[p.id] || 0, re = p.fuente === 'remuneraciones' ? remUnidad : (real[p.id] || 0); const pct = pr ? (re / pr) * 100 : 0; return <tr key={p.id}>
-              <td style={td}>{p.nombre}{p.fuente === 'remuneraciones' && <span style={{ fontSize: 11, color: '#667085' }}> · automática (BUK / planilla)</span>}</td><td style={der}>{$(pr)}</td><td style={der}>{$(re)}</td>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={th}>Cuentas Kame</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th><th style={{ ...th, textAlign: 'right' }}>Real</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th><th style={{ ...th, textAlign: 'right' }}>% usado</th></tr></thead>
+            <tbody>{partidas.map(p => { const pr = presup[p.id] || 0, pref = String(p.cuentas || '').split(',').map((x: string) => x.trim()).filter(Boolean); const re = p.fuente === 'remuneraciones' ? remUnidad : (real[p.id] || 0) + asientos.filter(a => pref.some((x: string) => a.cuenta.startsWith(x))).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0); const pct = pr ? (re / pr) * 100 : 0; return <tr key={p.id}>
+              <td style={td}>{p.nombre}{p.fuente === 'remuneraciones' && <span style={{ fontSize: 11, color: '#667085' }}> · automática (BUK / planilla)</span>}</td><td style={td}>{p.fuente === 'remuneraciones' ? '—' : <input defaultValue={p.cuentas || ''} placeholder="ej. 4.01.02.02" onBlur={async e => { if (e.target.value !== (p.cuentas || '')) { await supabase.from('fin_partidas').update({ cuentas: e.target.value }).eq('id', p.id); cargar() } }} style={{ ...inp, width: 150, padding: '4px 6px' }} />}</td><td style={der}>{$(pr)}</td><td style={der}>{$(re)}</td>
               <td style={{ ...der, color: pr - re < 0 ? '#b42318' : '#067647' }}>{$(pr - re)}</td>
               <td style={{ ...der, color: pct > 100 ? '#b42318' : undefined }}>{pr ? pct.toFixed(0) + '%' : '—'}</td></tr> })}
-              <tr><td style={{ ...td, color: '#92400e' }}>Sin clasificar ({sinClas.length} líneas)</td><td style={der}>—</td><td style={der}>{$(sinClas.reduce((a, l) => a + Number(l.monto), 0))}</td><td style={der} colSpan={2} /></tr>
+              <tr><td style={{ ...td, color: '#92400e' }}>Sin clasificar ({sinClas.length} líneas de Excel)</td><td style={td} /><td style={der}>—</td><td style={der}>{$(sinClas.reduce((a, l) => a + Number(l.monto), 0))}</td><td style={der} colSpan={2} /></tr>
             </tbody></table>
+          {asientos.length > 0 && <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, cursor: 'pointer' }}>Cuentas de costo con movimiento en este proyecto</summary><ul style={{ fontSize: 12 }}>{Object.entries(asientos.reduce((m: Record<string, { n: string, v: number }>, a) => { m[a.cuenta] = { n: a.nombre_cuenta, v: (m[a.cuenta]?.v || 0) + Number(a.debe) - Number(a.haber) }; return m }, {})).sort().map(([c, x]: any) => <li key={c}>{c} · {x.n} · ${$(x.v)}</li>)}</ul><p style={{ fontSize: 11, color: '#667085' }}>En «Cuentas Kame» de una partida escribe una o varias cuentas o prefijos separados por coma (ej. 4.01.02.02, 4.01.03). Su costo real se llena solo.</p></details>}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><input value={nueva} onChange={e => setNueva(e.target.value)} placeholder="Nueva partida (ej. Hormigón)" style={{ ...inp, width: 260 }} /><button onClick={agregarPartida} style={btn()}>Agregar partida</button>{!partidas.some(p => p.fuente === 'remuneraciones') && <button onClick={agregarRem} style={btn(false)}>+ Partida de remuneraciones</button>}</div>
         </div>
         <div style={card}>
@@ -257,31 +261,34 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
 // ───────────────────────── Resultado ─────────────────────────
 function Resultado({ unidades }: { unidades: Unidad[] }) {
   const [mes, setMes] = useState('')
-  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [vers, setVers] = useState<any[]>([])
+  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [vers, setVers] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([]); const [detalle, setDetalle] = useState('')
   const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([])
   useEffect(() => {
     (async () => {
       setCargando(true)
-      const [l, r, v] = await Promise.all([
+      const [l, r, v, a] = await Promise.all([
         traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
         traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,costo_empresa'),
         traerTodo('fin_versiones', 'id,unidad_id,delta_contrato'),
+        traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id', 'kame_id'),
       ])
-      setLineas(l); setRem(r); setVers(v)
+      setLineas(l); setRem(r); setVers(v); setAsi(a)
       // Documentos cuyo período tributario no coincide con el mes de su fecha: aviso de "cae en otro mes"
       setTardias(l.filter(x => x.documento?.periodo_tributario && x.documento?.fecha_doc && x.documento.fecha_doc.slice(0, 7) !== x.documento.periodo_tributario))
       setCargando(false)
     })()
   }, [])
-  const meses = useMemo(() => [...new Set([...lineas.map(l => l.documento?.fecha_doc?.slice(0, 7)), ...rem.map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [lineas, rem])
+  const hayKame = asi.length > 0
+  const meses = useMemo(() => [...new Set([...(hayKame ? asi.map(a => String(a.fecha).slice(0, 7)) : lineas.map(l => l.documento?.fecha_doc?.slice(0, 7))), ...rem.map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [lineas, rem, asi, hayKame])
 
   const filas = unidades.map(u => {
     const ls = lineas.filter(l => l.unidad_id === u.id && (!mes || (l.documento?.periodo_tributario || l.documento?.fecha_doc?.slice(0, 7)) === mes))
-    const ventas = ls.filter(l => l.documento?.sentido === 'venta').reduce((a, l) => a + Number(l.monto), 0)
-    const compras = ls.filter(l => l.documento?.sentido === 'compra').reduce((a, l) => a + Number(l.monto), 0)
+    const as = asi.filter(a => a.unidad_id === u.id && (!mes || String(a.fecha).slice(0, 7) === mes))
+    const ventas = hayKame ? as.filter(a => a.cuenta.startsWith('3.')).reduce((t, a) => t + Number(a.haber) - Number(a.debe), 0) : ls.filter(l => l.documento?.sentido === 'venta').reduce((a, l) => a + Number(l.monto), 0)
+    const compras = hayKame ? as.filter(a => a.cuenta.startsWith('4.')).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0) : ls.filter(l => l.documento?.sentido === 'compra').reduce((a, l) => a + Number(l.monto), 0)
     const sueldos = rem.filter(r => r.unidad_id === u.id && (!mes || r.periodo === mes)).reduce((a, r) => a + Number(r.costo_empresa), 0)
     const contrato = Number(u.monto_contrato_base) + vers.filter(v => v.unidad_id === u.id).reduce((a, v) => a + Number(v.delta_contrato), 0)
-    const margen = ventas - compras - sueldos
+    const margen = ventas - compras - (hayKame ? 0 : sueldos)
     return { u, ventas, compras, sueldos, margen, pct: ventas ? (margen / ventas) * 100 : null, contrato }
   }).filter(f => f.ventas || f.compras || f.sueldos || f.contrato)
   const tot = filas.reduce((a, f) => ({ v: a.v + f.ventas, c: a.c + f.compras, s: a.s + f.sueldos }), { v: 0, c: 0, s: 0 })
@@ -291,15 +298,25 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
       <div style={card}>
         <span style={{ fontSize: 13, marginRight: 8 }}>Período:</span>
         <select value={mes} onChange={e => setMes(e.target.value)} style={inp}><option value="">Acumulado</option>{meses.map(m => <option key={m} value={m}>{m}</option>)}</select>
-        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.</p>
+        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>{hayKame ? 'Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x. La planilla de remuneraciones se muestra como referencia: no se resta aparte para no contarla dos veces si Kame ya la tiene en sus costos.' : 'Fuente: archivos importados. Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.'}</p>
       </div>
       <div style={card}>
         {cargando ? <p style={{ fontSize: 13, color: '#999' }}>Cargando…</p> : filas.length === 0 ? <p style={{ fontSize: 13 }}>Aún no hay datos. Sube los informes en la pestaña Importar y marca las unidades activas.</p> :
-          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>Compras</th><th style={{ ...th, textAlign: 'right' }}>Remuneraciones</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
+          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Costos (contabilidad)' : 'Compras'}</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Rem. planilla (ref.)' : 'Remuneraciones'}</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
             <tbody>{filas.map(f => <tr key={f.u.id}><td style={td}>{f.u.nombre}</td><td style={der}>{f.contrato ? $(f.contrato) : '—'}</td><td style={der}>{$(f.ventas)}</td><td style={der}>{$(f.compras)}</td><td style={der}>{$(f.sueldos)}</td>
               <td style={{ ...der, color: f.margen < 0 ? '#b42318' : '#067647', fontWeight: 600 }}>{$(f.margen)}</td><td style={der}>{f.pct == null ? '—' : f.pct.toFixed(1) + '%'}</td></tr>)}
-              <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c - tot.s)}</td><td style={der} /></tr></tbody></table></div>}
+              <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c - (hayKame ? 0 : tot.s))}</td><td style={der} /></tr></tbody></table></div>}
       </div>
+      {hayKame && filas.length > 0 && <div style={card}>
+        <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Costos por cuenta contable</h2>
+        <select value={detalle} onChange={e => setDetalle(e.target.value)} style={inp}><option value="">Elegir proyecto…</option>{filas.map(f => <option key={f.u.id} value={f.u.id}>{f.u.nombre}</option>)}</select>
+        {detalle && (() => {
+          const m: Record<string, { n: string, v: number }> = {}
+          asi.filter(a => a.unidad_id === detalle && a.cuenta.startsWith('4.') && (!mes || String(a.fecha).slice(0, 7) === mes)).forEach(a => { m[a.cuenta] = { n: a.nombre_cuenta, v: (m[a.cuenta]?.v || 0) + Number(a.debe) - Number(a.haber) } })
+          return <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}><thead><tr><th style={th}>Cuenta</th><th style={th}>Nombre</th><th style={{ ...th, textAlign: 'right' }}>Monto</th></tr></thead>
+            <tbody>{Object.entries(m).sort((x, y) => y[1].v - x[1].v).map(([c, x]) => <tr key={c}><td style={td}>{c}</td><td style={td}>{x.n}</td><td style={der}>{$(x.v)}</td></tr>)}</tbody></table>
+        })()}
+      </div>}
       {tardias.length > 0 && <div style={card}>
         <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Documentos que caen en otro mes ({tardias.length} líneas)</h2>
         <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>La fecha del documento y el período en que se declaró al SII no coinciden.</p>
@@ -332,11 +349,44 @@ function ConexionKame() {
     } catch (e: any) { setSalida('Error: ' + e.message) }
     setOcupado(false)
   }
+  const hoy = new Date(); const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+  const [mDesde, setMDesde] = useState(mesActual); const [mHasta, setMHasta] = useState(mesActual); const [log, setLog] = useState<string[]>([])
+  const sincronizar = async () => {
+    setOcupado(true); setLog([])
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const meses: string[] = []
+      for (let [y, m] = mDesde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= mHasta; m++) { if (m > 12) { m = 1; y++ } meses.push(`${y}-${String(m).padStart(2, '0')}`); if (meses.length > 36) break }
+      for (const mes of meses) {
+        const [y, m] = mes.split('-').map(Number); const fin = new Date(y, m, 0).getDate()
+        let total = 0, guardadas = 0
+        for (let page = 1; page <= 40; page++) {
+          setLog(l => [...l.filter(x => !x.startsWith(mes + ':')), `${mes}: página ${page}…`])
+          const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ accion: 'sync_pagina', desde: `${mes}-01`, hasta: `${mes}-${fin}`, page }) })
+          const j = await r.json()
+          if (!r.ok) throw new Error(`${mes} página ${page}: ${j.error || r.status}`)
+          total += j.lineas; guardadas += j.guardadas
+          if (!j.hayMas) break
+        }
+        setLog(l => [...l.filter(x => !x.startsWith(mes + ':')), `${mes}: listo · ${total} líneas leídas, ${guardadas} de ingresos/costos guardadas`])
+      }
+    } catch (e: any) { setLog(l => [...l, 'Error: ' + e.message]) }
+    setOcupado(false)
+  }
   const parse = (t: string) => { try { return JSON.parse(t || '{}') } catch { return {} } }
   return (
     <div style={card}>
       <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Conexión con la API de Kame</h2>
       <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Las credenciales están solo en el servidor (variables KAME_CLIENT_ID y KAME_CLIENT_SECRET en Vercel). Esta pantalla sirve para probar la conexión y descubrir qué endpoints responden.</p>
+      <div style={{ background: '#f0f9ff', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+        <b style={{ fontSize: 14 }}>Sincronizar contabilidad desde Kame (Libro Diario)</b>
+        <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 8px' }}>Trae ingresos (cuentas 3.x) y costos (cuentas 4.x) con su unidad de negocio. Volver a sincronizar un mes reemplaza ese mes completo, sin duplicar.</p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          Desde <input type="month" value={mDesde} onChange={e => setMDesde(e.target.value)} style={inp} /> hasta <input type="month" value={mHasta} onChange={e => setMHasta(e.target.value)} style={inp} />
+          <button disabled={ocupado} onClick={sincronizar} style={btn(true, ocupado)}>Sincronizar</button>
+        </div>
+        {log.length > 0 && <pre style={{ fontSize: 12, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{log.join('\n')}</pre>}
+      </div>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'token' })} style={btn(true, ocupado)}>1. Probar conexión (token)</button>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'descubrir', prefijos: pref.split(',').map(x => x.trim()), nombres: nom.split(',').map(x => x.trim()) })} style={{ ...btn(false, ocupado), marginLeft: 8 }}>Descubrir endpoints</button>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>

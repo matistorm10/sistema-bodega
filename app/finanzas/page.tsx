@@ -261,7 +261,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
 // ───────────────────────── Resultado ─────────────────────────
 function Resultado({ unidades }: { unidades: Unidad[] }) {
   const [mes, setMes] = useState('')
-  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [vers, setVers] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([]); const [detalle, setDetalle] = useState('')
+  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [vers, setVers] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([]); const [detalle, setDetalle] = useState(''); const [abierta, setAbierta] = useState(''); const [provAbierto, setProvAbierto] = useState('')
   const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([])
   useEffect(() => {
     (async () => {
@@ -270,7 +270,7 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
         traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
         traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,costo_empresa'),
         traerTodo('fin_versiones', 'id,unidad_id,delta_contrato'),
-        traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id', 'kame_id'),
+        traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario', 'kame_id'),
       ])
       setLineas(l); setRem(r); setVers(v); setAsi(a)
       // Documentos cuyo período tributario no coincide con el mes de su fecha: aviso de "cae en otro mes"
@@ -311,10 +311,32 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
         <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Costos por cuenta contable</h2>
         <select value={detalle} onChange={e => setDetalle(e.target.value)} style={inp}><option value="">Elegir proyecto…</option>{filas.map(f => <option key={f.u.id} value={f.u.id}>{f.u.nombre}</option>)}</select>
         {detalle && (() => {
+          const base = asi.filter(a => a.unidad_id === detalle && a.cuenta.startsWith('4.') && (!mes || String(a.fecha).slice(0, 7) === mes))
           const m: Record<string, { n: string, v: number }> = {}
-          asi.filter(a => a.unidad_id === detalle && a.cuenta.startsWith('4.') && (!mes || String(a.fecha).slice(0, 7) === mes)).forEach(a => { m[a.cuenta] = { n: a.nombre_cuenta, v: (m[a.cuenta]?.v || 0) + Number(a.debe) - Number(a.haber) } })
+          base.forEach(a => { m[a.cuenta] = { n: a.nombre_cuenta, v: (m[a.cuenta]?.v || 0) + Number(a.debe) - Number(a.haber) } })
           return <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}><thead><tr><th style={th}>Cuenta</th><th style={th}>Nombre</th><th style={{ ...th, textAlign: 'right' }}>Monto</th></tr></thead>
-            <tbody>{Object.entries(m).sort((x, y) => y[1].v - x[1].v).map(([c, x]) => <tr key={c}><td style={td}>{c}</td><td style={td}>{x.n}</td><td style={der}>{$(x.v)}</td></tr>)}</tbody></table>
+            <tbody>{Object.entries(m).sort((x, y) => y[1].v - x[1].v).map(([c, x]) => {
+              const abre = abierta === c
+              const provs: Record<string, { n: string, rut: string, v: number, docs: any[] }> = {}
+              if (abre) base.filter(a => a.cuenta === c).forEach(a => {
+                const k = a.doc_rut || a.doc_nombre || '(sin proveedor)'
+                provs[k] = provs[k] || { n: a.doc_nombre || (a.doc_rut ? a.doc_rut : 'Sin proveedor (asiento manual o remuneraciones)'), rut: a.doc_rut || '', v: 0, docs: [] }
+                provs[k].v += Number(a.debe) - Number(a.haber); provs[k].docs.push(a)
+              })
+              return [
+                <tr key={c} onClick={() => { setAbierta(abre ? '' : c); setProvAbierto('') }} style={{ cursor: 'pointer', background: abre ? '#f0f9ff' : undefined }}>
+                  <td style={td}>{abre ? '▾' : '▸'} {c}</td><td style={td}>{x.n}</td><td style={der}>{$(x.v)}</td></tr>,
+                ...Object.entries(provs).sort((p, q) => q[1].v - p[1].v).flatMap(([k, pv]) => {
+                  const ab2 = provAbierto === c + '|' + k
+                  return [
+                    <tr key={c + k} onClick={() => setProvAbierto(ab2 ? '' : c + '|' + k)} style={{ cursor: 'pointer', background: '#fafcff' }}>
+                      <td style={{ ...td, paddingLeft: 28 }}>{ab2 ? '▾' : '▸'} {pv.rut}</td><td style={td}>{pv.n} <span style={{ color: '#98a2b3' }}>· {pv.docs.length} mov.</span></td><td style={der}>{$(pv.v)}</td></tr>,
+                    ...(ab2 ? pv.docs.sort((a: any, b: any) => String(a.fecha).localeCompare(String(b.fecha))).map((a: any) =>
+                      <tr key={a.kame_id}><td style={{ ...td, paddingLeft: 52, color: '#667085' }}>{String(a.fecha).slice(0, 10)}</td><td style={{ ...td, color: '#667085' }}>{a.doc_tipo ? `${a.doc_tipo} ${a.doc_folio || ''}` : (a.comentario_det || a.comentario || '')}</td><td style={{ ...der, color: '#667085' }}>{$(Number(a.debe) - Number(a.haber))}</td></tr>) : []),
+                  ]
+                }),
+              ]
+            })}</tbody></table>
         })()}
       </div>}
       {tardias.length > 0 && <div style={card}>

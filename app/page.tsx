@@ -24,6 +24,7 @@ export default function Home() {
     { href:'/contabilidad', icon:'🧾', label:'Contabilidad', desc:'Rendiciones y guías de traslado', visible: esAdmin || usuario?.accesoContabilidad },
     { href:'/hsec', icon:'🦺', label:'Departamento Prevención de Riesgo', desc:'Panel de jefatura y espacio de cada prevencionista', visible: esAdmin || usuario?.accesoHsec || !!usuario?.cargoPrograma },
     { href:'/operaciones', icon:'🛠️', label:'Operaciones', desc:'Personal, turnos, dotación, vuelos y pasajes', visible: esAdmin || usuario?.accesoOperaciones },
+    { href:'/finanzas', icon:'📊', label:'Finanzas', desc:'Control de costos por proyecto (en desarrollo)', visible: esAdmin },
     { href:'/administracion', icon:'⚙️', label:'Administración', desc:'Usuarios, roles, permisos y centros de costo (CECO)', visible: esAdmin },
   ].filter(m => m.visible)
 

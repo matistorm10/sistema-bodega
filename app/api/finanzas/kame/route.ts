@@ -50,14 +50,13 @@ export async function POST(req: NextRequest) {
     }
     if (b.accion === 'descubrir') {
       const t = await obtenerToken()
-      const prefijos = ['/api', '/api/v1', '/api/Informes', '/api/Reportes', '/api/Documentos', '/api/Compras', '/api/Ventas', '/api/Contabilidad', '/v1', '']
-      const nombres = ['getInformeVentas', 'getInformeCompras', 'getCuentaxPagar', 'getCuentaxCobrar', 'getInformeCobros', 'getInformePagos', 'getListFicha']
-      const docs = ['/api', '/api/swagger', '/api/swagger.json', '/api/swagger/v1/swagger.json', '/swagger/index.html', '/swagger.json', '/api/docs', '/docs', '/openapi.json', '/api/openapi.json']
-      const rutas = [...docs, ...prefijos.flatMap(p => nombres.map(n => `${p}/${n}`))]
+      const lim = (x: any, def: string[]) => (Array.isArray(x) && x.length ? x : def).map(String).filter(v => /^[A-Za-z0-9_/]*$/.test(v)).slice(0, 40)
+      const prefijos = lim(b.prefijos, ['/api/Contabilidad'])
+      const nombres = lim(b.nombres, ['getInformeCompras'])
+      const rutas = prefijos.flatMap(p => nombres.map(n => `${p}/${n}`)).slice(0, 160)
       const out: { ruta: string, status: number }[] = []
-      for (let i = 0; i < rutas.length; i += 8) {
-        const parte = rutas.slice(i, i + 8)
-        const res = await Promise.all(parte.map(async ruta => {
+      for (let i = 0; i < rutas.length; i += 10) {
+        const res = await Promise.all(rutas.slice(i, i + 10).map(async ruta => {
           try { const r = await fetch(`${BASE}${ruta}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } }); return { ruta, status: r.status } }
           catch { return { ruta, status: 0 } }
         }))

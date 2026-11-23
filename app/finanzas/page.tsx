@@ -17,7 +17,7 @@ const td: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderBottom
 const der: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 
 type Unidad = { id: string, nombre: string, grupo: string | null, activa: boolean, monto_contrato_base: number }
-type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'resultado'
+type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'resultado' | 'kame'
 
 export default function Finanzas() {
   const { usuario, cargando } = useUsuarioActual()
@@ -40,7 +40,7 @@ export default function Finanzas() {
   if (cargando) return <main style={fondoPagina}><div style={{ padding: '1.5rem' }}><p style={{ fontSize: 13, color: '#999' }}>Cargando...</p></div></main>
   if (!esAdmin) return <main style={fondoPagina}><div style={{ padding: '1.5rem', maxWidth: 600, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>{cab}<div style={card}><p style={{ fontSize: 14 }}>Este módulo está en desarrollo y solo está habilitado para administradores.</p></div></div></main>
 
-  const tabs: [Pestana, string][] = [['resultado', 'Resultado por proyecto'], ['presupuesto', 'Presupuesto'], ['importar', 'Importar'], ['unidades', 'Unidades']]
+  const tabs: [Pestana, string][] = [['resultado', 'Resultado por proyecto'], ['presupuesto', 'Presupuesto'], ['importar', 'Importar'], ['unidades', 'Unidades'], ['kame', 'Conexión Kame']]
   return (
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: 1100, margin: '0 auto' }}>
@@ -51,6 +51,7 @@ export default function Finanzas() {
         {tab === 'importar' && <Importar onListo={cargarUnidades} />}
         {tab === 'unidades' && <Unidades unidades={unidades} recargar={cargarUnidades} />}
         {tab === 'presupuesto' && <Presupuesto unidades={unidades.filter(u => u.activa)} recargar={cargarUnidades} />}
+        {tab === 'kame' && <ConexionKame />}
         {tab === 'resultado' && <Resultado unidades={unidades.filter(u => u.activa)} />}
       </div>
     </main>
@@ -172,6 +173,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const [versiones, setVersiones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [lineas, setLineas] = useState<any[]>([])
+  const [remUnidad, setRemUnidad] = useState(0)
   const [nueva, setNueva] = useState('')
   const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [vDeltas, setVDeltas] = useState<Record<string, string>>({})
   const unidad = unidades.find(u => u.id === uid)
@@ -183,6 +185,8 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
       supabase.from('fin_versiones').select('*').eq('unidad_id', uid).order('numero'),
       supabase.from('fin_lineas').select('id,monto,concepto,detalle,partida_id,documento:fin_documentos(sentido,razon_social,folio,fecha_doc)').eq('unidad_id', uid).limit(5000),
     ])
+    const { data: rm } = await supabase.from('fin_remuneraciones').select('costo_empresa').eq('unidad_id', uid).limit(5000)
+    setRemUnidad((rm || []).reduce((a, r) => a + Number(r.costo_empresa), 0))
     setPartidas(p.data || []); setVersiones(v.data || []); setLineas((l.data || []).filter((x: any) => x.documento?.sentido === 'compra'))
     const ids = (v.data || []).map(x => x.id)
     if (ids.length) { const { data } = await supabase.from('fin_version_items').select('*').in('version_id', ids); setItems(data || []) } else setItems([])
@@ -196,6 +200,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const totPres = Object.values(presup).reduce((a, b) => a + b, 0)
 
   const agregarPartida = async () => { if (!nueva.trim()) return; await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: nueva.trim(), orden: partidas.length }); setNueva(''); cargar() }
+  const agregarRem = async () => { await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: 'Remuneraciones', orden: partidas.length, fuente: 'remuneraciones' }); cargar() }
   const guardarVersion = async () => {
     const numero = (versiones[versiones.length - 1]?.numero || 0) + 1
     const { data: v, error } = await supabase.from('fin_versiones').insert({ unidad_id: uid, numero, tipo: vTipo, descripcion: vDesc || (vTipo === 'base' ? 'Presupuesto base' : 'Adicional'), delta_contrato: Number(vContrato) || 0 }).select('id').single()
@@ -216,13 +221,13 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
         <div style={card}>
           <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Partidas: presupuesto vigente vs real</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th><th style={{ ...th, textAlign: 'right' }}>Real (compras)</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th><th style={{ ...th, textAlign: 'right' }}>% usado</th></tr></thead>
-            <tbody>{partidas.map(p => { const pr = presup[p.id] || 0, re = real[p.id] || 0; const pct = pr ? (re / pr) * 100 : 0; return <tr key={p.id}>
-              <td style={td}>{p.nombre}</td><td style={der}>{$(pr)}</td><td style={der}>{$(re)}</td>
+            <tbody>{partidas.map(p => { const pr = presup[p.id] || 0, re = p.fuente === 'remuneraciones' ? remUnidad : (real[p.id] || 0); const pct = pr ? (re / pr) * 100 : 0; return <tr key={p.id}>
+              <td style={td}>{p.nombre}{p.fuente === 'remuneraciones' && <span style={{ fontSize: 11, color: '#667085' }}> · automática (BUK / planilla)</span>}</td><td style={der}>{$(pr)}</td><td style={der}>{$(re)}</td>
               <td style={{ ...der, color: pr - re < 0 ? '#b42318' : '#067647' }}>{$(pr - re)}</td>
               <td style={{ ...der, color: pct > 100 ? '#b42318' : undefined }}>{pr ? pct.toFixed(0) + '%' : '—'}</td></tr> })}
               <tr><td style={{ ...td, color: '#92400e' }}>Sin clasificar ({sinClas.length} líneas)</td><td style={der}>—</td><td style={der}>{$(sinClas.reduce((a, l) => a + Number(l.monto), 0))}</td><td style={der} colSpan={2} /></tr>
             </tbody></table>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><input value={nueva} onChange={e => setNueva(e.target.value)} placeholder="Nueva partida (ej. Hormigón)" style={{ ...inp, width: 260 }} /><button onClick={agregarPartida} style={btn()}>Agregar partida</button></div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><input value={nueva} onChange={e => setNueva(e.target.value)} placeholder="Nueva partida (ej. Hormigón)" style={{ ...inp, width: 260 }} /><button onClick={agregarPartida} style={btn()}>Agregar partida</button>{!partidas.some(p => p.fuente === 'remuneraciones') && <button onClick={agregarRem} style={btn(false)}>+ Partida de remuneraciones</button>}</div>
         </div>
         <div style={card}>
           <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Versiones del presupuesto</h2>
@@ -242,7 +247,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
           <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Líneas por clasificar ({sinClas.length})</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Proveedor</th><th style={th}>Folio</th><th style={th}>Concepto</th><th style={{ ...th, textAlign: 'right' }}>Neto</th><th style={th}>Partida</th></tr></thead>
             <tbody>{sinClas.slice(0, 200).map(l => <tr key={l.id}><td style={td}>{l.documento?.fecha_doc}</td><td style={td}>{l.documento?.razon_social}</td><td style={td}>{l.documento?.folio}</td><td style={td}>{l.concepto}</td><td style={der}>{$(l.monto)}</td>
-              <td style={td}><select value="" onChange={e => clasificar(l.id, e.target.value)} style={inp}><option value="">Elegir…</option>{partidas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td></tr>)}</tbody></table>
+              <td style={td}><select value="" onChange={e => clasificar(l.id, e.target.value)} style={inp}><option value="">Elegir…</option>{partidas.filter(p => p.fuente !== 'remuneraciones').map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></td></tr>)}</tbody></table>
         </div>
       </>}
     </>
@@ -302,5 +307,42 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
           <tbody>{tardias.slice(0, 30).map(t => <tr key={t.id}><td style={td}>{t.documento.razon_social}</td><td style={td}>{t.documento.folio}</td><td style={td}>{t.documento.fecha_doc}</td><td style={td}>{t.documento.periodo_tributario}</td></tr>)}</tbody></table>
       </div>}
     </>
+  )
+}
+
+// ───────────────────────── Conexión Kame ─────────────────────────
+const SUGERIDOS = ['/api/getInformeVentas', '/api/getInformeCompras', '/api/getCuentaxCobrar', '/api/getCuentaxPagar', '/api/getInformeCobros', '/api/getInformePagos', '/api/getListFicha']
+function ConexionKame() {
+  const [ruta, setRuta] = useState('/api/getInformeVentas'); const [metodo, setMetodo] = useState<'GET' | 'POST'>('GET')
+  const [query, setQuery] = useState('{}'); const [cuerpo, setCuerpo] = useState('{}')
+  const [salida, setSalida] = useState(''); const [ocupado, setOcupado] = useState(false)
+  const llamar = async (payload: any) => {
+    setOcupado(true); setSalida('Consultando…')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify(payload) })
+      const j = await r.json()
+      if (j.respuesta !== undefined) { let t = j.respuesta; try { t = JSON.stringify(JSON.parse(t), null, 2) } catch {} ; setSalida(`HTTP ${j.status} · ${j.tipo} · ${j.largo} caracteres\n\n${t}`) }
+      else setSalida(j.mensaje || j.error || JSON.stringify(j))
+    } catch (e: any) { setSalida('Error: ' + e.message) }
+    setOcupado(false)
+  }
+  const parse = (t: string) => { try { return JSON.parse(t || '{}') } catch { return {} } }
+  return (
+    <div style={card}>
+      <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Conexión con la API de Kame</h2>
+      <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Las credenciales están solo en el servidor (variables KAME_CLIENT_ID y KAME_CLIENT_SECRET en Vercel). Esta pantalla sirve para probar la conexión y descubrir qué endpoints responden.</p>
+      <button disabled={ocupado} onClick={() => llamar({ accion: 'token' })} style={btn(true, ocupado)}>1. Probar conexión (token)</button>
+      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <select value={metodo} onChange={e => setMetodo(e.target.value as any)} style={inp}><option>GET</option><option>POST</option></select>
+        <input list="sug" value={ruta} onChange={e => setRuta(e.target.value)} style={{ ...inp, width: 300 }} /><datalist id="sug">{SUGERIDOS.map(x => <option key={x} value={x} />)}</datalist>
+        <button disabled={ocupado} onClick={() => llamar({ accion: 'llamar', metodo, ruta, query: parse(query), cuerpo: parse(cuerpo) })} style={btn(true, ocupado)}>2. Consultar</button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        <label style={{ fontSize: 12 }}>Parámetros URL (JSON)<br /><input value={query} onChange={e => setQuery(e.target.value)} style={{ ...inp, width: 340 }} /></label>
+        <label style={{ fontSize: 12 }}>Cuerpo POST (JSON)<br /><input value={cuerpo} onChange={e => setCuerpo(e.target.value)} style={{ ...inp, width: 340 }} /></label>
+      </div>
+      {salida && <pre style={{ marginTop: 12, background: '#101828', color: '#e4e7ec', padding: 12, borderRadius: 8, fontSize: 12, maxHeight: 420, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{salida}</pre>}
+    </div>
   )
 }

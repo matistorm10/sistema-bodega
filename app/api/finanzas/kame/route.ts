@@ -48,6 +48,23 @@ export async function POST(req: NextRequest) {
       const texto = await r.text()
       return NextResponse.json({ ok: r.ok, status: r.status, tipo: r.headers.get('content-type'), largo: texto.length, respuesta: texto.slice(0, 20000) })
     }
+    if (b.accion === 'descubrir') {
+      const t = await obtenerToken()
+      const prefijos = ['/api', '/api/v1', '/api/Informes', '/api/Reportes', '/api/Documentos', '/api/Compras', '/api/Ventas', '/api/Contabilidad', '/v1', '']
+      const nombres = ['getInformeVentas', 'getInformeCompras', 'getCuentaxPagar', 'getCuentaxCobrar', 'getInformeCobros', 'getInformePagos', 'getListFicha']
+      const docs = ['/api', '/api/swagger', '/api/swagger.json', '/api/swagger/v1/swagger.json', '/swagger/index.html', '/swagger.json', '/api/docs', '/docs', '/openapi.json', '/api/openapi.json']
+      const rutas = [...docs, ...prefijos.flatMap(p => nombres.map(n => `${p}/${n}`))]
+      const out: { ruta: string, status: number }[] = []
+      for (let i = 0; i < rutas.length; i += 8) {
+        const parte = rutas.slice(i, i + 8)
+        const res = await Promise.all(parte.map(async ruta => {
+          try { const r = await fetch(`${BASE}${ruta}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } }); return { ruta, status: r.status } }
+          catch { return { ruta, status: 0 } }
+        }))
+        out.push(...res)
+      }
+      return NextResponse.json({ ok: true, probadas: out.length, distintas: out.filter(x => x.status !== 404) })
+    }
     return NextResponse.json({ error: 'Acción desconocida.' }, { status: 400 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || String(e) }, { status: 500 })

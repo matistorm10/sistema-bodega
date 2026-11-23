@@ -79,6 +79,32 @@ export async function POST(req: NextRequest) {
       const gastos = items.filter(x => /^[5-6]/.test(String(x.Cuenta))).slice(0, 6)
       return NextResponse.json({ ok: true, status: r.status, resumen: JSON.stringify({ totalLineas: items.length, campos, tiposComprobante: tipos, camposClave: distintos, ejemploPrimeraLinea: items[0], ejemplosGasto: gastos }, null, 2) })
     }
+    if (b.accion === 'paginar') {
+      const t = await obtenerToken()
+      const base = { fechaDesde: String(b.desde || '2026-10-01'), fechaHasta: String(b.hasta || '2026-10-31') }
+      const pedir = async (extra: Record<string, string>) => {
+        const r = await fetch(`${BASE}/api/Contabilidad/getLibroDiario?${new URLSearchParams({ ...base, ...extra })}`, { headers: { Authorization: `Bearer ${t}`, Accept: 'application/json' } })
+        const j: any = await r.json().catch(() => null)
+        return { status: r.status, j, items: (j?.items || []) as any[] }
+      }
+      const b0 = await pedir({})
+      const otros = Object.fromEntries(Object.entries(b0.j || {}).filter(([k]) => k !== 'items'))
+      const id0 = b0.items[0]?.Id, idN = b0.items[b0.items.length - 1]?.Id
+      const variantes: Record<string, string>[] = [
+        { pagina: '2' }, { page: '2' }, { nroPagina: '2' }, { numeroPagina: '2' }, { pageNumber: '2' }, { skip: '1000' }, { offset: '1000' },
+        { pagina: '2', registrosPorPagina: '1000' }, { pagina: '2', tamanoPagina: '1000' }, { page: '2', pageSize: '1000' }, { desde: '1000' }, { start: '1000' },
+      ]
+      const pruebas: any[] = []
+      for (const v of variantes) {
+        const r = await pedir(v)
+        pruebas.push({ parametros: JSON.stringify(v), status: r.status, lineas: r.items.length, primerId: r.items[0]?.Id, distinto: r.items[0]?.Id !== id0, msg: r.items.length ? '' : JSON.stringify(r.j).slice(0, 200) })
+      }
+      const gastos = b0.items.filter(x => /^4\./.test(String(x.Cuenta))).slice(0, 5)
+      const ingresos = b0.items.filter(x => /^3\./.test(String(x.Cuenta))).slice(0, 3)
+      const porUnidad: Record<string, number> = {}; b0.items.filter(x => /^4\./.test(String(x.Cuenta))).forEach(x => { porUnidad[x.UnidadNegocio || '(vacía)'] = (porUnidad[x.UnidadNegocio || '(vacía)'] || 0) + x.Debe - x.Haber })
+      const fechas = b0.items.map(x => String(x.Fecha).slice(0, 10)).sort()
+      return NextResponse.json({ ok: true, resumen: JSON.stringify({ otrosCamposRespuesta: otros, lineas: b0.items.length, primerId: id0, ultimoId: idN, fechaMin: fechas[0], fechaMax: fechas[fechas.length - 1], pruebas, ejemplosCuenta4: gastos, ejemplosCuenta3: ingresos, costos4PorUnidad_enEstaPagina: porUnidad }, null, 2) })
+    }
     if (b.accion === 'parametros') {
       const ruta = String(b.ruta || ''); if (!ruta.startsWith('/') || ruta.includes('..')) return NextResponse.json({ error: 'Ruta inválida.' }, { status: 400 })
       const t = await obtenerToken()

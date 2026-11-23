@@ -346,6 +346,7 @@ function ConexionKame() {
       <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <select value={metodo} onChange={e => setMetodo(e.target.value as any)} style={inp}><option>GET</option><option>POST</option></select>
         <input list="sug" value={ruta} onChange={e => setRuta(e.target.value)} style={{ ...inp, width: 300 }} /><datalist id="sug">{SUGERIDOS.map(x => <option key={x} value={x} />)}</datalist>
+        <button disabled={ocupado} onClick={() => llamar({ accion: 'paginar' })} style={btn(false, ocupado)}>Probar paginación Libro Diario</button>
         <button disabled={ocupado} onClick={() => llamar({ accion: 'resumen_diario' })} style={btn(false, ocupado)}>Resumen Libro Diario (octubre)</button>
         <button disabled={ocupado} onClick={() => llamar({ accion: 'parametros', ruta })} style={btn(false, ocupado)}>Buscar parámetros de fecha</button>
         <button disabled={ocupado} onClick={() => llamar({ accion: 'llamar', metodo, ruta, query: parse(query), cuerpo: parse(cuerpo) })} style={btn(true, ocupado)}>2. Consultar</button>

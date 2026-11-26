@@ -84,11 +84,11 @@ export async function POST(req: NextRequest) {
       const tk = process.env.BUK_API_TOKEN; const dom = process.env.BUK_DOMINIO || 'indeli.buk.cl'
       if (!tk) return NextResponse.json({ error: 'Falta la variable BUK_API_TOKEN en Vercel (y hacer Redeploy).' }, { status: 400 })
       const pedir = async (ruta: string) => fetch(`https://${dom}${ruta}`, { headers: { auth_token: tk, Accept: 'application/json' } })
-      const forma = (v: any, d = 0): any => Array.isArray(v) ? [`lista de ${v.length}`, v.length && d < 4 ? forma(v[0], d + 1) : null] : (v && typeof v === 'object') ? (d >= 4 ? '{…}' : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, forma(x, d + 1)]))) : (v === null ? 'null' : typeof v)
+      const forma = (v: any, d = 0): any => Array.isArray(v) ? [`lista de ${v.length}`, v.length && d < 7 ? forma(v[0], d + 1) : null] : (v && typeof v === 'object') ? (d >= 7 ? '{…}' : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, forma(x, d + 1)]))) : (v === null ? 'null' : typeof v)
       if (b.accion === 'buk_llamar') {
         const ruta = String(b.ruta || ''); if (!ruta.startsWith('/api/') || ruta.includes('..')) return NextResponse.json({ error: 'La ruta debe empezar con /api/' }, { status: 400 })
         const r = await pedir(ruta); const txt = await r.text(); let j: any = null; try { j = JSON.parse(txt) } catch {}
-        return NextResponse.json({ ok: r.ok, status: r.status, largo: txt.length, estructura: j ? JSON.stringify(forma(j), null, 2).slice(0, 6000) : txt.slice(0, 300) })
+        return NextResponse.json({ ok: r.ok, status: r.status, largo: txt.length, estructura: j ? JSON.stringify(forma(j), null, 2).slice(0, 12000) : txt.slice(0, 300) })
       }
       const rutas = ['/api/v1/chile/employees', '/api/v1/chile/employees/active', '/api/v1/chile/payroll_detail/month?date=01-10-2026', '/api/v1/chile/payroll_detail/month', '/api/v1/chile/payroll_detail', '/api/v1/chile/payrolls', '/api/v1/chile/payroll/month?date=01-10-2026', '/api/v1/chile/accounting/payroll?date=01-10-2026', '/api/v1/chile/accounting', '/api/v1/chile/accounting_integration', '/api/v1/chile/cost_centers', '/api/v1/chile/organization/cost_centers', '/api/v1/chile/organization/areas', '/api/v1/chile/organization/company', '/api/v1/chile/jobs', '/api/v1/chile/companies', '/api/v1/chile/payroll_detail/month/export?date=01-10-2026', '/api/v1/chile/liquidations?date=01-10-2026', '/api/v1/chile/employees/payroll_detail']
       const out = await Promise.all(rutas.map(async ruta => { try { const r = await pedir(ruta); return { ruta, status: r.status } } catch { return { ruta, status: 0 } } }))

@@ -156,7 +156,7 @@ const normNombre = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 const nombreMes = (m: string) => { const [y, mm] = m.split('-').map(Number); return new Date(y, mm - 1, 1).toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }).replace('.', '') }
 const rangoMeses = (d?: string | null, h?: string | null) => { const out: string[] = []; if (!d || !h) return out; let [y, m] = d.slice(0, 7).split('-').map(Number); const [yh, mh] = h.slice(0, 7).split('-').map(Number); while ((y < yh || (y === yh && m <= mh)) && out.length < 60) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++ } } return out }
 const CUENTA_REM = '4.02.04'
-const nomCuenta = (mapa: Record<string, string>, c: string) => c === CUENTA_REM ? 'Remuneraciones (planilla BUK)' : (mapa[c] || 'Cuenta sin nombre')
+const nomCuenta = (mapa: Record<string, string>, c: string) => c === CUENTA_REM ? 'Remuneraciones (BUK)' : (mapa[c] || 'Cuenta sin nombre')
 const agruparPorCuenta = (partidas: any[]) => { const g: Record<string, any[]> = {}; partidas.forEach(p => { const c = p.catalogo?.cuenta || '(sin cuenta)'; (g[c] = g[c] || []).push(p) }); return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0])) }
 
 function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () => void }) {
@@ -357,7 +357,7 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
       setCargando(true)
       const [l, r, v, a] = await Promise.all([
         traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
-        traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,rut,nombre,cargo,costo_empresa'),
+        traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,rut,nombre,cargo,costo_empresa,abierta'),
         traerTodo('fin_versiones', 'id,unidad_id,delta_contrato'),
         traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario', 'kame_id'),
       ])
@@ -369,6 +369,8 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
   const hayKame = asi.length > 0
   const meses = useMemo(() => [...new Set([...(hayKame ? asi.map(a => String(a.fecha).slice(0, 7)) : lineas.map(l => l.documento?.fecha_doc?.slice(0, 7))), ...rem.map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [lineas, rem, asi, hayKame])
 
+  const mesesAbiertos = useMemo(() => new Set(rem.filter(r => r.abierta).map(r => r.periodo as string)), [rem])
+  const hayProyeccion = mes ? mesesAbiertos.has(mes) : mesesAbiertos.size > 0
   const filas = unidades.map(u => {
     const ls = lineas.filter(l => l.unidad_id === u.id && (!mes || (l.documento?.periodo_tributario || l.documento?.fecha_doc?.slice(0, 7)) === mes))
     const as = asi.filter(a => a.unidad_id === u.id && (!mes || String(a.fecha).slice(0, 7) === mes))
@@ -386,9 +388,10 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
     <>
       <div style={card}>
         <span style={{ fontSize: 13, marginRight: 8 }}>Período:</span>
-        <select value={mes} onChange={e => setMes(e.target.value)} style={inp}><option value="">Acumulado</option>{meses.map(m => <option key={m} value={m}>{m}</option>)}</select>
+        <select value={mes} onChange={e => setMes(e.target.value)} style={inp}><option value="">Acumulado</option>{meses.map(m => <option key={m} value={m}>{m}{mesesAbiertos.has(m) ? ' (proyectado)' : ''}</option>)}</select>
         <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>{hayKame ? 'Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x (esta tabla incluye los sueldos que Kame tenga contabilizados). Haz clic en un proyecto para ver su detalle.' : 'Fuente: archivos importados. Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.'}</p>
       </div>
+      {hayProyeccion && <div style={{ ...card, background: '#fff7ed' }}><p style={{ fontSize: 13, margin: 0 }}>⚠ {mes ? `Las remuneraciones de ${mes}` : `Las remuneraciones de ${[...mesesAbiertos].sort().join(', ')}`} son una <b>proyección de BUK</b>: las liquidaciones aún no están cerradas y los montos pueden cambiar hasta el cierre.</p></div>}
       <div style={card}>
         {cargando ? <p style={{ fontSize: 13, color: '#999' }}>Cargando…</p> : filas.length === 0 ? <p style={{ fontSize: 13 }}>Aún no hay datos. Sincroniza con Kame en «Conexión Kame» y marca las unidades activas.</p> :
           <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Costos (contabilidad)' : 'Compras'}</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Rem. planilla (ref.)' : 'Remuneraciones'}</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>

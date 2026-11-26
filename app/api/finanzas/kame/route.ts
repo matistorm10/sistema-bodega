@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         const centro = f?.centro || ''
         const unidad_id = centro ? (mapa.get(norm(centro)) || null) : null
         if (!unidad_id) sinMapa.add(centro || '(sin centro)')
-        return { periodo: mes, rut: String(x.rut || ''), nombre: f?.nombre || null, cargo: f?.cargo || null, centro_texto: centro || null, unidad_id, haberes, aporte_patronal: aporte, costo_empresa: haberes + aporte }
+        return { periodo: mes, rut: String(x.rut || ''), nombre: f?.nombre || null, cargo: f?.cargo || null, centro_texto: centro || null, unidad_id, haberes, aporte_patronal: aporte, costo_empresa: haberes + aporte, abierta: x.closed === false }
       })
       const { error: eDel } = await supabaseAdmin.from('fin_remuneraciones').delete().eq('periodo', mes)
       if (eDel) return NextResponse.json({ error: 'No se pudo limpiar el período: ' + eDel.message }, { status: 500 })
@@ -223,7 +223,9 @@ export async function POST(req: NextRequest) {
       // Unidades de negocio: se crean las que falten
       const nombres = [...new Set(utiles.map(x => String(x.UnidadNegocio || '').trim()).filter(Boolean))]
       const { data: us } = await supabaseAdmin.from('fin_unidades').select('id,nombre')
+      const { data: als } = await supabaseAdmin.from('fin_alias_centro').select('centro_texto,unidad_id')
       const mapa = new Map((us || []).map(u => [norm(u.nombre), u.id as string]))
+      ;(als || []).forEach(a => { if (a.unidad_id) mapa.set(norm(a.centro_texto), a.unidad_id) })
       const faltan = nombres.filter(n => !mapa.has(norm(n)))
       if (faltan.length) {
         const { data: nu, error } = await supabaseAdmin.from('fin_unidades').insert(faltan.map(nombre => ({ nombre }))).select('id,nombre')

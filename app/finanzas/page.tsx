@@ -136,16 +136,75 @@ function Importar({ onListo }: { onListo: () => void }) {
 // ───────────────────────── Unidades ─────────────────────────
 function Unidades({ unidades, recargar }: { unidades: Unidad[], recargar: () => void }) {
   const cambiar = async (id: string, campos: Partial<Unidad>) => { await supabase.from('fin_unidades').update(campos).eq('id', id); recargar() }
+  const [nombreU, setNombreU] = useState(''); const [msgU, setMsgU] = useState('')
+  const agregarUnidad = async () => {
+    const nombre = nombreU.trim().replace(/\s+/g, ' '); if (!nombre) return
+    if (unidades.some(u => normNombre(u.nombre) === normNombre(nombre))) { setMsgU(`Ya existe la unidad «${nombre}».`); return }
+    const { error } = await supabase.from('fin_unidades').insert({ nombre, activa: true })
+    if (error) setMsgU('No se pudo crear: ' + error.message); else { setNombreU(''); setMsgU(`Unidad «${nombre}» creada. Vuelve a sincronizar Kame y BUK para traer sus datos.`); recargar() }
+  }
+  return (
+    <>
+      <div style={card}>
+        <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Unidades de negocio (centros de costo)</h2>
+        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Las sincronizaciones con Kame y BUK solo guardan las unidades registradas aquí. Para sumar un proyecto nuevo, créalo con el mismo nombre que tiene en Kame como unidad de negocio. Deja activas solo las que quieres controlar; las demás no aparecen en Presupuesto ni en Resultado.</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Activa</th><th style={th}>Nombre en Kame</th><th style={th}>Contrato base ($ neto)</th></tr></thead>
+          <tbody>{unidades.map(u => <tr key={u.id} style={{ opacity: u.activa ? 1 : 0.5 }}>
+            <td style={td}><input type="checkbox" checked={u.activa} onChange={e => cambiar(u.id, { activa: e.target.checked })} /></td>
+            <td style={td}>{u.nombre}</td>
+            <td style={td}><input type="number" defaultValue={u.monto_contrato_base} onBlur={e => Number(e.target.value) !== u.monto_contrato_base && cambiar(u.id, { monto_contrato_base: Number(e.target.value) })} style={{ ...inp, width: 150 }} /></td>
+          </tr>)}</tbody></table>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <input value={nombreU} onChange={e => setNombreU(e.target.value)} placeholder="Nueva unidad (nombre exacto de Kame)" style={{ ...inp, width: 320 }} />
+          <button onClick={agregarUnidad} style={btn()}>Crear unidad</button>
+        </div>
+        {msgU && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya)/.test(msgU) ? '#b42318' : '#067647' }}>{msgU}</p>}
+      </div>
+      <Catalogo />
+    </>
+  )
+}
+
+// Catálogo oficial de subpartidas (configuración): cada una pertenece a UNA cuenta contable de Kame
+function Catalogo() {
+  const [catalogo, setCatalogo] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({})
+  const [nuevoNombre, setNuevoNombre] = useState(''); const [nuevaCuenta, setNuevaCuenta] = useState(''); const [msg, setMsg] = useState('')
+  const cargarCatalogo = useCallback(async () => {
+    const [c, k] = await Promise.all([supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'), supabase.from('fin_cuentas').select('*').order('cuenta')])
+    setCatalogo(c.data || []); setCuentas(Object.fromEntries((k.data || []).map((x: any) => [x.cuenta, x.nombre_cuenta])))
+  }, [])
+  useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
+  const agregarCatalogo = async () => {
+    const nombre = nuevoNombre.trim().replace(/\s+/g, ' ')
+    if (!nombre) return
+    if (!nuevaCuenta) { setMsg('Elige a qué cuenta contable de Kame pertenece la subpartida.'); return }
+    const norm = normNombre(nombre); const ya = catalogo.find(c => c.nombre_norm === norm)
+    if (ya) { setMsg(`Ya existe la subpartida «${ya.nombre}». Usa esa en vez de crear «${nombre}».`); return }
+    const { error } = await supabase.from('fin_catalogo_partidas').insert({ nombre, nombre_norm: norm, cuenta: nuevaCuenta, cuentas: nuevaCuenta, orden: catalogo.length })
+    if (error) setMsg('No se pudo crear: ' + error.message); else { setNuevoNombre(''); setNuevaCuenta(''); setMsg(`Subpartida «${nombre}» creada.`); cargarCatalogo() }
+  }
+  const cambiarCuentaCatalogo = async (c: any, cuenta: string) => {
+    const { data: ps } = await supabase.from('fin_partidas').select('id').eq('catalogo_id', c.id)
+    const ids = (ps || []).map(x => x.id)
+    if (ids.length) { const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).in('partida_id', ids); if (count) { alert(`«${c.nombre}» ya tiene ${count} costos asignados; no se puede cambiar de cuenta. Quita primero esas asignaciones.`); cargarCatalogo(); return } }
+    await supabase.from('fin_catalogo_partidas').update({ cuenta, cuentas: cuenta }).eq('id', c.id); cargarCatalogo()
+  }
+  const cuentasOpc = Object.keys(cuentas).filter(c => !c.startsWith(CUENTA_REM)).sort()
   return (
     <div style={card}>
-      <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Unidades de negocio (centros de costo)</h2>
-      <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Se crean solas al sincronizar con Kame. Deja activas solo las que quieres controlar; las demás no aparecen en Presupuesto ni en Resultado.</p>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Activa</th><th style={th}>Nombre en Kame</th><th style={th}>Contrato base ($ neto)</th></tr></thead>
-        <tbody>{unidades.map(u => <tr key={u.id} style={{ opacity: u.activa ? 1 : 0.5 }}>
-          <td style={td}><input type="checkbox" checked={u.activa} onChange={e => cambiar(u.id, { activa: e.target.checked })} /></td>
-          <td style={td}>{u.nombre}</td>
-          <td style={td}><input type="number" defaultValue={u.monto_contrato_base} onBlur={e => Number(e.target.value) !== u.monto_contrato_base && cambiar(u.id, { monto_contrato_base: Number(e.target.value) })} style={{ ...inp, width: 150 }} /></td>
-        </tr>)}</tbody></table>
+      <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Catálogo oficial de subpartidas ({catalogo.length})</h2>
+      <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Kame solo tiene la cuenta contable (ej. «Costos Materiales de Construcción»). Aquí definimos las subpartidas que la abren (Hormigón, Cubiertas, Fierro…). Todos los proyectos usan esta lista, así nadie escribe «Cubierta» y otro «Cubiertas». El presupuesto de una cuenta es la suma de sus subpartidas.</p>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta contable de Kame</th><th style={th}>Costo real desde</th></tr></thead>
+        <tbody>{[...catalogo].sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.nombre.localeCompare(b.nombre)).map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
+          <td style={td}>{c.fuente === 'remuneraciones' ? <span style={{ color: '#667085' }}>{nomCuenta(cuentas, CUENTA_REM)}</span> :
+            <select value={c.cuenta} onChange={e => cambiarCuentaCatalogo(c, e.target.value)} style={{ ...inp, padding: '4px 6px', maxWidth: 380 }}>{!cuentasOpc.includes(c.cuenta) && <option value={c.cuenta}>{c.cuenta || 'Elegir cuenta…'}</option>}{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>}</td>
+          <td style={td}>{c.fuente === 'remuneraciones' ? 'Remuneraciones de BUK' : 'Facturas de Kame asignadas'}</td></tr>)}</tbody></table>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nueva subpartida (ej. Fierro)" style={{ ...inp, width: 220 }} />
+        <select value={nuevaCuenta} onChange={e => setNuevaCuenta(e.target.value)} style={{ ...inp, maxWidth: 380 }}><option value="">Cuenta contable de Kame…</option>{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>
+        <button onClick={agregarCatalogo} style={btn()}>Crear subpartida</button>
+      </div>
+      {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
     </div>
   )
 }
@@ -169,7 +228,6 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const [elegida, setElegida] = useState('')
   const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [draft, setDraft] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
-  const [nuevoNombre, setNuevoNombre] = useState(''); const [nuevaCuenta, setNuevaCuenta] = useState('')
   const unidad = unidades.find(u => u.id === uid)
   const meses = useMemo(() => rangoMeses(unidad?.presupuesto_desde, unidad?.presupuesto_hasta), [unidad])
 
@@ -222,23 +280,6 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   }
   const borrarVersion = async (v: any) => { if (!confirm(`¿Borrar la versión #${v.numero} («${v.descripcion}»)? Se quitan sus montos del presupuesto.`)) return; await supabase.from('fin_versiones').delete().eq('id', v.id); cargar(); recargar() }
 
-  // Catálogo oficial de subpartidas (cada una pertenece a UNA cuenta contable de Kame)
-  const agregarCatalogo = async () => {
-    const nombre = nuevoNombre.trim().replace(/\s+/g, ' ')
-    if (!nombre) return
-    if (!nuevaCuenta) { setMsg('Elige a qué cuenta contable de Kame pertenece la subpartida.'); return }
-    const norm = normNombre(nombre); const ya = catalogo.find(c => c.nombre_norm === norm)
-    if (ya) { setMsg(`Ya existe la subpartida «${ya.nombre}». Usa esa en vez de crear «${nombre}».`); return }
-    const { error } = await supabase.from('fin_catalogo_partidas').insert({ nombre, nombre_norm: norm, cuenta: nuevaCuenta, cuentas: nuevaCuenta, orden: catalogo.length })
-    if (error) setMsg('No se pudo crear: ' + error.message); else { setNuevoNombre(''); setNuevaCuenta(''); setMsg(`Subpartida «${nombre}» creada.`); cargarCatalogo() }
-  }
-  const cambiarCuentaCatalogo = async (c: any, cuenta: string) => {
-    const { data: ps } = await supabase.from('fin_partidas').select('id').eq('catalogo_id', c.id)
-    const ids = (ps || []).map(x => x.id)
-    if (ids.length) { const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).in('partida_id', ids); if (count) { alert(`«${c.nombre}» ya tiene ${count} costos asignados; no se puede cambiar de cuenta. Quita primero esas asignaciones.`); cargarCatalogo(); return } }
-    await supabase.from('fin_catalogo_partidas').update({ cuenta, cuentas: cuenta }).eq('id', c.id); cargarCatalogo(); cargar()
-  }
-  const cuentasOpc = Object.keys(cuentas).filter(c => !c.startsWith(CUENTA_REM)).sort()
   const dispo = catalogo.filter(c => !partidas.some(p => p.catalogo_id === c.id))
   const celda: React.CSSProperties = { ...td, padding: '4px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontSize: 12 }
   const cabCuenta: React.CSSProperties = { ...td, background: '#f2f4f7', fontWeight: 600, whiteSpace: 'nowrap' }
@@ -250,21 +291,6 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
         {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente: <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
         {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       </div>
-
-      <details style={card}>
-        <summary style={{ fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Catálogo oficial de subpartidas ({catalogo.length})</summary>
-        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0' }}>Kame solo tiene la cuenta contable (ej. «Costos Materiales de Construcción»). Aquí definimos las subpartidas que la abren (Hormigón, Cubiertas, Fierro…). Todos los proyectos usan esta lista, así nadie escribe «Cubierta» y otro «Cubiertas». El presupuesto de una cuenta es la suma de sus subpartidas.</p>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta contable de Kame</th><th style={th}>Costo real desde</th></tr></thead>
-          <tbody>{[...catalogo].sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.nombre.localeCompare(b.nombre)).map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
-            <td style={td}>{c.fuente === 'remuneraciones' ? <span style={{ color: '#667085' }}>{nomCuenta(cuentas, CUENTA_REM)}</span> :
-              <select value={c.cuenta} onChange={e => cambiarCuentaCatalogo(c, e.target.value)} style={{ ...inp, padding: '4px 6px', maxWidth: 380 }}>{!cuentasOpc.includes(c.cuenta) && <option value={c.cuenta}>{c.cuenta || 'Elegir cuenta…'}</option>}{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>}</td>
-            <td style={td}>{c.fuente === 'remuneraciones' ? 'Planilla RR.HH. (BUK)' : 'Facturas de Kame asignadas'}</td></tr>)}</tbody></table>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nueva subpartida (ej. Fierro)" style={{ ...inp, width: 220 }} />
-          <select value={nuevaCuenta} onChange={e => setNuevaCuenta(e.target.value)} style={{ ...inp, maxWidth: 380 }}><option value="">Cuenta contable de Kame…</option>{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>
-          <button onClick={agregarCatalogo} style={btn()}>Crear subpartida</button>
-        </div>
-      </details>
 
       {unidad && <>
         <div style={card}>
@@ -278,7 +304,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
 
         <div style={card}>
           <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>2. Subpartidas de este proyecto</h2>
-          {grupos.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Aún no hay subpartidas. Agrega las que necesitas desde el catálogo.</p>}
+          {grupos.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Aún no hay subpartidas. Agrega las que necesitas desde el catálogo (si falta alguna, créala en la pestaña Unidades).</p>}
           {grupos.map(([c, ps]) => <div key={c} style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#344054' }}>{c} · {nomCuenta(cuentas, c)}</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>{ps.map(p => <span key={p.id} style={{ background: '#eef4ff', borderRadius: 99, padding: '4px 10px', fontSize: 13 }}>{p.nombre} <button onClick={() => quitarPartida(p)} title="Quitar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#667085' }}>✕</button></span>)}</div>

@@ -590,6 +590,7 @@ function ConexionKame() {
   const [query, setQuery] = useState('{}'); const [cuerpo, setCuerpo] = useState('{}')
   const [pref, setPref] = useState('/api/Contabilidad,/api/Compras,/api/Ventas,/api/Tesoreria,/api/Informes,/api/Maestros')
   const [nom, setNom] = useState('getInformeCompras,getInformeVentas,getLibroCompras,getLibroVentas,getLibroMayor,getLibroDiario,getBalance,getComprobantes,getAsientos,getCentrosCosto,getUnidadesNegocio,getListUnidadNegocio,getListCentroCosto,getListFicha,getListCuentas,getPlanCuentas,getDocumentosCompra,getDocumentosVenta,getCompras,getVentas')
+  const [rutaBuk, setRutaBuk] = useState('/api/v1/chile/employees')
   const [salida, setSalida] = useState(''); const [ocupado, setOcupado] = useState(false)
   const llamar = async (payload: any) => {
     setOcupado(true); setSalida('Consultando…')
@@ -597,7 +598,8 @@ function ConexionKame() {
       const { data: { session } } = await supabase.auth.getSession()
       const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify(payload) })
       const j = await r.json()
-      if (j.resumen) setSalida(j.resumen)
+      if (j.estructura !== undefined) setSalida(`HTTP ${j.status} · ${j.largo} caracteres\n\n${j.estructura}`)
+      else if (j.resumen) setSalida(j.resumen)
       else if (j.intentos) setSalida(j.intentos.map((x: any) => `${x.parametros}\n  HTTP ${x.status} · ${x.estado || '-'} · ${x.largo} caracteres\n  ${x.msg}`).join('\n\n'))
       else if (j.distintas) setSalida(`Probé ${j.probadas} rutas. Las que NO dieron 404:\n\n` + (j.distintas.length ? j.distintas.map((x: any) => `${x.status}  ${x.ruta}`).join('\n') : '(ninguna: todas dieron 404)'))
       else if (j.respuesta !== undefined) { let t = j.respuesta; try { t = JSON.stringify(JSON.parse(t), null, 2) } catch {} ; setSalida(`HTTP ${j.status} · ${j.tipo} · ${j.largo} caracteres\n\n${t}`) }
@@ -642,6 +644,15 @@ function ConexionKame() {
           <button disabled={ocupado} onClick={sincronizar} style={btn(true, ocupado)}>Sincronizar</button>
         </div>
         {log.length > 0 && <pre style={{ fontSize: 12, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{log.join('\n')}</pre>}
+      </div>
+      <div style={{ background: '#fff7ed', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+        <b style={{ fontSize: 14 }}>BUK (remuneraciones)</b>
+        <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 8px' }}>Usa la variable BUK_API_TOKEN del servidor. Solo muestra la estructura de los datos (nombres de campos), nunca sueldos ni datos personales.</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_descubrir' })} style={btn(true, ocupado)}>Descubrir endpoints BUK</button>
+          <input value={rutaBuk} onChange={e => setRutaBuk(e.target.value)} style={{ ...inp, width: 380 }} />
+          <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_llamar', ruta: rutaBuk })} style={btn(false, ocupado)}>Ver estructura</button>
+        </div>
       </div>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'token' })} style={btn(true, ocupado)}>1. Probar conexión (token)</button>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'descubrir', prefijos: pref.split(',').map(x => x.trim()), nombres: nom.split(',').map(x => x.trim()) })} style={{ ...btn(false, ocupado), marginLeft: 8 }}>Descubrir endpoints</button>

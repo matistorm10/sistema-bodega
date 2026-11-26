@@ -632,6 +632,26 @@ function ConexionKame() {
     } catch (e: any) { setLog(l => [...l, 'Error: ' + e.message]) }
     setOcupado(false)
   }
+  const [bDesde, setBDesde] = useState('2026-01'); const [bHasta, setBHasta] = useState(mesActual); const [logB, setLogB] = useState<string[]>([])
+  const sincronizarBuk = async () => {
+    setOcupado(true); setLogB([])
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const meses: string[] = []
+      for (let [y, m] = bDesde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= bHasta; m++) { if (m > 12) { m = 1; y++ } meses.push(`${y}-${String(m).padStart(2, '0')}`); if (meses.length > 24) break }
+      for (const mes of meses) {
+        setLogB(l => [...l, `${mes}: leyendo BUK…`])
+        const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ accion: 'buk_sync_mes', mes }) })
+        const j = await r.json()
+        const fmt = (n: number) => miles(String(Math.round(n)))
+        setLogB(l => [...l.filter(x => !x.startsWith(mes + ':')), r.ok
+          ? `${mes}: listo · ${j.personas} personas · haberes $${fmt(j.haberes)} · aportes $${fmt(j.aporte_patronal)} · costo empresa $${fmt(j.costo_empresa)}${j.abiertas ? ` · ⚠ ${j.abiertas} liquidaciones aún abiertas` : ''}${j.centrosSinUnidad?.length ? ` · ⚠ centros sin unidad: ${j.centrosSinUnidad.join(', ')}` : ''}`
+          : `${mes}: ${r.status === 404 ? 'BUK no tiene liquidaciones (se omite)' : 'error: ' + (j.error || r.status)}`])
+        if (!r.ok && r.status !== 404) break
+      }
+    } catch (e: any) { setLogB(l => [...l, 'Error: ' + e.message]) }
+    setOcupado(false)
+  }
   const parse = (t: string) => { try { return JSON.parse(t || '{}') } catch { return {} } }
   return (
     <div style={card}>
@@ -647,7 +667,15 @@ function ConexionKame() {
         {log.length > 0 && <pre style={{ fontSize: 12, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{log.join('\n')}</pre>}
       </div>
       <div style={{ background: '#fff7ed', borderRadius: 12, padding: 12, marginBottom: 16 }}>
-        <b style={{ fontSize: 14 }}>BUK (remuneraciones)</b>
+        <b style={{ fontSize: 14 }}>Sincronizar remuneraciones desde BUK</b>
+        <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 8px' }}>Reemplaza las remuneraciones de cada mes elegido con lo que hay en BUK (haberes + aportes patronales, centro de costo vigente en el mes). Volver a sincronizar no duplica.</p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          Desde <input type="month" value={bDesde} onChange={e => setBDesde(e.target.value)} style={inp} /> hasta <input type="month" value={bHasta} onChange={e => setBHasta(e.target.value)} style={inp} />
+          <button disabled={ocupado} onClick={sincronizarBuk} style={btn(true, ocupado)}>Sincronizar desde BUK</button>
+        </div>
+        {logB.length > 0 && <pre style={{ fontSize: 12, margin: '8px 0 12px', whiteSpace: 'pre-wrap' }}>{logB.join('\n')}</pre>}
+        <hr style={{ border: 0, borderTop: '1px solid #fed7aa', margin: '12px 0' }} />
+        <b style={{ fontSize: 14 }}>BUK (herramientas de diagnóstico)</b>
         <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 8px' }}>Usa la variable BUK_API_TOKEN del servidor. Solo muestra la estructura de los datos (nombres de campos), nunca sueldos ni datos personales.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_descubrir' })} style={btn(true, ocupado)}>Descubrir endpoints BUK</button>

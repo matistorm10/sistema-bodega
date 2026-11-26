@@ -94,6 +94,59 @@ export async function POST(req: NextRequest) {
       const out = await Promise.all(rutas.map(async ruta => { try { const r = await pedir(ruta); return { ruta, status: r.status } } catch { return { ruta, status: 0 } } }))
       return NextResponse.json({ ok: true, probadas: out.length, distintas: out.filter(x => x.status !== 404) })
     }
+    if (b.accion === 'buk_sync_mes') {
+      // Trae un mes completo de BUK y REEMPLAZA ese período en fin_remuneraciones (haberes + aportes patronales; centro vigente en el mes).
+      const tk = process.env.BUK_API_TOKEN; const dom = process.env.BUK_DOMINIO || 'indeli.buk.cl'
+      if (!tk) return NextResponse.json({ error: 'Falta la variable BUK_API_TOKEN en Vercel.' }, { status: 400 })
+      const mes = String(b.mes || '')
+      if (!/^\d{4}-\d{2}$/.test(mes)) return NextResponse.json({ error: 'Mes inválido (AAAA-MM).' }, { status: 400 })
+      const pedir = async (ruta: string) => { const r = await fetch(`https://${dom}${ruta}`, { headers: { auth_token: tk, Accept: 'application/json' } }); if (!r.ok) throw new Error(`BUK HTTP ${r.status} en ${ruta.split('?')[0]}`); return r.json() as Promise<any> }
+      const todas = async (ruta: string) => {
+        const sep = ruta.includes('?') ? '&' : '?'
+        const p1 = await pedir(ruta); const total = Number(p1?.pagination?.total_pages) || 1
+        let datos: any[] = [...(p1.data || [])]
+        const resto = Array.from({ length: Math.max(0, total - 1) }, (_, i) => i + 2)
+        for (let i = 0; i < resto.length; i += 4) {
+          const res = await Promise.all(resto.slice(i, i + 4).map(p => pedir(`${ruta}${sep}page=${p}`)))
+          res.forEach(x => { datos = datos.concat(x.data || []) })
+        }
+        return datos
+      }
+      const [y, m] = mes.split('-')
+      const [liqs, emps] = await Promise.all([todas(`/api/v1/chile/payroll_detail/month?date=01-${m}-${y}`), todas('/api/v1/chile/employees')])
+      if (!liqs.length) return NextResponse.json({ error: `BUK no tiene liquidaciones para ${mes}; no se modificó nada.` }, { status: 404 })
+      const ini = `${y}-${m}-01`, fin = `${y}-${m}-${String(new Date(Number(y), Number(m), 0).getDate()).padStart(2, '0')}`
+      const ficha = new Map<string, { nombre: string, cargo: string, centro: string }>()
+      emps.forEach(e => {
+        const js: any[] = (Array.isArray(e.jobs) && e.jobs.length ? e.jobs : [e.current_job]).filter(Boolean)
+        const vig = js.filter(j => String(j.start_date || '0000') <= fin && (!j.end_date || String(j.end_date) >= ini)).sort((a, c) => String(c.start_date).localeCompare(String(a.start_date)))
+        const j = vig[0] || e.current_job
+        ficha.set(String(e.rut || ''), { nombre: String(e.full_name || ''), cargo: String(j?.role?.name || ''), centro: String(j?.cost_center || '').trim() })
+      })
+      const norm = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+      const { data: us } = await supabaseAdmin.from('fin_unidades').select('id,nombre')
+      const { data: al } = await supabaseAdmin.from('fin_alias_centro').select('centro_texto,unidad_id')
+      const mapa = new Map<string, string>((us || []).map(u => [norm(u.nombre), u.id as string]))
+      ;(al || []).forEach(a => { if (a.unidad_id) mapa.set(norm(a.centro_texto), a.unidad_id) })
+      const sinMapa = new Set<string>()
+      const filas = liqs.map(x => {
+        const f = ficha.get(String(x.rut || ''))
+        const haberes = Number(x.income_gross) || 0
+        const aporte = (x.lines_settlement || []).filter((l: any) => l.type === 'aporte').reduce((a: number, l: any) => a + (Number(l.amount) || 0), 0)
+        const centro = f?.centro || ''
+        const unidad_id = centro ? (mapa.get(norm(centro)) || null) : null
+        if (!unidad_id) sinMapa.add(centro || '(sin centro)')
+        return { periodo: mes, rut: String(x.rut || ''), nombre: f?.nombre || null, cargo: f?.cargo || null, centro_texto: centro || null, unidad_id, haberes, aporte_patronal: aporte, costo_empresa: haberes + aporte }
+      })
+      const { error: eDel } = await supabaseAdmin.from('fin_remuneraciones').delete().eq('periodo', mes)
+      if (eDel) return NextResponse.json({ error: 'No se pudo limpiar el período: ' + eDel.message }, { status: 500 })
+      for (let i = 0; i < filas.length; i += 300) {
+        const { error } = await supabaseAdmin.from('fin_remuneraciones').insert(filas.slice(i, i + 300))
+        if (error) return NextResponse.json({ error: 'No se pudo guardar: ' + error.message }, { status: 500 })
+      }
+      const tot = filas.reduce((a, f) => ({ h: a.h + f.haberes, ap: a.ap + f.aporte_patronal, c: a.c + f.costo_empresa }), { h: 0, ap: 0, c: 0 })
+      return NextResponse.json({ ok: true, mes, personas: filas.length, haberes: Math.round(tot.h), aporte_patronal: Math.round(tot.ap), costo_empresa: Math.round(tot.c), abiertas: liqs.filter(x => x.closed === false).length, centrosSinUnidad: [...sinMapa] })
+    }
     if (b.accion === 'buk_conciliar') {
       // Trae TODAS las páginas de un mes de BUK y lo compara con la planilla guardada. Solo devuelve totales (sin datos personales).
       const tk = process.env.BUK_API_TOKEN; const dom = process.env.BUK_DOMINIO || 'indeli.buk.cl'

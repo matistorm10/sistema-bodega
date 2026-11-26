@@ -616,7 +616,6 @@ function ConexionKame() {
   const sincronizar = async () => {
     setOcupado(true); setLog([])
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const meses: string[] = []
       for (let [y, m] = mDesde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= mHasta; m++) { if (m > 12) { m = 1; y++ } meses.push(`${y}-${String(m).padStart(2, '0')}`); if (meses.length > 36) break }
       for (const mes of meses) {
@@ -624,6 +623,7 @@ function ConexionKame() {
         let total = 0, guardadas = 0
         for (let page = 1; page <= 40; page++) {
           setLog(l => [...l.filter(x => !x.startsWith(mes + ':')), `${mes}: página ${page}…`])
+          const { data: { session } } = await supabase.auth.getSession()
           const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ accion: 'sync_pagina', desde: `${mes}-01`, hasta: `${mes}-${fin}`, page }) })
           const j = await r.json()
           if (!r.ok) throw new Error(`${mes} página ${page}: ${j.error || r.status}`)
@@ -639,18 +639,21 @@ function ConexionKame() {
   const sincronizarBuk = async () => {
     setOcupado(true); setLogB([])
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const meses: string[] = []
       for (let [y, m] = bDesde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= bHasta; m++) { if (m > 12) { m = 1; y++ } meses.push(`${y}-${String(m).padStart(2, '0')}`); if (meses.length > 24) break }
       for (const mes of meses) {
         setLogB(l => [...l, `${mes}: leyendo BUK…`])
-        const r = await fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ accion: 'buk_sync_mes', mes }) })
-        const j = await r.json()
+        const pedir = async (forzar: boolean) => {
+          const { data: { session } } = forzar ? await supabase.auth.refreshSession() : await supabase.auth.getSession()
+          return fetch('/api/finanzas/kame', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ accion: 'buk_sync_mes', mes }) })
+        }
+        let r = await pedir(false)
+        if (r.status === 401) r = await pedir(true)
+        const j = await r.json().catch(() => ({ error: 'respuesta inválida (¿tiempo agotado?)' }))
         const fmt = (n: number) => miles(String(Math.round(n)))
         setLogB(l => [...l.filter(x => !x.startsWith(mes + ':')), r.ok
           ? `${mes}: listo · ${j.personas} personas · haberes $${fmt(j.haberes)} · aportes $${fmt(j.aporte_patronal)} · costo empresa $${fmt(j.costo_empresa)}${j.abiertas ? ` · ⚠ ${j.abiertas} liquidaciones aún abiertas` : ''}${j.centrosSinUnidad?.length ? ` · ⚠ centros sin unidad: ${j.centrosSinUnidad.join(', ')}` : ''}`
           : `${mes}: ${r.status === 404 ? 'BUK no tiene liquidaciones (se omite)' : 'error: ' + (j.error || r.status)}`])
-        if (!r.ok && r.status !== 404) break
       }
     } catch (e: any) { setLogB(l => [...l, 'Error: ' + e.message]) }
     setOcupado(false)

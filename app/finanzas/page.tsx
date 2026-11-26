@@ -260,8 +260,8 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
         {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: msg.startsWith('No') || msg.startsWith('Ya') || msg.startsWith('Escribe') ? '#b42318' : '#067647' }}>{msg}</p>}
       </div>
 
-      <div style={card}>
-        <h2 style={{ fontSize: 15, margin: 0 }}>Catálogo oficial de partidas ({catalogo.length})</h2>
+      <details style={card}>
+        <summary style={{ fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Catálogo oficial de partidas ({catalogo.length})</summary>
         <p style={{ fontSize: 12, color: '#667085', margin: '8px 0' }}>Todos los proyectos usan estas partidas, así nadie escribe «Cubierta» y otro «Cubiertas». En «Cuentas Kame» pon las cuentas (o prefijos) que alimentan su costo real, separadas por coma. «Remuneraciones» se alimenta de la planilla de RR.HH.</p>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Partida</th><th style={th}>Cuentas Kame</th><th style={th}>Fuente del real</th></tr></thead>
           <tbody>{catalogo.map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
@@ -272,7 +272,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
           <input value={nuevasCuentas} onChange={e => setNuevasCuentas(e.target.value)} placeholder="Cuentas Kame (opcional)" style={{ ...inp, width: 260 }} />
           <button onClick={agregarCatalogo} style={btn()}>Crear en el catálogo</button>
         </div>
-      </div>
+      </details>
 
       {unidad && <>
         <div style={card}>

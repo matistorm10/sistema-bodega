@@ -94,6 +94,51 @@ export async function POST(req: NextRequest) {
       const out = await Promise.all(rutas.map(async ruta => { try { const r = await pedir(ruta); return { ruta, status: r.status } } catch { return { ruta, status: 0 } } }))
       return NextResponse.json({ ok: true, probadas: out.length, distintas: out.filter(x => x.status !== 404) })
     }
+    if (b.accion === 'buk_conciliar') {
+      // Trae TODAS las páginas de un mes de BUK y lo compara con la planilla guardada. Solo devuelve totales (sin datos personales).
+      const tk = process.env.BUK_API_TOKEN; const dom = process.env.BUK_DOMINIO || 'indeli.buk.cl'
+      if (!tk) return NextResponse.json({ error: 'Falta la variable BUK_API_TOKEN en Vercel.' }, { status: 400 })
+      const mes = String(b.mes || '')
+      if (!/^\d{4}-\d{2}$/.test(mes)) return NextResponse.json({ error: 'Mes inválido (AAAA-MM).' }, { status: 400 })
+      const pedir = async (ruta: string) => { const r = await fetch(`https://${dom}${ruta}`, { headers: { auth_token: tk, Accept: 'application/json' } }); if (!r.ok) throw new Error(`BUK HTTP ${r.status} en ${ruta.split('?')[0]}`); return r.json() as Promise<any> }
+      const todas = async (ruta: string) => {
+        const sep = ruta.includes('?') ? '&' : '?'
+        const p1 = await pedir(ruta); const total = Number(p1?.pagination?.total_pages) || 1
+        let datos: any[] = [...(p1.data || [])]
+        const resto = Array.from({ length: Math.max(0, total - 1) }, (_, i) => i + 2)
+        for (let i = 0; i < resto.length; i += 4) {
+          const res = await Promise.all(resto.slice(i, i + 4).map(p => pedir(`${ruta}${sep}page=${p}`)))
+          res.forEach(x => { datos = datos.concat(x.data || []) })
+        }
+        return { datos, total }
+      }
+      const [y, m] = mes.split('-')
+      const [liq, emp] = await Promise.all([todas(`/api/v1/chile/payroll_detail/month?date=01-${m}-${y}`), todas('/api/v1/chile/employees')])
+      const liqs = liq.datos
+      const suma = (k: string) => Math.round(liqs.reduce((a, x) => a + (Number(x[k]) || 0), 0))
+      const conceptos: Record<string, { n: number, monto: number }> = {}
+      liqs.forEach(x => (x.lines_settlement || []).forEach((l: any) => {
+        const k = `${l.type} | ${l.income_type ?? '-'} | ${l.name} | ${l.taxable ? 'trib' : 'no trib'} | ${l.imponible ? 'imp' : 'no imp'}`
+        const c = conceptos[k] || (conceptos[k] = { n: 0, monto: 0 }); c.n++; c.monto += Number(l.amount) || 0
+      }))
+      const porConcepto = Object.entries(conceptos).map(([k, v]) => ({ concepto: k, personas: v.n, monto: Math.round(v.monto) })).sort((a, b) => Math.abs(b.monto) - Math.abs(a.monto))
+      const centroDe = new Map<string, string>(); const centros: Record<string, number> = {}
+      emp.datos.forEach(e => { const c = String(e.current_job?.cost_center || '(vacío)'); centroDe.set(String(e.rut || ''), c); })
+      const porCentro: Record<string, { personas: number, ingreso: number }> = {}; let sinFicha = 0
+      liqs.forEach(x => { const c = centroDe.get(String(x.rut || '')); if (!c) sinFicha++; const k = c || '(sin ficha)'; const o = porCentro[k] || (porCentro[k] = { personas: 0, ingreso: 0 }); o.personas++; o.ingreso += Number(x.income_gross) || 0 })
+      void centros
+      const { data: pl } = await supabaseAdmin.from('fin_remuneraciones').select('haberes,aporte_patronal,costo_empresa,rut').eq('periodo', mes)
+      const plan = (pl || []).reduce((a, x: any) => ({ n: a.n + 1, haberes: a.haberes + Number(x.haberes || 0), aporte: a.aporte + Number(x.aporte_patronal || 0), costo: a.costo + Number(x.costo_empresa || 0) }), { n: 0, haberes: 0, aporte: 0, costo: 0 })
+      const { data: alias } = await supabaseAdmin.from('fin_alias_centro').select('*')
+      return NextResponse.json({ ok: true, resumen: JSON.stringify({
+        mes, paginasLiquidaciones: liq.total, liquidaciones: liqs.length, fichasEmpleados: emp.datos.length, liquidacionesSinFicha: sinFicha,
+        buk: { income_gross: suma('income_gross'), income_net: suma('income_net'), imponible_afp: suma('income_afp'), total_income_taxable: suma('total_income_taxable'), total_income_notaxable: suma('total_income_notaxable') },
+        planilla: { filas: plan.n, haberes: Math.round(plan.haberes), aporte_patronal: Math.round(plan.aporte), costo_empresa: Math.round(plan.costo) },
+        porCentroBUK: Object.entries(porCentro).map(([c, v]) => ({ centro: c, personas: v.personas, ingreso: Math.round(v.ingreso) })).sort((a, b) => b.ingreso - a.ingreso),
+        aliasGuardados: (alias || []).length,
+        conceptos: porConcepto,
+      }, null, 2).slice(0, 20000) })
+    }
     if (b.accion === 'sync_pagina') {
       // Trae UNA página (1000 líneas) del Libro Diario y guarda las cuentas de ingresos (3.x) y egresos (4.x).
       const desde = String(b.desde || ''), hasta = String(b.hasta || ''), page = Math.max(1, Number(b.page) || 1)

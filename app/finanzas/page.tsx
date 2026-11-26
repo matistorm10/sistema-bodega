@@ -591,6 +591,7 @@ function ConexionKame() {
   const [pref, setPref] = useState('/api/Contabilidad,/api/Compras,/api/Ventas,/api/Tesoreria,/api/Informes,/api/Maestros')
   const [nom, setNom] = useState('getInformeCompras,getInformeVentas,getLibroCompras,getLibroVentas,getLibroMayor,getLibroDiario,getBalance,getComprobantes,getAsientos,getCentrosCosto,getUnidadesNegocio,getListUnidadNegocio,getListCentroCosto,getListFicha,getListCuentas,getPlanCuentas,getDocumentosCompra,getDocumentosVenta,getCompras,getVentas')
   const [rutaBuk, setRutaBuk] = useState('/api/v1/chile/employees')
+  const [mesBuk, setMesBuk] = useState('2026-10')
   const [salida, setSalida] = useState(''); const [ocupado, setOcupado] = useState(false)
   const llamar = async (payload: any) => {
     setOcupado(true); setSalida('Consultando…')
@@ -652,6 +653,11 @@ function ConexionKame() {
           <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_descubrir' })} style={btn(true, ocupado)}>Descubrir endpoints BUK</button>
           <input value={rutaBuk} onChange={e => setRutaBuk(e.target.value)} style={{ ...inp, width: 380 }} />
           <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_llamar', ruta: rutaBuk })} style={btn(false, ocupado)}>Ver estructura</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          <input value={mesBuk} onChange={e => setMesBuk(e.target.value)} placeholder="AAAA-MM" style={{ ...inp, width: 110 }} />
+          <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_conciliar', mes: mesBuk })} style={btn(true, ocupado)}>Conciliar mes con la planilla</button>
+          <span style={{ fontSize: 12, color: '#667085' }}>Suma todo el mes en BUK y lo compara con la planilla (solo totales).</span>
         </div>
       </div>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'token' })} style={btn(true, ocupado)}>1. Probar conexión (token)</button>

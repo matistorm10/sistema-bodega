@@ -8,7 +8,13 @@ import { traerTodo } from '@/lib/operaciones'
 import { TIPOS, TipoArchivo, Doc, Rem, leerInforme, leerLibro, leerRemuneraciones, guardarImportacion, guardarRemuneraciones } from '@/lib/finanzas'
 
 const AZUL = '#1B4F9C'
-const $ = (n: number) => Math.round(n || 0).toLocaleString('es-CL')
+const miles = (d: string) => d.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+const $ = (n: number) => { const r = Math.round(n || 0); return (r < 0 ? '-' : '') + miles(String(Math.abs(r))) }
+// Campo de monto: muestra puntos de miles mientras se escribe y guarda solo dígitos (con - opcional)
+function MontoInput({ value, onChange, style, placeholder }: { value: string, onChange: (v: string) => void, style?: React.CSSProperties, placeholder?: string }) {
+  const mostrar = (v: string) => { const neg = v.startsWith('-'); const d = v.replace(/\D/g, ''); return (neg ? '-' : '') + (d ? miles(String(Number(d))) : '') }
+  return <input type="text" inputMode="decimal" value={mostrar(value)} placeholder={placeholder} onChange={e => { const t = e.target.value; const neg = t.trim().startsWith('-'); const d = t.replace(/\D/g, ''); onChange((neg ? '-' : '') + (d ? String(Number(d)) : '')) }} style={style} />
+}
 const card: React.CSSProperties = { background: '#fff', borderRadius: 16, padding: '16px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)', marginBottom: 16 }
 const inp: React.CSSProperties = { padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
 const btn = (primario = true, off = false): React.CSSProperties => ({ padding: '8px 14px', borderRadius: 8, border: primario ? 'none' : '1px solid #d0d5dd', background: off ? '#c7ced9' : primario ? AZUL : '#fff', color: primario ? '#fff' : '#344054', fontSize: 13, cursor: off ? 'default' : 'pointer', fontFamily: 'inherit' })
@@ -290,13 +296,13 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               <select value={vTipo} onChange={e => setVTipo(e.target.value as any)} style={inp}><option value="base">Presupuesto base</option><option value="adicional">Adicional / nota de venta</option></select>
               <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción (ej. Adicional fierro)" style={{ ...inp, width: 280 }} />
-              <input type="number" value={vContrato} onChange={e => setVContrato(e.target.value)} placeholder={vTipo === 'base' ? 'Valor del contrato $' : 'Variación del contrato $'} style={{ ...inp, width: 220 }} />
+              <MontoInput value={vContrato} onChange={setVContrato} placeholder={vTipo === 'base' ? 'Valor del contrato $' : 'Variación del contrato $'} style={{ ...inp, width: 220, textAlign: 'right' }} />
             </div>
             <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta / subpartida</th>{meses.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{nombreMes(m)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
               <tbody>{grupos.flatMap(([c, ps]) => [
                 <tr key={c}><td style={cabCuenta}>{c} · {nomCuenta(cuentas, c)}</td>{meses.map(m => <td key={m} style={{ ...celda, background: '#f2f4f7', fontWeight: 600 }}>{(() => { const v = ps.reduce((a, p) => a + (Number(draft[p.id + '|' + m]) || 0), 0); return v ? $(v) : '' })()}</td>)}<td style={{ ...celda, background: '#f2f4f7', fontWeight: 600 }}>{$(ps.reduce((a, p) => a + meses.reduce((b, m) => b + (Number(draft[p.id + '|' + m]) || 0), 0), 0))}</td></tr>,
                 ...ps.map(p => <tr key={p.id}><td style={{ ...td, whiteSpace: 'nowrap', paddingLeft: 24 }}>{p.nombre}</td>{meses.map(m => <td key={m} style={{ ...td, padding: 3 }}>
-                  <input type="number" value={draft[p.id + '|' + m] ?? ''} onChange={e => setDraft(d => ({ ...d, [p.id + '|' + m]: e.target.value }))} style={{ ...inp, width: 100, padding: '5px 6px', textAlign: 'right' }} /></td>)}
+                  <MontoInput value={draft[p.id + '|' + m] ?? ''} onChange={v => setDraft(d => ({ ...d, [p.id + '|' + m]: v }))} style={{ ...inp, width: 110, padding: '5px 6px', textAlign: 'right' }} /></td>)}
                   <td style={celda}>{$(meses.reduce((b, m) => b + (Number(draft[p.id + '|' + m]) || 0), 0))}</td></tr>),
               ])}</tbody></table></div>
             <button onClick={guardarVersion} disabled={guardando} style={{ ...btn(true, guardando), marginTop: 12 }}>{guardando ? 'Guardando…' : `Guardar ${vTipo === 'base' ? 'presupuesto base' : 'adicional'}`}</button>

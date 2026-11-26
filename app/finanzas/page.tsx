@@ -652,7 +652,7 @@ function ConexionKame() {
         const j = await r.json().catch(() => ({ error: 'respuesta inválida (¿tiempo agotado?)' }))
         const fmt = (n: number) => miles(String(Math.round(n)))
         setLogB(l => [...l.filter(x => !x.startsWith(mes + ':')), r.ok
-          ? `${mes}: listo · ${j.personas} personas · haberes $${fmt(j.haberes)} · aportes $${fmt(j.aporte_patronal)} · costo empresa $${fmt(j.costo_empresa)}${j.abiertas ? ` · ⚠ ${j.abiertas} liquidaciones aún abiertas` : ''}${j.centrosSinUnidad?.length ? ` · ⚠ centros sin unidad: ${j.centrosSinUnidad.join(', ')}` : ''}`
+          ? `${mes}: listo · ${j.personas} personas · haberes $${fmt(j.haberes)} · aportes $${fmt(j.aporte_patronal)} · costo empresa $${fmt(j.costo_empresa)}${j.abiertas ? ` · ⚠ ${j.abiertas} liquidaciones aún abiertas` : ''}${j.omitidas ? ` · ${j.omitidas} personas de otros centros omitidas (${(j.centrosSinUnidad || []).join(', ')})` : ''}`
           : `${mes}: ${r.status === 404 ? 'BUK no tiene liquidaciones (se omite)' : 'error: ' + (j.error || r.status)}`])
       }
     } catch (e: any) { setLogB(l => [...l, 'Error: ' + e.message]) }

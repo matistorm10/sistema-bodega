@@ -138,14 +138,16 @@ export async function POST(req: NextRequest) {
         if (!unidad_id) sinMapa.add(centro || '(sin centro)')
         return { periodo: mes, rut: String(x.rut || ''), nombre: f?.nombre || null, cargo: f?.cargo || null, centro_texto: centro || null, unidad_id, haberes, aporte_patronal: aporte, costo_empresa: haberes + aporte, abierta: x.closed === false }
       })
+      const omitidas = filas.filter(f => !f.unidad_id).length
+      const filasOk = filas.filter(f => f.unidad_id)
       const { error: eDel } = await supabaseAdmin.from('fin_remuneraciones').delete().eq('periodo', mes)
       if (eDel) return NextResponse.json({ error: 'No se pudo limpiar el período: ' + eDel.message }, { status: 500 })
-      for (let i = 0; i < filas.length; i += 300) {
-        const { error } = await supabaseAdmin.from('fin_remuneraciones').insert(filas.slice(i, i + 300))
+      for (let i = 0; i < filasOk.length; i += 300) {
+        const { error } = await supabaseAdmin.from('fin_remuneraciones').insert(filasOk.slice(i, i + 300))
         if (error) return NextResponse.json({ error: 'No se pudo guardar: ' + error.message }, { status: 500 })
       }
-      const tot = filas.reduce((a, f) => ({ h: a.h + f.haberes, ap: a.ap + f.aporte_patronal, c: a.c + f.costo_empresa }), { h: 0, ap: 0, c: 0 })
-      return NextResponse.json({ ok: true, mes, personas: filas.length, haberes: Math.round(tot.h), aporte_patronal: Math.round(tot.ap), costo_empresa: Math.round(tot.c), abiertas: liqs.filter(x => x.closed === false).length, centrosSinUnidad: [...sinMapa] })
+      const tot = filasOk.reduce((a, f) => ({ h: a.h + f.haberes, ap: a.ap + f.aporte_patronal, c: a.c + f.costo_empresa }), { h: 0, ap: 0, c: 0 })
+      return NextResponse.json({ ok: true, mes, personas: filasOk.length, omitidas, haberes: Math.round(tot.h), aporte_patronal: Math.round(tot.ap), costo_empresa: Math.round(tot.c), abiertas: liqs.filter(x => x.closed === false).length, centrosSinUnidad: [...sinMapa] })
     }
     if (b.accion === 'buk_conciliar') {
       // Trae TODAS las páginas de un mes de BUK y lo compara con la planilla guardada. Solo devuelve totales (sin datos personales).
@@ -220,19 +222,14 @@ export async function POST(req: NextRequest) {
       }
       const utiles = items.filter(x => /^[34]\./.test(String(x.Cuenta)))
       const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
-      // Unidades de negocio: se crean las que falten
-      const nombres = [...new Set(utiles.map(x => String(x.UnidadNegocio || '').trim()).filter(Boolean))]
+      // Solo se guardan las unidades registradas en el sistema (no se crean nuevas). Las líneas de otras unidades se descartan.
       const { data: us } = await supabaseAdmin.from('fin_unidades').select('id,nombre')
       const { data: als } = await supabaseAdmin.from('fin_alias_centro').select('centro_texto,unidad_id')
       const mapa = new Map((us || []).map(u => [norm(u.nombre), u.id as string]))
       ;(als || []).forEach(a => { if (a.unidad_id) mapa.set(norm(a.centro_texto), a.unidad_id) })
-      const faltan = nombres.filter(n => !mapa.has(norm(n)))
-      if (faltan.length) {
-        const { data: nu, error } = await supabaseAdmin.from('fin_unidades').insert(faltan.map(nombre => ({ nombre }))).select('id,nombre')
-        if (error) return NextResponse.json({ error: 'No se pudieron crear unidades: ' + error.message }, { status: 500 })
-        ;(nu || []).forEach(u => mapa.set(norm(u.nombre), u.id))
-      }
-      const filas = utiles.map(x => {
+      const faltan: string[] = []
+      const descartadas = new Set<string>()
+      const filas = utiles.filter(x => { const u = String(x.UnidadNegocio || '').trim(); if (u && !mapa.has(norm(u))) { descartadas.add(u); return false } return true }).map(x => {
         // El comentario trae el documento: "Factura Electrónica #21053 Ficha 76.340.983-K PROVEEDOR"
         const m = String(x.Comentario || '').match(/^(.*?)\s*#\s*(\d+)\s*,?\s*ficha\s+([0-9.]+-[0-9kK])\s*(.*)$/i)
         const u = String(x.UnidadNegocio || '').trim()
@@ -248,7 +245,7 @@ export async function POST(req: NextRequest) {
         const { error } = await supabaseAdmin.from('fin_asientos').upsert(filas.slice(i, i + 500), { onConflict: 'kame_id' })
         if (error) return NextResponse.json({ error: 'No se pudo guardar: ' + error.message }, { status: 500 })
       }
-      return NextResponse.json({ ok: true, lineas: items.length, guardadas: filas.length, hayMas: items.length >= 1000, unidadesNuevas: faltan.length })
+      return NextResponse.json({ ok: true, lineas: items.length, guardadas: filas.length, hayMas: items.length >= 1000, unidadesNuevas: faltan.length, descartadas: descartadas.size })
     }
     if (b.accion === 'paginar') {
       const t = await obtenerToken()

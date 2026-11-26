@@ -123,11 +123,23 @@ export async function POST(req: NextRequest) {
       }))
       const porConcepto = Object.entries(conceptos).map(([k, v]) => ({ concepto: k, personas: v.n, monto: Math.round(v.monto) })).sort((a, b) => Math.abs(b.monto) - Math.abs(a.monto))
       const centroDe = new Map<string, string>(); const centros: Record<string, number> = {}
-      emp.datos.forEach(e => { const c = String(e.current_job?.cost_center || '(vacío)'); centroDe.set(String(e.rut || ''), c); })
+      // Centro vigente EN ese mes (historial de cargos), no el actual de la ficha
+      const ini = `${y}-${m}-01`, fin = `${y}-${m}-${String(new Date(Number(y), Number(m), 0).getDate()).padStart(2, '0')}`
+      emp.datos.forEach(e => {
+        const js: any[] = (Array.isArray(e.jobs) && e.jobs.length ? e.jobs : [e.current_job]).filter(Boolean)
+        const vig = js.filter(j => String(j.start_date || '0000') <= fin && (!j.end_date || String(j.end_date) >= ini)).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date)))
+        const j = vig[0] || e.current_job
+        centroDe.set(String(e.rut || ''), String(j?.cost_center || '(vacío)'))
+      })
       const porCentro: Record<string, { personas: number, ingreso: number }> = {}; let sinFicha = 0
       liqs.forEach(x => { const c = centroDe.get(String(x.rut || '')); if (!c) sinFicha++; const k = c || '(sin ficha)'; const o = porCentro[k] || (porCentro[k] = { personas: 0, ingreso: 0 }); o.personas++; o.ingreso += Number(x.income_gross) || 0 })
       void centros
-      const { data: pl } = await supabaseAdmin.from('fin_remuneraciones').select('haberes,aporte_patronal,costo_empresa,rut').eq('periodo', mes)
+      const { data: pl } = await supabaseAdmin.from('fin_remuneraciones').select('haberes,aporte_patronal,costo_empresa,rut,centro_texto').eq('periodo', mes)
+      const plCentro: Record<string, { personas: number, haberes: number }> = {}
+      ;(pl || []).forEach((x: any) => { const k = x.centro_texto || '(vacío)'; const o = plCentro[k] || (plCentro[k] = { personas: 0, haberes: 0 }); o.personas++; o.haberes += Number(x.haberes || 0) })
+      const normC = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, '').trim()
+      const bukPorCentro: Record<string, number> = {}; Object.entries(porCentro).forEach(([k, v]) => { bukPorCentro[normC(k)] = (bukPorCentro[normC(k)] || 0) + v.ingreso })
+      const compCentros = Object.entries(plCentro).map(([k, v]) => ({ centro: k, planilla: Math.round(v.haberes), bukPorFecha: Math.round(bukPorCentro[normC(k)] || 0), diferencia: Math.round((bukPorCentro[normC(k)] || 0) - v.haberes) })).sort((a, b) => b.planilla - a.planilla)
       const plan = (pl || []).reduce((a, x: any) => ({ n: a.n + 1, haberes: a.haberes + Number(x.haberes || 0), aporte: a.aporte + Number(x.aporte_patronal || 0), costo: a.costo + Number(x.costo_empresa || 0) }), { n: 0, haberes: 0, aporte: 0, costo: 0 })
       const { data: alias } = await supabaseAdmin.from('fin_alias_centro').select('*')
       return NextResponse.json({ ok: true, resumen: JSON.stringify({
@@ -135,6 +147,7 @@ export async function POST(req: NextRequest) {
         buk: { income_gross: suma('income_gross'), income_net: suma('income_net'), imponible_afp: suma('income_afp'), total_income_taxable: suma('total_income_taxable'), total_income_notaxable: suma('total_income_notaxable') },
         planilla: { filas: plan.n, haberes: Math.round(plan.haberes), aporte_patronal: Math.round(plan.aporte), costo_empresa: Math.round(plan.costo) },
         porCentroBUK: Object.entries(porCentro).map(([c, v]) => ({ centro: c, personas: v.personas, ingreso: Math.round(v.ingreso) })).sort((a, b) => b.ingreso - a.ingreso),
+        comparacionPorCentro: compCentros,
         aliasGuardados: (alias || []).length,
         conceptos: porConcepto,
       }, null, 2).slice(0, 20000) })

@@ -497,7 +497,7 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
   const borrarEdp = async (x: any) => { if (!confirm(`¿Borrar el EDP N°${x.numero}? Sus facturas quedan «sin EDP».`)) return; await supabase.from('fin_edp').delete().eq('id', x.id); I.cargar() }
   const asignarDoc = async (doc: any, edpId: string | null) => {
     const { error } = await supabase.from('fin_edp_asientos').upsert(doc.ids.map((k: number) => ({ kame_id: k, edp_id: edpId, manual: true })), { onConflict: 'kame_id' })
-    if (!err(error)) { setMsg(edpId ? 'Factura asignada al EDP.' : 'Factura desvinculada (queda sin EDP y no se vuelve a calzar sola).'); I.cargar() }
+    if (!err(error)) { setMsg(edpId ? 'Factura asignada al EDP.' : 'Factura sacada del EDP: volvió a «3. Facturas de venta sin EDP» (no se vuelve a calzar sola; ahí puedes asignarla a otro EDP).'); I.cargar() }
   }
   // Órdenes de compra
   const oVacio = { numero: '', descripcion: '', monto: '', fecha: hoyISO() }; const [fo, setFo] = useState(oVacio)
@@ -519,14 +519,17 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
       </div>
 
       {unidad && <>
-        <div style={{ ...card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
-          <Tarjeta t="Contrato vigente" v={'$' + $(I.contratado)} s={`${I.contratos.length} contrato(s) y adicionales`} />
-          <Tarjeta t="EDP presentados" v={'$' + $(I.edpTot)} s={I.contratado > 0 ? Math.round(I.edpTot / I.contratado * 100) + '% del contrato' : ''} />
-          <Tarjeta t="Facturado (Kame)" v={'$' + $(I.facturadoTot)} s={I.contratado > 0 ? Math.round(I.facturadoTot / I.contratado * 100) + '% del contrato' : ''} />
-          <Tarjeta t="EDP por facturar" v={'$' + $(I.porFacturar)} s="aprobados, aún sin factura" />
-          <Tarjeta t="EDP por aprobar" v={'$' + $(I.porAprobar)} s="presentados al cliente" />
-          <Tarjeta t="Contrato sin EDP" v={'$' + $(I.sinPresentar)} s="aún no presentado" color={rojo(I.sinPresentar)} />
-          <Tarjeta t="OC cliente por facturar" v={'$' + $(I.ocPend)} s={`${I.ordenes.filter(x => x.estado === 'pendiente').length} pendiente(s)`} />
+        <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Cómo fluye un ingreso</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 10px' }}><b>Contrato</b> → se cobra por partes con <b>EDP</b> (estados de pago) → el cliente los <b>aprueba</b> → se <b>factura</b> (esa factura sale de Kame). Cada tarjeta muestra cuánto hay en cada etapa:</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+            <Tarjeta t="1. Contrato vigente" v={'$' + $(I.contratado)} s="original + adicionales" />
+            <Tarjeta t="2. Aún sin presentar" v={'$' + $(I.sinPresentar)} s="contrato sin EDP todavía" color={rojo(I.sinPresentar)} />
+            <Tarjeta t="3. EDP por aprobar" v={'$' + $(I.porAprobar)} s="presentados, esperando al cliente" />
+            <Tarjeta t="4. EDP por facturar" v={'$' + $(I.porFacturar)} s="aprobados, sin factura aún" />
+            <Tarjeta t="5. Facturado (Kame)" v={'$' + $(I.facturadoTot)} s={I.contratado > 0 ? Math.round(I.facturadoTot / I.contratado * 100) + '% del contrato' : ''} />
+            <Tarjeta t="Aparte: OC del cliente" v={'$' + $(I.ocPend)} s="pedidos aún sin EDP ni factura" />
+          </div>
         </div>
 
         <div style={card}>
@@ -549,16 +552,23 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
         </div>
 
         <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>2. Estados de pago (EDP)</h2>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Cada EDP se <b>presenta</b> al cliente, él lo <b>aprueba</b> y recién ahí se factura (ahora, o en otro mes). Cuando Kame trae una factura cuya glosa dice «EDP N°…», calza sola con el EDP del mismo número y descuenta lo «por facturar». Las que no calzan aparecen más abajo para asignarlas a mano.</p>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>2. EDP: lo que le cobramos al cliente</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 4px' }}><b>Qué hacer:</b> crea un EDP cada vez que presentas un estado de pago (N°, valor neto, fecha). Cuando el cliente lo apruebe, cambia su estado a <b>Aprobado</b>.</p>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}><b>Facturado:</b> las facturas de venta de Kame se asocian solas al EDP si su glosa dice «EDP N°…». <b>Pincha el monto facturado</b> para ver esas facturas y, si alguna está mal, sacarla del EDP: vuelve a la sección 3 para asignarla a otro.</p>
           {I.edps.length > 0 && <div style={{ overflowX: 'auto', marginBottom: 8 }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>N°</th><th style={th}>Descripción</th><th style={th}>N° OC</th><th style={th}>Presentado</th><th style={{ ...th, textAlign: 'right' }}>Avance acum.</th><th style={{ ...th, textAlign: 'right' }}>Valor neto</th><th style={th}>Estado</th><th style={{ ...th, textAlign: 'right' }}>Facturado</th><th style={{ ...th, textAlign: 'right' }}>Por facturar</th><th style={th} /></tr></thead>
             <tbody>{I.edps.map(x => {
               const fac = I.facturadoDe(x.id); const dif = Number(x.monto) - fac; const e = ep(x); const docsX = I.docs.filter(d => d.edp_id === x.id)
               return [<tr key={x.id}><td style={td}>{docsX.length > 0 && <span onClick={() => setAbiertos(a => ({ ...a, [x.id]: !a[x.id] }))} style={{ cursor: 'pointer', color: '#98a2b3' }}>{abiertos[x.id] ? '▾' : '▸'} </span>}{x.numero}</td><td style={td}>{x.descripcion || '—'}</td><td style={td}>{x.orden_compra || '—'}</td><td style={td}>{fechaCL(x.fecha_presentacion)}</td><td style={der}>{x.avance_pct != null ? Number(x.avance_pct) + '%' : '—'}</td><td style={der}>{$(Number(x.monto))}</td>
                 <td style={td}><select value={x.estado} onChange={ev => cambiarEstado(x, ev.target.value)} style={{ ...inp, padding: '3px 6px', fontSize: 12, background: e[2], color: e[1] }}><option value="presentado">Presentado</option><option value="aprobado">Aprobado</option></select>{x.fecha_aprobacion && <div style={{ fontSize: 11, color: '#667085' }}>aprob. {fechaCL(x.fecha_aprobacion)}</div>}</td>
-                <td style={der}>{fac ? $(fac) : '—'}</td><td style={{ ...der, color: Math.abs(dif) < 1 ? '#067647' : undefined }}>{Math.abs(dif) < 1 ? 'Facturado' : $(dif)}</td>
+                <td style={der}>{fac ? <span onClick={() => setAbiertos(a => ({ ...a, [x.id]: !a[x.id] }))} title="Ver las facturas de este monto" style={{ cursor: 'pointer', color: AZUL, textDecoration: 'underline' }}>{$(fac)}</span> : '—'}</td><td style={{ ...der, color: Math.abs(dif) < 1 ? '#067647' : undefined }}>{Math.abs(dif) < 1 ? 'Facturado' : $(dif)}</td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => { setEEdit(x.id); setFe({ numero: x.numero, descripcion: x.descripcion || '', oc: x.orden_compra || '', contrato_id: x.contrato_id || '', monto: String(Math.round(Number(x.monto))), avance: x.avance_pct != null ? String(x.avance_pct) : '', fecha: x.fecha_presentacion || '' }) }} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Editar</button> <button onClick={() => borrarEdp(x)} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Borrar</button></td></tr>,
-                ...(abiertos[x.id] ? docsX.map(d => <tr key={x.id + d.key} style={{ background: '#fafafa' }}><td style={td} /><td style={{ ...td, fontSize: 12 }} colSpan={3}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'} · {d.nombre || ''} · {d.glosa.slice(0, 70)}</td><td style={{ ...td, fontSize: 12 }}>{fechaCL(d.fecha)}</td><td style={{ ...der, fontSize: 12 }} colSpan={3}>{$(d.monto)}</td><td style={td} colSpan={2}><button onClick={() => asignarDoc(d, null)} style={{ ...btn(false), padding: '2px 8px', fontSize: 12 }}>Desvincular</button></td></tr>) : [])]
+                ...(abiertos[x.id] ? [<tr key={x.id + 'det'}><td style={{ ...td, background: '#f8fafc' }} colSpan={10}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Facturas de Kame dentro del EDP N°{x.numero} (suman ${$(fac)})</div>
+                  {docsX.map(d => <div key={d.key} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, padding: '4px 0', borderBottom: '1px solid #eaecf0' }}>
+                    <span style={{ width: 80 }}>{fechaCL(d.fecha)}</span><span style={{ width: 190 }}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'}</span><span style={{ flex: 1, color: '#667085' }}>{d.nombre || ''} · {d.glosa.slice(0, 70)}</span>
+                    <span style={{ width: 110, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{$(d.monto)}</span>
+                    <button onClick={() => asignarDoc(d, null)} title="Sacarla de este EDP: vuelve a «Facturas de venta sin EDP»" style={{ ...btn(false), padding: '2px 8px', fontSize: 12 }}>Sacar del EDP</button></div>)}
+                </td></tr>] : [])]
             })}
               <tr><td style={{ ...td, fontWeight: 600 }} colSpan={5}>Total</td><td style={{ ...der, fontWeight: 600 }}>{$(I.edpTot)}</td><td style={td} /><td style={{ ...der, fontWeight: 600 }}>{$(I.docs.filter(d => d.edp_id).reduce((t, d) => t + d.monto, 0))}</td><td style={{ ...der, fontWeight: 600 }}>{$(I.porFacturar + I.porAprobar)}</td><td style={td} /></tr></tbody></table></div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: eEdit ? '#fff7ed' : undefined, padding: eEdit ? 8 : 0, borderRadius: 8 }}>
@@ -576,7 +586,7 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
 
         <div style={card}>
           <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>3. Facturas de venta de Kame sin EDP ({I.sinEdp.length})</h2>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Ventas ya contabilizadas en Kame que no calzaron con ningún EDP (la glosa no trae su número, o el EDP aún no está creado). Asígnalas a mano.</p>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}><b>Qué hacer:</b> aquí están las facturas de venta que Kame ya contabilizó pero que no están en ningún EDP (la glosa no trae el número de EDP, o ese EDP aún no existe, o la sacaste de uno). Elige el EDP al que pertenecen y toca Asignar.</p>
           {I.sinEdp.length === 0 ? <p style={{ fontSize: 13, color: '#067647', margin: 0 }}>Todas las ventas de Kame están asignadas a un EDP.</p> :
             <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Documento</th><th style={th}>Cliente / glosa</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Asignar a EDP</th></tr></thead>
               <tbody>{I.sinEdp.map(d => <tr key={d.key}><td style={td}>{fechaCL(d.fecha)}</td><td style={td}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'}</td><td style={{ ...td, fontSize: 12 }}>{d.nombre || ''}<div style={{ color: '#667085' }}>{d.glosa.slice(0, 80)}</div></td><td style={der}>{$(d.monto)}</td>
@@ -584,8 +594,9 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
         </div>
 
         <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Órdenes de compra del cliente por facturar</h2>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Compromisos del cliente que aún no se facturan. Márcalas como facturadas cuando corresponda.</p>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Órdenes de compra del cliente (aún sin EDP ni factura)</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 4px' }}><b>Para qué sirve:</b> es una lista aparte, solo informativa, de pedidos que el cliente ya nos hizo (su orden de compra) y que todavía no hemos convertido en EDP ni facturado. Sirve para ver cuánto viene en camino. <b>No se mezcla</b> con los EDP de arriba.</p>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}><b>Qué hacer:</b> registra la OC (N°, monto, fecha). Cuando ya la cobres con un EDP o la factures, cámbiala a «Facturada» y deja de contar como pendiente.</p>
           {I.ordenes.length > 0 && <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}><thead><tr><th style={th}>N° OC</th><th style={th}>Descripción</th><th style={th}>Fecha</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Estado</th><th style={th} /></tr></thead>
             <tbody>{I.ordenes.map(o => <tr key={o.id} style={{ opacity: o.estado === 'facturada' ? 0.55 : 1 }}><td style={td}>{o.numero || '—'}</td><td style={td}>{o.descripcion || '—'}</td><td style={td}>{fechaCL(o.fecha)}</td><td style={der}>{$(Number(o.monto))}</td>
               <td style={td}><select value={o.estado} onChange={async e => { await supabase.from('fin_ordenes_cliente').update({ estado: e.target.value }).eq('id', o.id); I.cargar() }} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="pendiente">Por facturar</option><option value="facturada">Facturada</option></select></td>

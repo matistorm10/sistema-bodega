@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { fondoPagina } from '@/lib/theme'
@@ -96,8 +96,7 @@ function CasaMatriz({ unidad }: { unidad: Unidad }) {
   const abiertos = useMemo(() => new Set(rem.filter(r => r.abierta).map(r => r.periodo as string)), [rem])
   const [verMeses, setVerMeses] = useState(12)
   const ms = meses.slice(-verMeses)
-  const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
-  const alternar = (k: string) => setAbiertas(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const [sel, setSel] = useState<{ k: string, mes: string } | null>(null)
   const filasCta = useMemo(() => {
     const m = new Map<string, { v: Record<string, number>, items: { fecha: string, mes: string, quien: string, detalle: string, monto: number }[] }>()
     const add = (clave: string, mes: string, v: number, it: { fecha: string, quien: string, detalle: string }) => { const o = m.get(clave) || { v: {}, items: [] }; o.v[mes] = (o.v[mes] || 0) + v; o.items.push({ ...it, mes, monto: v }); m.set(clave, o) }
@@ -141,13 +140,26 @@ function CasaMatriz({ unidad }: { unidad: Unidad }) {
         </>}
       </div>
       {!cargando && ms.length > 0 && <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 2px' }}>Costo por cuenta y mes</h2><p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Haz clic en una cuenta para ver el detalle de facturas (o de personas, en remuneraciones).</p>
+        <h2 style={{ fontSize: 15, margin: '0 0 2px' }}>Costo por cuenta y mes</h2><p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Haz clic en el nombre de una cuenta para ver todas sus facturas, o en un monto para ver solo ese mes. El detalle aparece debajo de la tabla.</p>
         <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta</th>{ms.map(x => <th key={x} style={{ ...th, textAlign: 'right' }}>{nombreMes(x)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
-          <tbody>{filasCta.map(f => <Fragment key={f.k}><tr onClick={() => alternar(f.k)} style={{ cursor: 'pointer', background: abiertas.has(f.k) ? '#eef4ff' : undefined }}><td style={{ ...td, whiteSpace: 'nowrap' }}>{abiertas.has(f.k) ? '▼' : '▶'} {f.nombre} <span style={{ color: '#98a2b3', fontSize: 11 }}>({f.items.length})</span></td>{ms.map(x => <td key={x} style={der}>{f.v[x] ? $(f.v[x]) : '·'}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(f.total)}</td></tr>
-              {abiertas.has(f.k) && <tr><td colSpan={ms.length + 2} style={{ padding: '4px 8px 12px 28px', background: '#f9fafb' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%' }}><thead><tr><th style={th}>Fecha</th><th style={th}>{f.k === 'Remuneraciones' ? 'Persona' : 'Proveedor'}</th><th style={th}>{f.k === 'Remuneraciones' ? 'Cargo' : 'Documento · detalle'}</th><th style={{ ...th, textAlign: 'right' }}>Monto</th></tr></thead>
-                  <tbody>{f.items.map((it, n) => <tr key={n}><td style={{ ...td, whiteSpace: 'nowrap' }}>{it.fecha}</td><td style={td}>{it.quien}</td><td style={{ ...td, color: '#475467' }}>{it.detalle}</td><td style={der}>{$(it.monto)}</td></tr>)}</tbody></table></td></tr>}</Fragment>)}
+          <tbody>{filasCta.map(f => <tr key={f.k} style={{ background: sel?.k === f.k ? '#eef4ff' : undefined }}>
+              <td onClick={() => setSel(sel?.k === f.k && !sel.mes ? null : { k: f.k, mes: '' })} style={{ ...td, whiteSpace: 'nowrap', cursor: 'pointer', position: 'sticky', left: 0, background: sel?.k === f.k ? '#eef4ff' : '#fff' }}>{sel?.k === f.k ? '▼' : '▶'} {f.nombre} <span style={{ color: '#98a2b3', fontSize: 11 }}>({f.items.length})</span></td>
+              {ms.map(x => <td key={x} onClick={() => f.v[x] && setSel(sel?.k === f.k && sel.mes === x ? null : { k: f.k, mes: x })} style={{ ...der, cursor: f.v[x] ? 'pointer' : 'default', background: sel?.k === f.k && sel.mes === x ? '#cfe0fb' : undefined }}>{f.v[x] ? $(f.v[x]) : '·'}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(f.total)}</td></tr>)}
             <tr><td style={{ ...td, fontWeight: 600 }}>Total</td>{totMes.map((v, i) => <td key={i} style={{ ...der, fontWeight: 600 }}>{$(v)}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(totMes.reduce((t, v) => t + v, 0))}</td></tr></tbody></table></div>
+        {(() => { const f = sel && filasCta.find(x => x.k === sel.k); if (!sel || !f) return null
+          const its = f.items.filter(it => !sel.mes || it.mes === sel.mes); const porMes = [...new Set(its.map(it => it.mes))]
+          const esRem = f.k === 'Remuneraciones'
+          return <div style={{ marginTop: 14, border: '1px solid #d0d5dd', borderRadius: 8, padding: 12, maxWidth: 900 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <b style={{ fontSize: 14 }}>{f.nombre}{sel.mes ? ` · ${sel.mes}` : ''}</b>
+              <span style={{ fontSize: 12 }}><button onClick={() => setSel({ k: f.k, mes: '' })} style={{ ...btn(!sel.mes), padding: '2px 8px' }}>Todos los meses</button> <button onClick={() => setSel(null)} style={{ ...btn(false), padding: '2px 8px' }}>Cerrar ✕</button></span></div>
+            {porMes.map(mm => { const l = its.filter(it => it.mes === mm); return <div key={mm} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#344054', background: '#f2f4f7', padding: '4px 8px', display: 'flex', justifyContent: 'space-between' }}><span>{mm}</span><span>${$(l.reduce((t, it) => t + it.monto, 0))}</span></div>
+              <table style={{ borderCollapse: 'collapse', width: '100%' }}><tbody>{l.map((it, n) => <tr key={n}>
+                <td style={{ ...td, whiteSpace: 'nowrap', width: 90 }}>{esRem ? '' : it.fecha.slice(8, 10) + '-' + it.fecha.slice(5, 7)}</td>
+                <td style={td}><div style={{ fontWeight: 500 }}>{it.quien}</div>{it.detalle && <div style={{ fontSize: 11, color: '#667085' }}>{it.detalle}</div>}</td>
+                <td style={{ ...der, whiteSpace: 'nowrap' }}>{$(it.monto)}</td></tr>)}</tbody></table></div> })}
+          </div> })()}
       </div>}
     </>
   )

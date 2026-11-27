@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { fondoPagina } from '@/lib/theme'
@@ -89,19 +89,21 @@ function CasaMatriz({ unidad }: { unidad: Unidad }) {
   const [asi, setAsi] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [cu, setCu] = useState<{ nombres: Record<string, string>, mapa: Record<string, string> }>({ nombres: {}, mapa: {} }); const [cargando, setCargando] = useState(true)
   useEffect(() => { (async () => {
     setCargando(true)
-    const [a, r, k] = await Promise.all([traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id', 'kame_id'), traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,costo_empresa,abierta'), cargarCuentas()])
+    const [a, r, k] = await Promise.all([traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_nombre,comentario_det,comentario', 'kame_id'), traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,costo_empresa,abierta,nombre,cargo'), cargarCuentas()])
     setAsi(a.filter(x => x.unidad_id === unidad.id && x.cuenta.startsWith('4.') && !x.cuenta.startsWith(CUENTA_REM))); setRem(r.filter(x => x.unidad_id === unidad.id)); setCu({ nombres: k.nombres, mapa: k.mapa }); setCargando(false)
   })() }, [unidad.id])
   const meses = useMemo(() => [...new Set([...asi.map(a => String(a.fecha).slice(0, 7)), ...rem.map(r => r.periodo)].filter(Boolean))].sort() as string[], [asi, rem])
   const abiertos = useMemo(() => new Set(rem.filter(r => r.abierta).map(r => r.periodo as string)), [rem])
   const [verMeses, setVerMeses] = useState(12)
   const ms = meses.slice(-verMeses)
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
+  const alternar = (k: string) => setAbiertas(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })
   const filasCta = useMemo(() => {
-    const m = new Map<string, Record<string, number>>()
-    const add = (clave: string, mes: string, v: number) => { const o = m.get(clave) || {}; o[mes] = (o[mes] || 0) + v; m.set(clave, o) }
-    asi.forEach(a => { const g = cu.mapa[a.cuenta] || a.cuenta; add(g, String(a.fecha).slice(0, 7), Number(a.debe) - Number(a.haber)) })
-    rem.forEach(r => add('Remuneraciones', r.periodo, Number(r.costo_empresa)))
-    return [...m.entries()].map(([k, v]) => ({ k, nombre: k === 'Remuneraciones' ? 'Remuneraciones (BUK)' : `${k} · ${cu.nombres[k] || a_nombre(k)}`, v, total: ms.reduce((t, x) => t + (v[x] || 0), 0) })).sort((a, b) => b.total - a.total)
+    const m = new Map<string, { v: Record<string, number>, items: { fecha: string, mes: string, quien: string, detalle: string, monto: number }[] }>()
+    const add = (clave: string, mes: string, v: number, it: { fecha: string, quien: string, detalle: string }) => { const o = m.get(clave) || { v: {}, items: [] }; o.v[mes] = (o.v[mes] || 0) + v; o.items.push({ ...it, mes, monto: v }); m.set(clave, o) }
+    asi.forEach(a => { const g = cu.mapa[a.cuenta] || a.cuenta; const doc = [a.doc_tipo, a.doc_folio].filter(Boolean).join(' '); add(g, String(a.fecha).slice(0, 7), Number(a.debe) - Number(a.haber), { fecha: String(a.fecha).slice(0, 10), quien: a.doc_nombre || 'Sin proveedor', detalle: [doc, a.cuenta !== g ? a.nombre_cuenta : '', a.comentario_det || a.comentario].filter(Boolean).join(' · ') }) })
+    rem.forEach(r => add('Remuneraciones', r.periodo, Number(r.costo_empresa), { fecha: r.periodo, quien: r.nombre || 'Sin nombre', detalle: r.cargo || '' }))
+    return [...m.entries()].map(([k, o]) => ({ k, nombre: k === 'Remuneraciones' ? 'Remuneraciones (BUK)' : `${k} · ${cu.nombres[k] || a_nombre(k)}`, v: o.v, items: o.items.filter(x => ms.includes(x.mes)).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.monto - a.monto), total: ms.reduce((t, x) => t + (o.v[x] || 0), 0) })).sort((a, b) => b.total - a.total)
   }, [asi, rem, cu, ms])
   function a_nombre(c: string) { return asi.find(x => x.cuenta === c)?.nombre_cuenta || 'Cuenta sin nombre' }
   const totMes = ms.map(x => filasCta.reduce((t, f) => t + (f.v[x] || 0), 0))
@@ -139,9 +141,12 @@ function CasaMatriz({ unidad }: { unidad: Unidad }) {
         </>}
       </div>
       {!cargando && ms.length > 0 && <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Costo por cuenta y mes</h2>
+        <h2 style={{ fontSize: 15, margin: '0 0 2px' }}>Costo por cuenta y mes</h2><p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Haz clic en una cuenta para ver el detalle de facturas (o de personas, en remuneraciones).</p>
         <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta</th>{ms.map(x => <th key={x} style={{ ...th, textAlign: 'right' }}>{nombreMes(x)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
-          <tbody>{filasCta.map(f => <tr key={f.k}><td style={{ ...td, whiteSpace: 'nowrap' }}>{f.nombre}</td>{ms.map(x => <td key={x} style={der}>{f.v[x] ? $(f.v[x]) : '·'}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(f.total)}</td></tr>)}
+          <tbody>{filasCta.map(f => <Fragment key={f.k}><tr onClick={() => alternar(f.k)} style={{ cursor: 'pointer', background: abiertas.has(f.k) ? '#eef4ff' : undefined }}><td style={{ ...td, whiteSpace: 'nowrap' }}>{abiertas.has(f.k) ? '▼' : '▶'} {f.nombre} <span style={{ color: '#98a2b3', fontSize: 11 }}>({f.items.length})</span></td>{ms.map(x => <td key={x} style={der}>{f.v[x] ? $(f.v[x]) : '·'}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(f.total)}</td></tr>
+              {abiertas.has(f.k) && <tr><td colSpan={ms.length + 2} style={{ padding: '4px 8px 12px 28px', background: '#f9fafb' }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%' }}><thead><tr><th style={th}>Fecha</th><th style={th}>{f.k === 'Remuneraciones' ? 'Persona' : 'Proveedor'}</th><th style={th}>{f.k === 'Remuneraciones' ? 'Cargo' : 'Documento · detalle'}</th><th style={{ ...th, textAlign: 'right' }}>Monto</th></tr></thead>
+                  <tbody>{f.items.map((it, n) => <tr key={n}><td style={{ ...td, whiteSpace: 'nowrap' }}>{it.fecha}</td><td style={td}>{it.quien}</td><td style={{ ...td, color: '#475467' }}>{it.detalle}</td><td style={der}>{$(it.monto)}</td></tr>)}</tbody></table></td></tr>}</Fragment>)}
             <tr><td style={{ ...td, fontWeight: 600 }}>Total</td>{totMes.map((v, i) => <td key={i} style={{ ...der, fontWeight: 600 }}>{$(v)}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(totMes.reduce((t, v) => t + v, 0))}</td></tr></tbody></table></div>
       </div>}
     </>

@@ -30,6 +30,9 @@ export default function Finanzas() {
   const esAdmin = usuario?.rol === 'admin'
   const [tab, setTab] = useState<Pestana>('resultado')
   const [unidades, setUnidades] = useState<Unidad[]>([])
+  const [proyecto, setProyectoSel] = useState('')
+  const setProyecto = (id: string) => { setProyectoSel(id); try { localStorage.setItem('fin_proyecto', id) } catch {} }
+  useEffect(() => { try { setProyectoSel(localStorage.getItem('fin_proyecto') || '') } catch {} }, [])
   const cargarUnidades = useCallback(async () => {
     const { data } = await supabase.from('fin_unidades').select('*').order('nombre')
     setUnidades((data || []) as Unidad[])
@@ -46,20 +49,31 @@ export default function Finanzas() {
   if (cargando) return <main style={fondoPagina}><div style={{ padding: '1.5rem' }}><p style={{ fontSize: 13, color: '#999' }}>Cargando...</p></div></main>
   if (!esAdmin) return <main style={fondoPagina}><div style={{ padding: '1.5rem', maxWidth: 600, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>{cab}<div style={card}><p style={{ fontSize: 14 }}>Este módulo está en desarrollo y solo está habilitado para administradores.</p></div></div></main>
 
-  const tabs: [Pestana, string][] = [['resultado', 'Resultado por proyecto'], ['ingresos', 'Ingresos'], ['presupuesto', 'Presupuesto'], ['importar', 'Importar'], ['unidades', 'Unidades'], ['kame', 'Conexión Kame']]
+  const activas = unidades.filter(u => u.activa)
+  const proyectoId = activas.some(u => u.id === proyecto) ? proyecto : ''
+  const tabsProy: [Pestana, string][] = [['resultado', 'Resultado'], ['ingresos', 'Ingresos'], ['presupuesto', 'Presupuesto']]
+  const tabsConf: [Pestana, string][] = [['unidades', 'Unidades y catálogo'], ['importar', 'Importar'], ['kame', 'Conexión Kame']]
   return (
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: 1100, margin: '0 auto' }}>
         {cab}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
+        <div style={{ ...card, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Centro de costo</span>
+          <select value={proyectoId} onChange={e => setProyecto(e.target.value)} style={{ ...inp, minWidth: 340, fontWeight: 600 }}><option value="">Todos los proyectos (resumen)</option>{activas.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+          <span style={{ fontSize: 12, color: '#667085' }}>Lo que elijas aquí se usa en Resultado, Ingresos y Presupuesto.</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          {tabsProy.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
+          <span style={{ width: 1, height: 24, background: '#d0d5dd', margin: '0 6px' }} />
+          <span style={{ fontSize: 11, color: '#98a2b3' }}>Configuración</span>
+          {tabsConf.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400, padding: '6px 12px' }}>{l}</button>)}
         </div>
         {tab === 'importar' && <Importar onListo={cargarUnidades} />}
         {tab === 'unidades' && <Unidades unidades={unidades} recargar={cargarUnidades} />}
-        {tab === 'presupuesto' && <Presupuesto unidades={unidades.filter(u => u.activa)} recargar={cargarUnidades} />}
-        {tab === 'ingresos' && <Ingresos unidades={unidades.filter(u => u.activa)} />}
+        {tab === 'presupuesto' && <Presupuesto unidades={activas} uid={proyectoId} recargar={cargarUnidades} />}
+        {tab === 'ingresos' && <Ingresos unidades={activas} uid={proyectoId} />}
         {tab === 'kame' && <ConexionKame />}
-        {tab === 'resultado' && <Resultado unidades={unidades.filter(u => u.activa)} />}
+        {tab === 'resultado' && <Resultado unidades={activas} proyecto={proyectoId} setProyecto={setProyecto} />}
       </div>
     </main>
   )
@@ -218,8 +232,7 @@ const CUENTA_REM = '4.02.04'
 const nomCuenta = (mapa: Record<string, string>, c: string) => c === CUENTA_REM ? 'Remuneraciones (BUK)' : (mapa[c] || 'Cuenta sin nombre')
 const agruparPorCuenta = (partidas: any[]) => { const g: Record<string, any[]> = {}; partidas.forEach(p => { const c = p.catalogo?.cuenta || '(sin cuenta)'; (g[c] = g[c] || []).push(p) }); return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0])) }
 
-function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () => void }) {
-  const [uid, setUid] = useState('')
+function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: string, recargar: () => void }) {
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [cuentas, setCuentas] = useState<Record<string, string>>({})
   const [partidas, setPartidas] = useState<any[]>([])
@@ -230,6 +243,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const [contratos, setContratos] = useState<any[]>([]); const [editId, setEditId] = useState<string | null>(null); const [abSub, setAbSub] = useState(false); const [abPer, setAbPer] = useState(false)
   const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
   const unidad = unidades.find(u => u.id === uid)
+  useEffect(() => { setDraft({}); setMsg(''); setEditId(null); setVDesc(''); setVContratoId('') }, [uid])
   const meses = useMemo(() => rangoMeses(unidad?.presupuesto_desde, unidad?.presupuesto_hasta), [unidad])
 
   const cargarCatalogo = useCallback(async () => {
@@ -309,8 +323,8 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   return (
     <>
       <div style={card}>
-        <select value={uid} onChange={e => { setUid(e.target.value); setDraft({}); setMsg('') }} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
-        {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente (ver pestaña Ingresos): <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
+        {!unidad && <span style={{ fontSize: 13, color: '#667085' }}>Elige un centro de costo arriba para trabajar su presupuesto.</span>}
+        {unidad && <span style={{ fontSize: 13 }}><b>{unidad.nombre}</b> · Contrato vigente (ver pestaña Ingresos): <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
         {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       </div>
 
@@ -451,8 +465,8 @@ function Tarjeta({ t, v, s, color }: { t: string, v: string, s?: string, color?:
   return <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: '#667085' }}>{t}</div><div style={{ fontSize: 18, fontWeight: 600, color }}>{v}</div><div style={{ fontSize: 11, color: '#667085' }}>{s || ' '}</div></div>
 }
 
-function Ingresos({ unidades }: { unidades: Unidad[] }) {
-  const [uid, setUid] = useState(''); const unidad = unidades.find(u => u.id === uid)
+function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
+  const unidad = unidades.find(u => u.id === uid)
   const I = useIngresos(uid)
   const [msg, setMsg] = useState(''); const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({})
   const err = (e: any) => { if (e) { setMsg('No se pudo guardar: ' + e.message); return true } return false }
@@ -487,13 +501,14 @@ function Ingresos({ unidades }: { unidades: Unidad[] }) {
     const { error } = await supabase.from('fin_ordenes_cliente').insert({ unidad_id: uid, numero: fo.numero, descripcion: fo.descripcion, monto: Number(fo.monto), fecha: fo.fecha || null })
     if (!err(error)) { setFo(oVacio); setMsg('Orden de compra registrada.'); I.cargar() }
   }
+  useEffect(() => { setMsg(''); setCEdit(null); setEEdit(null); setFc(cVacio); setFe(eVacio) }, [uid]) // eslint-disable-line react-hooks/exhaustive-deps
   const ep = (x: any) => ({ presentado: ['Presentado', '#92400e', '#fef3c7'], aprobado: ['Aprobado', '#065f46', '#d1fae5'] } as any)[x.estado]
   const rojo = (v: number) => v < 0 ? '#b42318' : undefined
 
   return (
     <>
       <div style={card}>
-        <select value={uid} onChange={e => { setUid(e.target.value); setMsg(''); setCEdit(null); setEEdit(null); setFc(cVacio); setFe(eVacio) }} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+        {!unidad ? <span style={{ fontSize: 13, color: '#667085' }}>Elige un centro de costo arriba para ver y registrar sus ingresos.</span> : <span style={{ fontSize: 14 }}><b>{unidad.nombre}</b></span>}
         {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
         {I.auto > 0 && <p style={{ fontSize: 12, margin: '8px 0 0', color: '#067647' }}>{I.auto} línea(s) de factura de Kame se calzaron solas con su EDP.</p>}
       </div>
@@ -594,10 +609,10 @@ function Barra({ real, ppto }: { real: number, ppto: number }) {
 }
 const COLS = 'minmax(240px,1fr) 190px 105px 105px'
 
-function Resultado({ unidades }: { unidades: Unidad[] }) {
+function Resultado({ unidades, proyecto, setProyecto }: { unidades: Unidad[], proyecto: string, setProyecto: (id: string) => void }) {
   const [mes, setMes] = useState('')
   const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [contr, setContr] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([])
-  const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([]); const [proyecto, setProyecto] = useState('')
+  const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([])
   useEffect(() => {
     (async () => {
       setCargando(true)
@@ -615,7 +630,7 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
   const hayKame = asi.length > 0
   const meses = useMemo(() => [...new Set([...(hayKame ? asi.map(a => String(a.fecha).slice(0, 7)) : lineas.map(l => l.documento?.fecha_doc?.slice(0, 7))), ...rem.map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [lineas, rem, asi, hayKame])
 
-  const mesesAbiertos = useMemo(() => new Set(rem.filter(r => r.abierta).map(r => r.periodo as string)), [rem])
+  const mesesAbiertos = useMemo(() => new Set(rem.filter(r => r.abierta && (!proyecto || r.unidad_id === proyecto)).map(r => r.periodo as string)), [rem, proyecto])
   const hayProyeccion = mes ? mesesAbiertos.has(mes) : mesesAbiertos.size > 0
   const filas = unidades.map(u => {
     const ls = lineas.filter(l => l.unidad_id === u.id && (!mes || (l.documento?.periodo_tributario || l.documento?.fecha_doc?.slice(0, 7)) === mes))
@@ -635,18 +650,18 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
       <div style={card}>
         <span style={{ fontSize: 13, marginRight: 8 }}>Período:</span>
         <select value={mes} onChange={e => setMes(e.target.value)} style={inp}><option value="">Acumulado</option>{meses.map(m => <option key={m} value={m}>{m}{mesesAbiertos.has(m) ? ' (proyectado)' : ''}</option>)}</select>
-        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>{hayKame ? 'Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x (esta tabla incluye los sueldos que Kame tenga contabilizados). Haz clic en un proyecto para ver su detalle.' : 'Fuente: archivos importados. Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.'}</p>
+        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>{hayKame ? 'Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x (esta tabla incluye los sueldos que Kame tenga contabilizados). Elige un centro de costo arriba (o haz clic en un proyecto de la tabla) para ver su detalle.' : 'Fuente: archivos importados. Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.'}</p>
       </div>
       {hayProyeccion && <div style={{ ...card, background: '#fff7ed' }}><p style={{ fontSize: 13, margin: 0 }}>⚠ {mes ? `Las remuneraciones de ${mes}` : `Las remuneraciones de ${[...mesesAbiertos].sort().join(', ')}`} son una <b>proyección de BUK</b>: las liquidaciones aún no están cerradas y los montos pueden cambiar hasta el cierre.</p></div>}
-      <div style={card}>
+      {(!uSel || !hayKame) && <div style={card}>
         {cargando ? <p style={{ fontSize: 13, color: '#999' }}>Cargando…</p> : filas.length === 0 ? <p style={{ fontSize: 13 }}>Aún no hay datos. Sincroniza con Kame en «Conexión Kame» y marca las unidades activas.</p> :
           <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Costos (contabilidad)' : 'Compras'}</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Rem. planilla (ref.)' : 'Remuneraciones'}</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
             <tbody>{filas.map(f => <tr key={f.u.id} onClick={() => setProyecto(f.u.id)} style={{ cursor: 'pointer', background: f.u.id === proyecto ? '#eef4ff' : undefined }}><td style={td}>{f.u.nombre}</td><td style={der}>{f.contrato ? $(f.contrato) : '—'}</td><td style={der}>{$(f.ventas)}</td><td style={der}>{$(f.compras)}</td><td style={der}>{$(f.sueldos)}</td>
               <td style={{ ...der, color: f.margen < 0 ? '#b42318' : '#067647', fontWeight: 600 }}>{$(f.margen)}</td><td style={der}>{f.pct == null ? '—' : f.pct.toFixed(1) + '%'}</td></tr>)}
               <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c - (hayKame ? 0 : tot.s))}</td><td style={der} /></tr></tbody></table></div>}
-      </div>
+      </div>}
       {uSel && hayKame && <DetalleProyecto key={uSel.id} unidad={uSel} mes={mes} asiU={asi.filter(a => a.unidad_id === uSel.id)} remU={rem.filter(r => r.unidad_id === uSel.id)} />}
-      {tardias.length > 0 && <div style={card}>
+      {!uSel && tardias.length > 0 && <div style={card}>
         <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Documentos que caen en otro mes ({tardias.length} líneas)</h2>
         <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>La fecha del documento y el período en que se declaró al SII no coinciden.</p>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proveedor / cliente</th><th style={th}>Folio</th><th style={th}>Fecha doc.</th><th style={th}>Período SII</th></tr></thead>

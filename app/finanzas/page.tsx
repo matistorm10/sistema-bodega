@@ -924,7 +924,6 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
           </div></div>}
 
       <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Costos: presupuesto vs real</h3>
-      {pendTot !== 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 8px' }}>Hay <b>{grupos.reduce((t, g) => t + g.pend.length, 0)} movimientos</b> por asignar a una subpartida, por ${$(pendTot)} (en {grupos.filter(g => g.pend.length).length} cuenta(s): {grupos.filter(g => g.pend.length).map(g => `${nomCuenta(cuentas, g.c)} ${g.pend.length}`).join(' · ')}). Ábrelos en la fila «Por asignar» de cada cuenta.</p>}
       {msg && <p style={{ fontSize: 12, margin: '0 0 8px', color: /^(No|El|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       {partidas.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Este proyecto aún no tiene subpartidas ni presupuesto: defínelos en la pestaña Presupuesto. Mientras tanto ves el costo por cuenta contable.</p>}
 

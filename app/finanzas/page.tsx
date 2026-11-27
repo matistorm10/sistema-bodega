@@ -207,6 +207,20 @@ function Catalogo() {
     if (ids.length) { const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).in('partida_id', ids); if (count) { alert(`«${c.nombre}» ya tiene ${count} costos asignados; no se puede cambiar de cuenta. Quita primero esas asignaciones.`); cargarCatalogo(); return } }
     await supabase.from('fin_catalogo_partidas').update({ cuenta, cuentas: (catalogo.find(x => x.cuenta === cuenta)?.cuentas) || cuenta }).eq('id', c.id); cargarCatalogo()
   }
+  const eliminarCatalogo = async (c: any) => {
+    const { data: ps } = await supabase.from('fin_partidas').select('id,unidad_id').eq('catalogo_id', c.id)
+    const ids = (ps || []).map(x => x.id)
+    if (ids.length) {
+      const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).in('partida_id', ids)
+      if (count) { setMsg(`No se puede eliminar «${c.nombre}»: tiene ${count} costo(s) o factura(s) asignados. Quítalos o reasígnalos primero.`); return }
+      const { count: nItems } = await supabase.from('fin_version_items').select('id', { count: 'exact', head: true }).in('partida_id', ids).neq('delta', 0)
+      if (!confirm(`«${c.nombre}» está en ${ids.length} proyecto(s)${nItems ? ` con presupuesto ingresado (${nItems} montos)` : ''}. Si la eliminas, se quita de esos proyectos${nItems ? ' junto con su presupuesto' : ''}. ¿Eliminar?`)) return
+      const { error: e1 } = await supabase.from('fin_partidas').delete().in('id', ids)
+      if (e1) { setMsg('No se pudo eliminar: ' + e1.message); return }
+    } else if (!confirm(`¿Eliminar la subpartida «${c.nombre}» del catálogo?`)) return
+    const { error } = await supabase.from('fin_catalogo_partidas').delete().eq('id', c.id)
+    if (error) setMsg('No se pudo eliminar: ' + error.message); else { setMsg(`Subpartida «${c.nombre}» eliminada.`); cargarCatalogo() }
+  }
   const cuentasOpc = grupos.map(g => g.grupo)
   return (
     <div style={card}>
@@ -214,11 +228,11 @@ function Catalogo() {
       <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Trabajamos con 9 cuentas de trabajo (cada una agrupa cuentas parecidas de Kame, ej. «Costos Herramientas» cuenta como Materiales de construcción). Aquí definimos las subpartidas que abren cada cuenta (Fierro, Cubiertas, Combustible…). Todos los proyectos usan esta lista, así nadie escribe «Cubierta» y otro «Cubiertas». El presupuesto de una cuenta es la suma de sus subpartidas.</p>
       <details style={{ margin: '0 0 10px', fontSize: 12 }}><summary style={{ cursor: 'pointer', color: '#344054', fontWeight: 600 }}>Cuentas de Kame que agrupa cada cuenta de trabajo</summary>
         <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#475467' }}>{grupos.map(g => <li key={g.grupo}><b>{g.numero}. {g.nombre}</b> (Kame: {g.nombre_kame}, {g.grupo}) — absorbe: {(catalogo.find(c => c.cuenta === g.grupo)?.cuentas || g.grupo).split(',').filter((x: string) => x !== g.grupo).map((x: string) => cuentas[x] ? `${x} ${cuentas[x]}` : x).join('; ') || 'ninguna otra'}</li>)}</ul></details>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta de trabajo</th><th style={th}>Costo real desde</th></tr></thead>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta de trabajo</th><th style={th}>Costo real desde</th><th style={th}></th></tr></thead>
         <tbody>{[...catalogo].sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.nombre.localeCompare(b.nombre)).map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
           <td style={td}>{c.fuente === 'remuneraciones' ? <span style={{ color: '#667085' }}>{nomCuenta(cuentas, CUENTA_REM)}</span> :
             <select value={c.cuenta} onChange={e => cambiarCuentaCatalogo(c, e.target.value)} style={{ ...inp, padding: '4px 6px', maxWidth: 380 }}>{!cuentasOpc.includes(c.cuenta) && <option value={c.cuenta}>{c.cuenta || 'Elegir cuenta…'}</option>}{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>}</td>
-          <td style={td}>{c.fuente === 'remuneraciones' ? 'Remuneraciones de BUK' : 'Facturas de Kame asignadas'}</td></tr>)}</tbody></table>
+          <td style={td}>{c.fuente === 'remuneraciones' ? 'Remuneraciones de BUK' : 'Facturas de Kame asignadas'}</td><td style={td}>{c.fuente !== 'remuneraciones' && <button onClick={() => eliminarCatalogo(c)} title="Eliminar subpartida" style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Eliminar</button>}</td></tr>)}</tbody></table>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nueva subpartida (ej. Fierro)" style={{ ...inp, width: 220 }} />
         <select value={nuevaCuenta} onChange={e => setNuevaCuenta(e.target.value)} style={{ ...inp, maxWidth: 380 }}><option value="">Cuenta de trabajo…</option>{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>

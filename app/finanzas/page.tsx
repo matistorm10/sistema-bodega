@@ -253,7 +253,7 @@ function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: str
   const [partidas, setPartidas] = useState<any[]>([])
   const [versiones, setVersiones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
-  const [elegida, setElegida] = useState('')
+  const [elegidas, setElegidas] = useState<Record<string, boolean>>({})
   const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContratoId, setVContratoId] = useState(''); const [draft, setDraft] = useState<Record<string, string>>({})
   const [contratos, setContratos] = useState<any[]>([]); const [editId, setEditId] = useState<string | null>(null); const [abSub, setAbSub] = useState(false); const [abPer, setAbPer] = useState(false)
   const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
@@ -287,11 +287,12 @@ function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: str
   const sinMes = items.filter(i => !meses.includes(i.mes)).reduce((a, i) => a + Number(i.delta), 0)
 
   const guardarPeriodo = async (campo: 'presupuesto_desde' | 'presupuesto_hasta', valor: string) => { await supabase.from('fin_unidades').update({ [campo]: valor || null }).eq('id', uid); recargar() }
-  const agregarPartida = async () => {
-    const c = catalogo.find(x => x.id === elegida); if (!c) return
-    const { error } = await supabase.from('fin_partidas').insert({ unidad_id: uid, nombre: c.nombre, catalogo_id: c.id, fuente: c.fuente === 'remuneraciones' ? 'remuneraciones' : 'manual', orden: partidas.length })
-    if (error) setMsg('No se pudo agregar: ' + error.message); else { setElegida(''); setMsg(''); cargar() }
+  const agregarPartidas = async () => {
+    const cs = catalogo.filter(x => elegidas[x.id] && !partidas.some(p => p.catalogo_id === x.id)); if (!cs.length) return
+    const { error } = await supabase.from('fin_partidas').insert(cs.map((c, i) => ({ unidad_id: uid, nombre: c.nombre, catalogo_id: c.id, fuente: c.fuente === 'remuneraciones' ? 'remuneraciones' : 'manual', orden: partidas.length + i })))
+    if (error) setMsg('No se pudo agregar: ' + error.message); else { setElegidas({}); setMsg(`${cs.length} subpartida(s) agregadas.`); cargar() }
   }
+  const nElegidas = Object.values(elegidas).filter(Boolean).length
   const quitarPartida = async (p: any) => {
     const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).eq('partida_id', p.id)
     if (!confirm(`¿Quitar «${p.nombre}» de este proyecto? Se borra su presupuesto${count ? ` y ${count} asignaciones de costos (esos costos vuelven a «por asignar»)` : ''}.`)) return
@@ -411,9 +412,17 @@ function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: str
               <div style={{ fontSize: 12, fontWeight: 600, color: '#344054' }}>{c} · {nomCuenta(cuentas, c)}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>{ps.map(p => <span key={p.id} style={{ background: '#eef4ff', borderRadius: 99, padding: '4px 10px', fontSize: 13 }}>{p.nombre} <button onClick={() => quitarPartida(p)} title="Quitar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#667085' }}>✕</button></span>)}</div>
             </div>)}
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <select value={elegida} onChange={e => setElegida(e.target.value)} style={{ ...inp, minWidth: 300 }}><option value="">Agregar subpartida del catálogo…</option>{dispo.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.cuenta}</option>)}</select>
-              <button onClick={agregarPartida} disabled={!elegida} style={btn(true, !elegida)}>Agregar</button>
+            <div style={{ marginTop: 10, borderTop: '1px solid #eaecf0', paddingTop: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#344054', marginBottom: 4 }}>Agregar subpartidas del catálogo (marca las que necesites)</div>
+              {dispo.length === 0 ? <p style={{ fontSize: 12, color: '#667085', margin: 0 }}>Este proyecto ya tiene todas las subpartidas del catálogo.</p> :
+                Object.entries(dispo.reduce((g: Record<string, any[]>, c) => { (g[c.cuenta] = g[c.cuenta] || []).push(c); return g }, {})).sort((a, b) => a[0].localeCompare(b[0])).map(([cta, cs]) => {
+                  const todas = cs.every(c => elegidas[c.id])
+                  return <div key={cta} style={{ marginBottom: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#475467' }}><input type="checkbox" checked={todas} onChange={e => setElegidas(s => ({ ...s, ...Object.fromEntries(cs.map(c => [c.id, e.target.checked])) }))} /> {cta} · {nomCuenta(cuentas, cta)}</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 16px', paddingLeft: 22 }}>{cs.map(c => <label key={c.id} style={{ fontSize: 13 }}><input type="checkbox" checked={!!elegidas[c.id]} onChange={e => setElegidas(s => ({ ...s, [c.id]: e.target.checked }))} /> {c.nombre}</label>)}</div>
+                  </div>
+                })}
+              <button onClick={agregarPartidas} disabled={!nElegidas} style={{ ...btn(true, !nElegidas), marginTop: 6 }}>Agregar seleccionadas{nElegidas ? ` (${nElegidas})` : ''}</button>
             </div>
           </div>
         </details>
@@ -648,7 +657,7 @@ function Resultado({ unidades, proyecto, setProyecto }: { unidades: Unidad[], pr
         traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
         traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,rut,nombre,cargo,costo_empresa,abierta'),
         traerTodo('fin_contratos', 'id,unidad_id,monto'),
-        traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario', 'kame_id'),
+        traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario,tipo_comprobante,folio_comprobante', 'kame_id'),
       ])
       setLineas(l); setRem(r); setContr(v); setAsi(a)
       setTardias(l.filter(x => x.documento?.periodo_tributario && x.documento?.fecha_doc && x.documento.fecha_doc.slice(0, 7) !== x.documento.periodo_tributario))
@@ -850,14 +859,14 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
           </div></div>}
 
       <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Costos: presupuesto vs real</h3>
-      {pendTot !== 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 8px' }}>Hay ${$(pendTot)} de costos por asignar a una subpartida (se ven en cada cuenta, fila «Por asignar»).</p>}
+      {pendTot !== 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 8px' }}>Hay <b>{grupos.reduce((t, g) => t + g.pend.length, 0)} movimientos</b> por asignar a una subpartida, por ${$(pendTot)} (en {grupos.filter(g => g.pend.length).length} cuenta(s): {grupos.filter(g => g.pend.length).map(g => `${nomCuenta(cuentas, g.c)} ${g.pend.length}`).join(' · ')}). Ábrelos en la fila «Por asignar» de cada cuenta.</p>}
       {msg && <p style={{ fontSize: 12, margin: '0 0 8px', color: /^(No|El|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       {partidas.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Este proyecto aún no tiene subpartidas ni presupuesto: defínelos en la pestaña Presupuesto. Mientras tanto ves el costo por cuenta contable.</p>}
 
       <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '4px 8px', fontSize: 11, color: '#667085', fontWeight: 600, borderBottom: '1px solid #eaecf0' }}><div>Cuenta / subpartida</div><div>Avance</div><div style={{ textAlign: 'right' }}>Real</div><div style={{ textAlign: 'right' }}>Presupuesto</div></div>
       <div style={{ opacity: ocupado ? 0.6 : 1 }}>
         {grupos.map(g => <div key={g.c}>
-          <Fila nivel={0} k={'c:' + g.c} fuerte nombre={<>{g.c} · {nomCuenta(cuentas, g.c)}</>} real={g.real} ppto={g.ppto} />
+          <Fila nivel={0} k={'c:' + g.c} fuerte nombre={<>{g.c} · {nomCuenta(cuentas, g.c)}</>} extra={g.pend.length > 0 ? <span style={{ color: '#92400e', fontWeight: 400, fontSize: 12 }}> · {g.pend.length} por asignar</span> : undefined} real={g.real} ppto={g.ppto} />
           {abiertos['c:' + g.c] && <>
             {g.ps.map(p => {
               const dp = asigDe(p); const pk = 'p:' + p.id
@@ -896,7 +905,15 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
                       {abiertos[vk] && pv.rows.sort((r: any, s: any) => String(r.fecha).localeCompare(String(s.fecha))).map((a: any) => {
                         const dk = 'sel|d|' + a.kame_id
                         return <div key={a.kame_id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', paddingLeft: 8 + 3 * 22, fontSize: 12, color: '#475467', borderBottom: '1px solid #f9fafb' }}>
-                          <span style={{ width: 80 }}>{String(a.fecha).slice(0, 10)}</span><span style={{ flex: 1 }}>{nombreDoc(a)}</span>
+                          <span style={{ width: 80 }}>{String(a.fecha).slice(0, 10)}</span>
+                          <span style={{ flex: 1 }}><span onClick={() => toggle('det|' + a.kame_id)} style={{ cursor: 'pointer', textDecoration: 'underline dotted' }} title="Ver el detalle de este documento">{nombreDoc(a)}</span>
+                            {(a.comentario_det || a.comentario) && <span style={{ color: '#98a2b3' }}> · {String(a.comentario_det || a.comentario).slice(0, 70)}</span>}
+                            {abiertos['det|' + a.kame_id] && <div style={{ margin: '4px 0', padding: '6px 8px', background: '#f9fafb', borderRadius: 6, color: '#344054', lineHeight: 1.5 }}>
+                              <div><b>Proveedor:</b> {a.doc_nombre || '—'} · RUT {a.doc_rut || '—'}</div>
+                              <div><b>Documento:</b> {a.doc_tipo || '—'} {a.doc_folio || ''} · <b>Comprobante Kame:</b> {a.tipo_comprobante || ''} {a.folio_comprobante || ''}</div>
+                              <div><b>Fecha:</b> {String(a.fecha).slice(0, 10)} · <b>Cuenta Kame:</b> {a.cuenta} {cuentas[a.cuenta] || ''} · <b>Monto:</b> ${$(monto$(a))}</div>
+                              <div><b>Glosa:</b> {a.comentario_det || a.comentario || '(sin glosa)'}{a.comentario_det && a.comentario && a.comentario !== a.comentario_det ? ` — ${a.comentario}` : ''}</div>
+                              <div style={{ color: '#667085' }}>El libro diario de Kame no incluye el PDF de la factura; con el folio y el RUT puedes buscarla en Kame.</div></div>}</span>
                           <input type="number" value={monto[dk] ?? ''} placeholder={String(Math.round(pendiente(a)))} onChange={e => setMonto(m => ({ ...m, [dk]: e.target.value }))} style={{ ...inp, width: 100, padding: '3px 6px', fontSize: 12, textAlign: 'right' }} />
                           <select value={sel[dk] || elegidaProv} onChange={e => setSel(s => ({ ...s, [dk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
                           <button disabled={ocupado} onClick={() => asignar(a, sel[dk] || elegidaProv, monto[dk] ?? '')} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar</button></div>

@@ -705,13 +705,16 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   const [partidas, setPartidas] = useState<any[]>([]); const [items, setItems] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({}); const [mapaGrupo, setMapaGrupo] = useState<Record<string, string>>({})
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({}); const [monto, setMonto] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [ocupado, setOcupado] = useState(false)
+  const [reglas, setReglas] = useState<Record<string, string>>({}); const [recordar, setRecordar] = useState<Record<string, boolean>>({})
 
   const cargar = useCallback(async () => {
-    const [p, v, k] = await Promise.all([
+    const [p, v, k, r] = await Promise.all([
       supabase.from('fin_partidas').select('*, catalogo:fin_catalogo_partidas(nombre,cuenta,fuente)').eq('unidad_id', unidad.id).order('orden'),
       supabase.from('fin_versiones').select('id').eq('unidad_id', unidad.id),
       cargarCuentas(),
+      supabase.from('fin_reglas_proveedor').select('clave,catalogo_id'),
     ])
+    setReglas(Object.fromEntries((r.data || []).map((x: any) => [x.clave, x.catalogo_id])))
     const ps = p.data || []; setPartidas(ps); setCuentas(k.nombres); setMapaGrupo(k.mapa)
     const vids = (v.data || []).map(x => x.id)
     if (vids.length) { const { data } = await supabase.from('fin_version_items').select('partida_id,mes,delta').in('version_id', vids).limit(20000); setItems(data || []) } else setItems([])
@@ -775,6 +778,21 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
     setOcupado(true)
     const rows = lineas.map(a => { const ex = (porKame.get(Number(a.kame_id)) || []).find(x => x.partida_id === partidaId); return { kame_id: Number(a.kame_id), partida_id: partidaId, monto: (ex ? Number(ex.monto) : 0) + pendiente(a) } })
     await guardar(rows); setMsg(`${rows.length} movimiento(s) asignados.`); await cargar(); setOcupado(false)
+  }
+  // Reglas por proveedor: «este proveedor siempre va a esta subpartida» (vale para todos los proyectos que la tengan)
+  const partidaRegla = (clave: string, ps: any[]) => ps.find(p => p.catalogo_id && p.catalogo_id === reglas[clave])
+  const asignarProv = async (clave: string, nombre: string, lineas: any[], partidaId: string, guardarRegla: boolean) => {
+    if (!partidaId) { setMsg('Elige la subpartida.'); return }
+    await asignarTodos(lineas, partidaId)
+    const cat = partidas.find(p => p.id === partidaId)?.catalogo_id
+    if (guardarRegla && cat) { await supabase.from('fin_reglas_proveedor').upsert({ clave, proveedor: nombre, catalogo_id: cat }); setMsg(`Asignados. Regla guardada: «${nombre}» irá siempre a esa subpartida.`); await cargar() }
+  }
+  const quitarRegla = async (clave: string) => { await supabase.from('fin_reglas_proveedor').delete().eq('clave', clave); setMsg('Regla quitada.'); await cargar() }
+  const aplicarReglas = async (pend: any[], ps: any[]) => {
+    const rows: { kame_id: number, partida_id: string, monto: number }[] = []
+    pend.forEach(a => { const p = partidaRegla(claveProv(a), ps); if (p) rows.push({ kame_id: Number(a.kame_id), partida_id: p.id, monto: ((porKame.get(Number(a.kame_id)) || []).find(x => x.partida_id === p.id)?.monto ? Number((porKame.get(Number(a.kame_id)) || []).find(x => x.partida_id === p.id)!.monto) : 0) + pendiente(a) }) })
+    if (!rows.length) { setMsg('Ningún proveedor pendiente tiene regla con una subpartida de este proyecto.'); return }
+    setOcupado(true); await guardar(rows); setMsg(`${rows.length} movimiento(s) asignados por regla de proveedor.`); await cargar(); setOcupado(false)
   }
   const reasignar = async (x: any, nuevo: string) => {
     if (!nuevo || nuevo === x.partida_id) return
@@ -861,23 +879,27 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
               const pk = 'pen:' + g.c
               return <div>
                 <Fila nivel={1} k={pk} nombre={<span style={{ color: '#92400e' }}>Por asignar</span>} real={g.pendTotal} ppto={null} extra={<span style={{ color: '#98a2b3' }}> · {g.pend.length} mov.</span>} />
+                {abiertos[pk] && g.ps.length > 0 && (() => { const nReg = g.pend.filter(a => partidaRegla(claveProv(a), g.ps)).length
+                  return <div style={{ padding: '6px 8px', paddingLeft: 8 + 2 * 22, fontSize: 12, color: '#475467' }}>{nReg > 0 ? <>{nReg} movimiento(s) tienen regla de proveedor. <button disabled={ocupado} onClick={() => aplicarReglas(g.pend, g.ps)} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12, marginLeft: 6 }}>Aplicar reglas</button></> : 'Marca «Recordar proveedor» al asignar para que ese proveedor vaya siempre a la misma subpartida.'}</div> })()}
                 {abiertos[pk] && (g.ps.length === 0 ? <p style={{ fontSize: 12, color: '#667085', padding: '6px 8px', paddingLeft: 8 + 2 * 22 }}>Para asignar estos costos, agrega primero subpartidas de esta cuenta al proyecto (pestaña Presupuesto).</p> :
                   grupoProv(g.pend).map(([k, pv]) => {
-                    const vk = pk + '|' + k; const sk = 'sel|' + vk
+                    const vk = pk + '|' + k; const sk = 'sel|' + vk; const reg = partidaRegla(k, g.ps); const elegidaProv = sel[sk] || reg?.id || ''
                     return <div key={vk}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 8px', paddingLeft: 8 + 2 * 22, fontSize: 13, borderBottom: '1px solid #f2f4f7' }}>
                         <span onClick={() => toggle(vk)} style={{ cursor: 'pointer', flex: 1 }}><span style={{ color: '#98a2b3' }}>{abiertos[vk] ? '▾' : '▸'} </span>{pv.n} <span style={{ color: '#98a2b3' }}>· {pv.rows.length} mov.</span></span>
                         <span style={{ width: 100, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{$(pv.rows.reduce((t: number, a: any) => t + pendiente(a), 0))}</span>
-                        <select value={sel[sk] || ''} onChange={e => setSel(s => ({ ...s, [sk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
-                        <button disabled={ocupado} onClick={() => asignarTodos(pv.rows, sel[sk] || '')} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar todos</button>
+                        {reg && <span title="Regla de proveedor" style={{ fontSize: 11, padding: '1px 6px', borderRadius: 99, background: '#e0f2fe', color: '#075985' }}>regla: {reg.nombre} <span onClick={() => quitarRegla(k)} style={{ cursor: 'pointer' }} title="Quitar regla">✕</span></span>}
+                        <select value={elegidaProv} onChange={e => setSel(s => ({ ...s, [sk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
+                        <label style={{ fontSize: 11, color: '#667085', whiteSpace: 'nowrap' }}><input type="checkbox" checked={!!recordar[vk]} onChange={e => setRecordar(r => ({ ...r, [vk]: e.target.checked }))} /> Recordar proveedor</label>
+                        <button disabled={ocupado} onClick={() => asignarProv(k, pv.n, pv.rows, elegidaProv, !!recordar[vk])} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar todos</button>
                       </div>
                       {abiertos[vk] && pv.rows.sort((r: any, s: any) => String(r.fecha).localeCompare(String(s.fecha))).map((a: any) => {
                         const dk = 'sel|d|' + a.kame_id
                         return <div key={a.kame_id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', paddingLeft: 8 + 3 * 22, fontSize: 12, color: '#475467', borderBottom: '1px solid #f9fafb' }}>
                           <span style={{ width: 80 }}>{String(a.fecha).slice(0, 10)}</span><span style={{ flex: 1 }}>{nombreDoc(a)}</span>
                           <input type="number" value={monto[dk] ?? ''} placeholder={String(Math.round(pendiente(a)))} onChange={e => setMonto(m => ({ ...m, [dk]: e.target.value }))} style={{ ...inp, width: 100, padding: '3px 6px', fontSize: 12, textAlign: 'right' }} />
-                          <select value={sel[dk] || sel[sk] || ''} onChange={e => setSel(s => ({ ...s, [dk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
-                          <button disabled={ocupado} onClick={() => asignar(a, sel[dk] || sel[sk] || '', monto[dk] ?? '')} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar</button></div>
+                          <select value={sel[dk] || elegidaProv} onChange={e => setSel(s => ({ ...s, [dk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
+                          <button disabled={ocupado} onClick={() => asignar(a, sel[dk] || elegidaProv, monto[dk] ?? '')} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar</button></div>
                       })}
                     </div>
                   }))}

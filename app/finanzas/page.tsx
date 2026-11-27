@@ -184,41 +184,44 @@ function Unidades({ unidades, recargar }: { unidades: Unidad[], recargar: () => 
 
 // Catálogo oficial de subpartidas (configuración): cada una pertenece a UNA cuenta contable de Kame
 function Catalogo() {
-  const [catalogo, setCatalogo] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({})
+  const [catalogo, setCatalogo] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({}); const [grupos, setGrupos] = useState<any[]>([])
   const [nuevoNombre, setNuevoNombre] = useState(''); const [nuevaCuenta, setNuevaCuenta] = useState(''); const [msg, setMsg] = useState('')
   const cargarCatalogo = useCallback(async () => {
-    const [c, k] = await Promise.all([supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'), supabase.from('fin_cuentas').select('*').order('cuenta')])
-    setCatalogo(c.data || []); setCuentas(Object.fromEntries((k.data || []).map((x: any) => [x.cuenta, x.nombre_cuenta])))
+    const [c, k] = await Promise.all([supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'), cargarCuentas()])
+    setCatalogo(c.data || []); setCuentas(k.nombres); setGrupos(k.grupos)
   }, [])
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
   const agregarCatalogo = async () => {
     const nombre = nuevoNombre.trim().replace(/\s+/g, ' ')
     if (!nombre) return
-    if (!nuevaCuenta) { setMsg('Elige a qué cuenta contable de Kame pertenece la subpartida.'); return }
+    if (!nuevaCuenta) { setMsg('Elige a qué cuenta de trabajo pertenece la subpartida.'); return }
+    const cuentasGrupo = (catalogo.find(c => c.cuenta === nuevaCuenta)?.cuentas) || nuevaCuenta
     const norm = normNombre(nombre); const ya = catalogo.find(c => c.nombre_norm === norm)
     if (ya) { setMsg(`Ya existe la subpartida «${ya.nombre}». Usa esa en vez de crear «${nombre}».`); return }
-    const { error } = await supabase.from('fin_catalogo_partidas').insert({ nombre, nombre_norm: norm, cuenta: nuevaCuenta, cuentas: nuevaCuenta, orden: catalogo.length })
+    const { error } = await supabase.from('fin_catalogo_partidas').insert({ nombre, nombre_norm: norm, cuenta: nuevaCuenta, cuentas: cuentasGrupo, orden: catalogo.length })
     if (error) setMsg('No se pudo crear: ' + error.message); else { setNuevoNombre(''); setNuevaCuenta(''); setMsg(`Subpartida «${nombre}» creada.`); cargarCatalogo() }
   }
   const cambiarCuentaCatalogo = async (c: any, cuenta: string) => {
     const { data: ps } = await supabase.from('fin_partidas').select('id').eq('catalogo_id', c.id)
     const ids = (ps || []).map(x => x.id)
     if (ids.length) { const { count } = await supabase.from('fin_asignaciones').select('id', { count: 'exact', head: true }).in('partida_id', ids); if (count) { alert(`«${c.nombre}» ya tiene ${count} costos asignados; no se puede cambiar de cuenta. Quita primero esas asignaciones.`); cargarCatalogo(); return } }
-    await supabase.from('fin_catalogo_partidas').update({ cuenta, cuentas: cuenta }).eq('id', c.id); cargarCatalogo()
+    await supabase.from('fin_catalogo_partidas').update({ cuenta, cuentas: (catalogo.find(x => x.cuenta === cuenta)?.cuentas) || cuenta }).eq('id', c.id); cargarCatalogo()
   }
-  const cuentasOpc = Object.keys(cuentas).filter(c => !c.startsWith(CUENTA_REM)).sort()
+  const cuentasOpc = grupos.map(g => g.grupo)
   return (
     <div style={card}>
       <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Catálogo oficial de subpartidas ({catalogo.length})</h2>
-      <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Kame solo tiene la cuenta contable (ej. «Costos Materiales de Construcción»). Aquí definimos las subpartidas que la abren (Hormigón, Cubiertas, Fierro…). Todos los proyectos usan esta lista, así nadie escribe «Cubierta» y otro «Cubiertas». El presupuesto de una cuenta es la suma de sus subpartidas.</p>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta contable de Kame</th><th style={th}>Costo real desde</th></tr></thead>
+      <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Trabajamos con 9 cuentas de trabajo (cada una agrupa cuentas parecidas de Kame, ej. «Costos Herramientas» cuenta como Materiales de construcción). Aquí definimos las subpartidas que abren cada cuenta (Fierro, Cubiertas, Combustible…). Todos los proyectos usan esta lista, así nadie escribe «Cubierta» y otro «Cubiertas». El presupuesto de una cuenta es la suma de sus subpartidas.</p>
+      <details style={{ margin: '0 0 10px', fontSize: 12 }}><summary style={{ cursor: 'pointer', color: '#344054', fontWeight: 600 }}>Cuentas de Kame que agrupa cada cuenta de trabajo</summary>
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#475467' }}>{grupos.map(g => <li key={g.grupo}><b>{g.numero}. {g.nombre}</b> (Kame: {g.nombre_kame}, {g.grupo}) — absorbe: {(catalogo.find(c => c.cuenta === g.grupo)?.cuentas || g.grupo).split(',').filter((x: string) => x !== g.grupo).map((x: string) => cuentas[x] ? `${x} ${cuentas[x]}` : x).join('; ') || 'ninguna otra'}</li>)}</ul></details>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Subpartida</th><th style={th}>Cuenta de trabajo</th><th style={th}>Costo real desde</th></tr></thead>
         <tbody>{[...catalogo].sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.nombre.localeCompare(b.nombre)).map(c => <tr key={c.id}><td style={td}>{c.nombre}</td>
           <td style={td}>{c.fuente === 'remuneraciones' ? <span style={{ color: '#667085' }}>{nomCuenta(cuentas, CUENTA_REM)}</span> :
             <select value={c.cuenta} onChange={e => cambiarCuentaCatalogo(c, e.target.value)} style={{ ...inp, padding: '4px 6px', maxWidth: 380 }}>{!cuentasOpc.includes(c.cuenta) && <option value={c.cuenta}>{c.cuenta || 'Elegir cuenta…'}</option>}{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>}</td>
           <td style={td}>{c.fuente === 'remuneraciones' ? 'Remuneraciones de BUK' : 'Facturas de Kame asignadas'}</td></tr>)}</tbody></table>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nueva subpartida (ej. Fierro)" style={{ ...inp, width: 220 }} />
-        <select value={nuevaCuenta} onChange={e => setNuevaCuenta(e.target.value)} style={{ ...inp, maxWidth: 380 }}><option value="">Cuenta contable de Kame…</option>{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>
+        <select value={nuevaCuenta} onChange={e => setNuevaCuenta(e.target.value)} style={{ ...inp, maxWidth: 380 }}><option value="">Cuenta de trabajo…</option>{cuentasOpc.map(k => <option key={k} value={k}>{k} · {cuentas[k]}</option>)}</select>
         <button onClick={agregarCatalogo} style={btn()}>Crear subpartida</button>
       </div>
       {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
@@ -233,6 +236,15 @@ const nombreMes = (m: string) => { const [y, mm] = m.split('-').map(Number); ret
 const rangoMeses = (d?: string | null, h?: string | null) => { const out: string[] = []; if (!d || !h) return out; let [y, m] = d.slice(0, 7).split('-').map(Number); const [yh, mh] = h.slice(0, 7).split('-').map(Number); while ((y < yh || (y === yh && m <= mh)) && out.length < 60) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++ } } return out }
 const CUENTA_REM = '4.02.04'
 const nomCuenta = (mapa: Record<string, string>, c: string) => c === CUENTA_REM ? 'Remuneraciones (BUK)' : (mapa[c] || 'Cuenta sin nombre')
+// Cuentas de trabajo: varias cuentas de Kame se agrupan en una (ej. «Costos Herramientas» cuenta como Materiales de construcción).
+// nombres: código → nombre (Kame, y para las cuentas de trabajo su nombre propio); mapa: cuenta Kame → cuenta de trabajo; grupos: las 9 cuentas de trabajo
+async function cargarCuentas() {
+  const [k, g, m] = await Promise.all([supabase.from('fin_cuentas').select('*').order('cuenta'), supabase.from('fin_grupos_cuenta').select('*').order('numero'), supabase.from('fin_cuenta_grupo').select('*')])
+  const nombres: Record<string, string> = Object.fromEntries((k.data || []).map((x: any) => [x.cuenta, x.nombre_cuenta]))
+  const grupos: any[] = g.data || []; grupos.forEach(x => { nombres[x.grupo] = x.nombre })
+  const mapa: Record<string, string> = Object.fromEntries((m.data || []).map((x: any) => [x.cuenta_kame, x.grupo]))
+  return { nombres, mapa, grupos }
+}
 const agruparPorCuenta = (partidas: any[]) => { const g: Record<string, any[]> = {}; partidas.forEach(p => { const c = p.catalogo?.cuenta || '(sin cuenta)'; (g[c] = g[c] || []).push(p) }); return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0])) }
 
 function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: string, recargar: () => void }) {
@@ -250,8 +262,8 @@ function Presupuesto({ unidades, uid, recargar }: { unidades: Unidad[], uid: str
   const meses = useMemo(() => rangoMeses(unidad?.presupuesto_desde, unidad?.presupuesto_hasta), [unidad])
 
   const cargarCatalogo = useCallback(async () => {
-    const [c, k] = await Promise.all([supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'), supabase.from('fin_cuentas').select('*').order('cuenta')])
-    setCatalogo(c.data || []); setCuentas(Object.fromEntries((k.data || []).map((x: any) => [x.cuenta, x.nombre_cuenta])))
+    const [c, k] = await Promise.all([supabase.from('fin_catalogo_partidas').select('*').order('orden').order('nombre'), cargarCuentas()])
+    setCatalogo(c.data || []); setCuentas(k.nombres)
   }, [])
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
@@ -690,7 +702,7 @@ function Resultado({ unidades, proyecto, setProyecto }: { unidades: Unidad[], pr
 // Dashboard de un proyecto: cuenta contable → subpartidas → proveedores → documentos, con asignación y reasignación de costos
 function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: string, asiU: any[], remU: any[] }) {
   const I = useIngresos(unidad.id)
-  const [partidas, setPartidas] = useState<any[]>([]); const [items, setItems] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({})
+  const [partidas, setPartidas] = useState<any[]>([]); const [items, setItems] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({}); const [mapaGrupo, setMapaGrupo] = useState<Record<string, string>>({})
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({}); const [monto, setMonto] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [ocupado, setOcupado] = useState(false)
 
@@ -698,9 +710,9 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
     const [p, v, k] = await Promise.all([
       supabase.from('fin_partidas').select('*, catalogo:fin_catalogo_partidas(nombre,cuenta,fuente)').eq('unidad_id', unidad.id).order('orden'),
       supabase.from('fin_versiones').select('id').eq('unidad_id', unidad.id),
-      supabase.from('fin_cuentas').select('*'),
+      cargarCuentas(),
     ])
-    const ps = p.data || []; setPartidas(ps); setCuentas(Object.fromEntries((k.data || []).map((x: any) => [x.cuenta, x.nombre_cuenta])))
+    const ps = p.data || []; setPartidas(ps); setCuentas(k.nombres); setMapaGrupo(k.mapa)
     const vids = (v.data || []).map(x => x.id)
     if (vids.length) { const { data } = await supabase.from('fin_version_items').select('partida_id,mes,delta').in('version_id', vids).limit(20000); setItems(data || []) } else setItems([])
     const pids = ps.map(x => x.id)
@@ -709,6 +721,7 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   useEffect(() => { cargar() }, [cargar])
 
   const inMes = (f: string) => !mes || String(f).slice(0, 7) === mes
+  const grupoDe = (c: string) => mapaGrupo[c] || c
   const monto$ = (a: any) => Number(a.debe) - Number(a.haber)
   const costos = useMemo(() => asiU.filter(a => a.cuenta.startsWith('4.') && !a.cuenta.startsWith(CUENTA_REM)), [asiU])
   const asiMap = useMemo(() => new Map(asiU.map(a => [Number(a.kame_id), a])), [asiU])
@@ -720,13 +733,13 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   const realDe = (p: any) => p.catalogo?.fuente === 'remuneraciones' ? remU.filter(r => !mes || r.periodo === mes).reduce((t, r) => t + Number(r.costo_empresa), 0) : asigDe(p).reduce((t, x) => t + Number(x.monto), 0)
 
   // Cuentas del proyecto: las de sus subpartidas + todas las que tengan costo en Kame
-  const codigos = useMemo(() => { const s = new Set<string>(); partidas.forEach(p => { if (p.catalogo?.fuente !== 'remuneraciones' && p.catalogo?.cuenta) s.add(p.catalogo.cuenta) }); costos.forEach(a => s.add(a.cuenta)); return [...s].sort() }, [partidas, costos])
+  const codigos = useMemo(() => { const s = new Set<string>(); partidas.forEach(p => { if (p.catalogo?.fuente !== 'remuneraciones' && p.catalogo?.cuenta) s.add(p.catalogo.cuenta) }); costos.forEach(a => s.add(grupoDe(a.cuenta))); return [...s].sort() }, [partidas, costos, mapaGrupo])
   const partRem = partidas.find(p => p.catalogo?.fuente === 'remuneraciones')
   const hayRem = !!partRem || remU.length > 0
 
   const grupos = codigos.map(c => {
     const ps = partidas.filter(p => p.catalogo?.cuenta === c && p.catalogo?.fuente !== 'remuneraciones')
-    const lineas = costos.filter(a => a.cuenta === c && inMes(a.fecha))
+    const lineas = costos.filter(a => grupoDe(a.cuenta) === c && inMes(a.fecha))
     const real = lineas.reduce((t, a) => t + monto$(a), 0)
     const ppto = ps.reduce((t, p) => t + pptoDe(p), 0)
     const pend = lineas.filter(a => Math.abs(pendiente(a)) > 0.5)
@@ -741,7 +754,7 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   const contrato = I.contratado
 
   const toggle = (k: string) => setAbiertos(a => ({ ...a, [k]: !a[k] }))
-  const nombreDoc = (a: any) => a.doc_tipo ? `${a.doc_tipo} ${a.doc_folio || ''}` : (a.comentario_det || a.comentario || 'Asiento manual')
+  const nombreDoc = (a: any) => (a.doc_tipo ? `${a.doc_tipo} ${a.doc_folio || ''}` : (a.comentario_det || a.comentario || 'Asiento manual')) + (grupoDe(a.cuenta) !== a.cuenta ? ` · Kame: ${cuentas[a.cuenta] || a.cuenta}` : '')
   const claveProv = (a: any) => a.doc_rut || a.doc_nombre || '(sin proveedor)'
   const nombreProv = (a: any) => a.doc_nombre || a.doc_rut || 'Sin proveedor (asiento manual)'
 

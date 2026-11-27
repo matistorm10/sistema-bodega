@@ -729,6 +729,22 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({}); const [monto, setMonto] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [ocupado, setOcupado] = useState(false)
   const [docVer, setDocVer] = useState<any>(null)
+  const [histProv, setHistProv] = useState<any>(null)
+  useEffect(() => {
+    setHistProv(null); const rut = docVer?.doc_rut; if (!rut) return; let vivo = true
+    ;(async () => {
+      const { data: ls } = await supabase.from('fin_asientos').select('kame_id,cuenta,debe,haber,doc_tipo,doc_folio,fecha,unidad_id').eq('doc_rut', rut).like('cuenta', '4.%').limit(3000)
+      const lineas = ls || []; const ids = lineas.map(l => Number(l.kame_id)); const asg: any[] = []
+      for (let i = 0; i < ids.length; i += 150) { const { data } = await supabase.from('fin_asignaciones').select('kame_id,monto,partida:fin_partidas(nombre)').in('kame_id', ids.slice(i, i + 150)); asg.push(...(data || [])) }
+      if (!vivo) return
+      const docs = new Set(lineas.map(l => `${l.doc_tipo}|${l.doc_folio}`)); const porCuenta: Record<string, number> = {}; const porSub: Record<string, number> = {}
+      lineas.forEach(l => { porCuenta[l.cuenta] = (porCuenta[l.cuenta] || 0) + Number(l.debe) - Number(l.haber) })
+      asg.forEach((x: any) => { const n = x.partida?.nombre || '?'; porSub[n] = (porSub[n] || 0) + Number(x.monto) })
+      const fechas = lineas.map(l => String(l.fecha).slice(0, 10)).sort()
+      setHistProv({ docs: docs.size, total: lineas.reduce((t, l) => t + Number(l.debe) - Number(l.haber), 0), desde: fechas[0], hasta: fechas[fechas.length - 1], porCuenta: Object.entries(porCuenta).sort((x, y) => y[1] - x[1]), porSub: Object.entries(porSub).sort((x, y) => y[1] - x[1]) })
+    })()
+    return () => { vivo = false }
+  }, [docVer])
   const [reglas, setReglas] = useState<Record<string, string>>({}); const [recordar, setRecordar] = useState<Record<string, boolean>>({})
 
   const cargar = useCallback(async () => {
@@ -864,6 +880,14 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
                 const pend = l.cuenta.startsWith('4.') ? pendiente(l) : 0
                 return <tr key={l.kame_id}><td style={td}>{l.cuenta} {cuentas[l.cuenta] || l.nombre_cuenta || ''}</td><td style={td}>{l.cuenta.startsWith('4.') ? (as.length ? as.join(', ') : <span style={{ color: '#92400e' }}>Por asignar</span>) : 'Ingreso'}{Math.abs(pend) > 0.5 && as.length ? <span style={{ color: '#92400e' }}> (queda ${$(pend)} por asignar)</span> : null}</td><td style={der}>{$(l.cuenta.startsWith('4.') ? monto$(l) : Number(l.haber) - Number(l.debe))}</td></tr> })}
                 {lineas.filter(l => l.cuenta.startsWith('4.')).length > 1 && <tr><td style={{ ...td, fontWeight: 600 }} colSpan={2}>Total costo</td><td style={{ ...der, fontWeight: 600 }}>{$(total)}</td></tr>}</tbody></table>
+            {a.doc_rut && <>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#344054', margin: '12px 0 4px' }}>Qué le hemos comprado a este proveedor (todos los proyectos)</div>
+              {!histProv ? <p style={{ fontSize: 12, color: '#667085', margin: 0 }}>Buscando…</p> : histProv.docs === 0 ? <p style={{ fontSize: 12, color: '#667085', margin: 0 }}>Sin otros movimientos de costo.</p> : <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+                <div>{histProv.docs} documento(s) · ${$(histProv.total)} neto · de {fechaCL(histProv.desde)} a {fechaCL(histProv.hasta)}</div>
+                <div><b>Por cuenta de Kame:</b> {histProv.porCuenta.slice(0, 6).map(([c, m]: any) => `${cuentas[c] || c} $${$(m)}`).join(' · ')}</div>
+                {histProv.porSub.length > 0 && <div><b>Subpartidas donde ya se asignó:</b> {histProv.porSub.slice(0, 6).map(([n, m]: any) => `${n} $${$(m)}`).join(' · ')}</div>}
+              </div>}
+            </>}
             <p style={{ fontSize: 11, color: '#667085', margin: '10px 0 0' }}>El libro diario de Kame no incluye el PDF de la factura; con el folio y el RUT puedes buscarla en Kame.</p>
           </div></div>
       })()}

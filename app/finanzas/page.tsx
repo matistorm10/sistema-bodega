@@ -62,11 +62,14 @@ export default function Finanzas() {
           <select value={proyectoId} onChange={e => setProyecto(e.target.value)} style={{ ...inp, minWidth: 340, fontWeight: 600 }}><option value="">Todos los proyectos (resumen)</option>{activas.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
           <span style={{ fontSize: 12, color: '#667085' }}>Lo que elijas aquí se usa en Resultado, Ingresos y Presupuesto.</span>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          {tabsProy.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
-          <span style={{ width: 1, height: 24, background: '#d0d5dd', margin: '0 6px' }} />
-          <span style={{ fontSize: 11, color: '#98a2b3' }}>Configuración</span>
-          {tabsConf.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400, padding: '6px 12px' }}>{l}</button>)}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {tabsProy.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #eaecf0', borderRadius: 12, padding: '4px 8px' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#475467' }}>⚙ Configuración</span>
+            {tabsConf.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
+          </div>
         </div>
         {tab === 'importar' && <Importar onListo={cargarUnidades} />}
         {tab === 'unidades' && <Unidades unidades={unidades} recargar={cargarUnidades} />}

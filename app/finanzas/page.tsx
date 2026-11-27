@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import { fondoPagina } from '@/lib/theme'
 import { useUsuarioActual } from '@/lib/useUsuarioActual'
 import { traerTodo } from '@/lib/operaciones'
-import { TIPOS, TipoArchivo, Doc, Rem, leerInforme, leerLibro, leerRemuneraciones, guardarImportacion, guardarRemuneraciones } from '@/lib/finanzas'
 
 const AZUL = '#1B4F9C'
 const miles = (d: string) => d.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
@@ -23,11 +22,11 @@ const td: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderBottom
 const der: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 
 type Unidad = { id: string, nombre: string, grupo: string | null, activa: boolean, monto_contrato_base: number, presupuesto_desde?: string | null, presupuesto_hasta?: string | null }
-type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'ingresos' | 'resultado' | 'kame'
+type Pestana = 'unidades' | 'presupuesto' | 'ingresos' | 'resultado' | 'kame' | 'matriz'
 
 export default function Finanzas() {
   const { usuario, cargando } = useUsuarioActual()
-  const esAdmin = usuario?.rol === 'admin'
+  const esAdmin = usuario?.rol === 'admin' || usuario?.rol === 'gerente_general' // administradores y dueños (Matías y Felipe Storm)
   const [tab, setTab] = useState<Pestana>('resultado')
   const [unidades, setUnidades] = useState<Unidad[]>([])
   const [proyecto, setProyectoSel] = useState('')
@@ -43,110 +42,108 @@ export default function Finanzas() {
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, background: '#fff', borderRadius: 16, padding: '14px 20px', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.06)' }}>
       <Link href="/" style={{ fontSize: 13, color: AZUL, textDecoration: 'none' }}>← Inicio</Link>
       <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Finanzas · Control de costos</h1>
-      <span style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 99 }}>En desarrollo · solo administradores</span>
+      <span style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 99 }}>En desarrollo · solo administradores y dueños</span>
     </div>
   )
   if (cargando) return <main style={fondoPagina}><div style={{ padding: '1.5rem' }}><p style={{ fontSize: 13, color: '#999' }}>Cargando...</p></div></main>
   if (!esAdmin) return <main style={fondoPagina}><div style={{ padding: '1.5rem', maxWidth: 600, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>{cab}<div style={card}><p style={{ fontSize: 14 }}>Este módulo está en desarrollo y solo está habilitado para administradores.</p></div></div></main>
 
-  const activas = unidades.filter(u => u.activa)
+  const esMatriz = (u: Unidad) => /casa\s*matriz/i.test(u.nombre)
+  const matriz = unidades.find(esMatriz)
+  const activas = unidades.filter(u => u.activa && !esMatriz(u))
   const proyectoId = activas.some(u => u.id === proyecto) ? proyecto : ''
   const tabsProy: [Pestana, string][] = [['resultado', 'Resultado'], ['ingresos', 'Ingresos'], ['presupuesto', 'Presupuesto']]
-  const tabsConf: [Pestana, string][] = [['unidades', 'Unidades y catálogo'], ['importar', 'Importar'], ['kame', 'Conexión Kame']]
+  const tabsConf: [Pestana, string][] = [['unidades', 'Unidades y catálogo'], ['kame', 'Conexión Kame']]
   return (
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: 1100, margin: '0 auto' }}>
         {cab}
-        <div style={{ ...card, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {tab !== 'matriz' && tab !== 'unidades' && tab !== 'kame' && <div style={{ ...card, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>Centro de costo</span>
           <select value={proyectoId} onChange={e => setProyecto(e.target.value)} style={{ ...inp, minWidth: 340, fontWeight: 600 }}><option value="">Todos los proyectos (resumen)</option>{activas.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
           <span style={{ fontSize: 12, color: '#667085' }}>Lo que elijas aquí se usa en Resultado, Ingresos y Presupuesto.</span>
-        </div>
+        </div>}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {tabsProy.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
+            {matriz && <button onClick={() => setTab('matriz')} style={{ ...btn(tab === 'matriz'), fontWeight: tab === 'matriz' ? 600 : 400, marginLeft: 8 }}>🏢 Casa Matriz</button>}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #eaecf0', borderRadius: 12, padding: '4px 8px' }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#475467' }}>⚙ Configuración</span>
             {tabsConf.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn(tab === k), fontWeight: tab === k ? 600 : 400 }}>{l}</button>)}
           </div>
         </div>
-        {tab === 'importar' && <Importar onListo={cargarUnidades} />}
         {tab === 'unidades' && <Unidades unidades={unidades} recargar={cargarUnidades} />}
         {tab === 'presupuesto' && <Presupuesto unidades={activas} uid={proyectoId} recargar={cargarUnidades} />}
         {tab === 'ingresos' && <Ingresos unidades={activas} uid={proyectoId} />}
         {tab === 'kame' && <ConexionKame />}
+        {tab === 'matriz' && matriz && <CasaMatriz unidad={matriz} />}
         {tab === 'resultado' && <Resultado unidades={activas} proyecto={proyectoId} setProyecto={setProyecto} />}
       </div>
     </main>
   )
 }
 
-// ───────────────────────── Importar ─────────────────────────
-function Importar({ onListo }: { onListo: () => void }) {
-  const [tipo, setTipo] = useState<TipoArchivo>('informe_compras')
-  const [periodo, setPeriodo] = useState('')
-  const [msg, setMsg] = useState(''); const [avisos, setAvisos] = useState<string[]>([]); const [ocupado, setOcupado] = useState(false)
-  const [lotes, setLotes] = useState<any[]>([])
-  const [anio, setAnio] = useState(new Date().getFullYear())
-  const cargarLotes = async () => { const { data } = await supabase.from('fin_lotes').select('*').order('creado_en', { ascending: false }).limit(15); setLotes(data || []) }
-  useEffect(() => { cargarLotes() }, [])
-
-  const subir = async (file: File | undefined) => {
-    if (!file) return
-    setOcupado(true); setMsg('Leyendo archivo…'); setAvisos([])
-    try {
-      let docs: Doc[]; let av: string[]; let per = ''
-      const sentido = tipo.endsWith('compras') ? 'compra' : 'venta'
-      if (tipo.startsWith('informe')) ({ docs, avisos: av } = await leerInforme(file, sentido))
-      else { const r = await leerLibro(file, periodo); docs = r.docs; av = r.avisos; per = r.periodo }
-      if (!docs.length) throw new Error('No encontré documentos en el archivo.')
-      const r = await guardarImportacion(tipo, file.name, docs, per, setMsg)
-      setMsg(`Listo: ${docs.length} documentos (${r.nuevos} nuevos, ${r.actualizados} ya existían y se actualizaron).${per ? ` Período tributario ${per}.` : ''}`)
-      setAvisos(av); onListo(); cargarLotes()
-    } catch (e: any) { setMsg('Error: ' + (e.message || e)) }
-    setOcupado(false)
-  }
-  const subirRem = async (file: File | undefined) => {
-    if (!file) return
-    setOcupado(true); setMsg('Leyendo planilla…'); setAvisos([])
-    try {
-      const { filas, avisos: av }: { filas: Rem[], avisos: string[] } = await leerRemuneraciones(file, anio)
-      if (!filas.length) throw new Error('No encontré filas de remuneraciones.')
-      const n = await guardarRemuneraciones(filas, setMsg)
-      setMsg(`Listo: ${filas.length} filas de ${n} mes(es). Costo empresa total ${$(filas.reduce((a, f) => a + f.costo, 0))}.`)
-      setAvisos(av); onListo()
-    } catch (e: any) { setMsg('Error: ' + (e.message || e)) }
-    setOcupado(false)
-  }
-
+// ───────────────────────── Casa Matriz (costo fijo de la empresa; solo administradores y dueños) ─────────────────────────
+function CasaMatriz({ unidad }: { unidad: Unidad }) {
+  const [asi, setAsi] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [cu, setCu] = useState<{ nombres: Record<string, string>, mapa: Record<string, string> }>({ nombres: {}, mapa: {} }); const [cargando, setCargando] = useState(true)
+  useEffect(() => { (async () => {
+    setCargando(true)
+    const [a, r, k] = await Promise.all([traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id', 'kame_id'), traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,costo_empresa,abierta'), cargarCuentas()])
+    setAsi(a.filter(x => x.unidad_id === unidad.id && x.cuenta.startsWith('4.') && !x.cuenta.startsWith(CUENTA_REM))); setRem(r.filter(x => x.unidad_id === unidad.id)); setCu({ nombres: k.nombres, mapa: k.mapa }); setCargando(false)
+  })() }, [unidad.id])
+  const meses = useMemo(() => [...new Set([...asi.map(a => String(a.fecha).slice(0, 7)), ...rem.map(r => r.periodo)].filter(Boolean))].sort() as string[], [asi, rem])
+  const abiertos = useMemo(() => new Set(rem.filter(r => r.abierta).map(r => r.periodo as string)), [rem])
+  const [verMeses, setVerMeses] = useState(12)
+  const ms = meses.slice(-verMeses)
+  const filasCta = useMemo(() => {
+    const m = new Map<string, Record<string, number>>()
+    const add = (clave: string, mes: string, v: number) => { const o = m.get(clave) || {}; o[mes] = (o[mes] || 0) + v; m.set(clave, o) }
+    asi.forEach(a => { const g = cu.mapa[a.cuenta] || a.cuenta; add(g, String(a.fecha).slice(0, 7), Number(a.debe) - Number(a.haber)) })
+    rem.forEach(r => add('Remuneraciones', r.periodo, Number(r.costo_empresa)))
+    return [...m.entries()].map(([k, v]) => ({ k, nombre: k === 'Remuneraciones' ? 'Remuneraciones (BUK)' : `${k} · ${cu.nombres[k] || a_nombre(k)}`, v, total: ms.reduce((t, x) => t + (v[x] || 0), 0) })).sort((a, b) => b.total - a.total)
+  }, [asi, rem, cu, ms])
+  function a_nombre(c: string) { return asi.find(x => x.cuenta === c)?.nombre_cuenta || 'Cuenta sin nombre' }
+  const totMes = ms.map(x => filasCta.reduce((t, f) => t + (f.v[x] || 0), 0))
+  const remMes = ms.map(x => filasCta.find(f => f.k === 'Remuneraciones')?.v[x] || 0)
+  const cerrados = ms.filter(x => !abiertos.has(x)); const ult = cerrados[cerrados.length - 1]; const ant = cerrados[cerrados.length - 2]
+  const valMes = (x?: string) => x ? totMes[ms.indexOf(x)] : 0
+  const prom = totMes.length ? totMes.reduce((t, v) => t + v, 0) / totMes.length : 0
+  const maxV = Math.max(1, ...totMes)
+  const W = 720, H = 200, pad = 28, bw = ms.length ? Math.min(46, (W - pad * 2) / ms.length - 8) : 40
+  const x0 = (i: number) => pad + i * ((W - pad * 2) / Math.max(1, ms.length)) + ((W - pad * 2) / Math.max(1, ms.length) - bw) / 2
+  const mm = (v: number) => (v / 1e6).toFixed(1) + ' M'
   return (
     <>
       <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Compras y ventas desde Kame</h2>
-        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Los documentos se identifican por RUT + tipo de documento + folio, así que dos proveedores con el mismo número de factura no se mezclan. Puedes volver a subir el mismo archivo sin duplicar. Sube el informe (trae la unidad de negocio) y el libro (trae el período tributario del SII).</p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={tipo} onChange={e => setTipo(e.target.value as TipoArchivo)} style={inp}>{TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
-          {tipo.startsWith('libro') && <input value={periodo} onChange={e => setPeriodo(e.target.value)} placeholder="Período AAAA-MM (opcional)" style={{ ...inp, width: 190 }} />}
-          <input type="file" accept=".xlsx" disabled={ocupado} onChange={e => { subir(e.target.files?.[0]); e.target.value = '' }} style={{ fontSize: 13 }} />
-        </div>
+        <h2 style={{ fontSize: 17, margin: '0 0 4px' }}>🏢 Casa Matriz · costo fijo de la empresa</h2>
+        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Solo costos (no tiene ingresos ni presupuesto). Visible solo para administradores y dueños. Kame (cuentas 4.x) + remuneraciones de BUK; montos netos.</p>
+        {cargando ? <p style={{ fontSize: 13, color: '#999' }}>Cargando…</p> : ms.length === 0 ? <p style={{ fontSize: 13 }}>Aún no hay costos de Casa Matriz. Sincroniza Kame y BUK.</p> : <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 }}>
+            <Tarjeta t={ult ? `Costo ${ult}` : 'Último mes cerrado'} v={'$' + $(valMes(ult))} s={ant && valMes(ant) ? `${valMes(ult) >= valMes(ant) ? '▲' : '▼'} ${Math.abs((valMes(ult) - valMes(ant)) / valMes(ant) * 100).toFixed(1)}% vs ${ant}` : ''} />
+            <Tarjeta t="Promedio mensual" v={'$' + $(prom)} s={`últimos ${ms.length} meses`} />
+            <Tarjeta t="Total del período" v={'$' + $(totMes.reduce((t, v) => t + v, 0))} s={`${ms[0]} a ${ms[ms.length - 1]}`} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}><span style={{ fontSize: 12, color: '#667085' }}>Mostrar</span>
+            <select value={verMeses} onChange={e => setVerMeses(Number(e.target.value))} style={inp}><option value={6}>6 meses</option><option value={12}>12 meses</option><option value={36}>Todo</option></select></div>
+          <div style={{ overflowX: 'auto' }}><svg viewBox={`0 0 ${W} ${H + 34}`} style={{ width: '100%', maxWidth: W, height: 'auto' }} role="img" aria-label="Costo fijo mensual de Casa Matriz">
+            {[0, 0.5, 1].map(f => <g key={f}><line x1={pad} x2={W - pad} y1={H - f * (H - 20)} y2={H - f * (H - 20)} stroke="#eaecf0" /><text x={pad - 4} y={H - f * (H - 20) + 4} fontSize="10" textAnchor="end" fill="#667085">{mm(maxV * f)}</text></g>)}
+            {ms.map((x, i) => { const h = totMes[i] / maxV * (H - 20), hr = remMes[i] / maxV * (H - 20); return <g key={x}>
+              <rect x={x0(i)} y={H - h} width={bw} height={Math.max(0, h - hr)} fill={abiertos.has(x) ? '#fdba74' : AZUL} rx="2"><title>{x}: ${$(totMes[i])}</title></rect>
+              <rect x={x0(i)} y={H - hr} width={bw} height={Math.max(0, hr)} fill={abiertos.has(x) ? '#fed7aa' : '#8fb2e3'}><title>Remuneraciones {x}: ${$(remMes[i])}</title></rect>
+              <text x={x0(i) + bw / 2} y={H - h - 4} fontSize="10" textAnchor="middle" fill="#344054">{mm(totMes[i])}</text>
+              <text x={x0(i) + bw / 2} y={H + 14} fontSize="10" textAnchor="middle" fill="#667085">{nombreMes(x)}</text></g> })}
+            <line x1={pad} x2={W - pad} y1={H - prom / maxV * (H - 20)} y2={H - prom / maxV * (H - 20)} stroke="#b42318" strokeDasharray="4 3" /><text x={W - pad} y={H - prom / maxV * (H - 20) - 3} fontSize="10" textAnchor="end" fill="#b42318">promedio {mm(prom)}</text>
+          </svg></div>
+          <p style={{ fontSize: 11, color: '#667085', margin: '4px 0 0' }}>Barra clara abajo = remuneraciones; barra oscura = resto de costos. Naranjo = mes con remuneraciones aún proyectadas por BUK.</p>
+        </>}
       </div>
-      <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Remuneraciones (planilla de RR.HH., desde BUK)</h2>
-        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Se usa la hoja «TOTAL». Los meses que trae el archivo se reemplazan completos al subirlo.</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="number" value={anio} onChange={e => setAnio(Number(e.target.value))} style={{ ...inp, width: 90 }} />
-          <input type="file" accept=".xlsx" disabled={ocupado} onChange={e => { subirRem(e.target.files?.[0]); e.target.value = '' }} style={{ fontSize: 13 }} />
-        </div>
-      </div>
-      {msg && <div style={{ ...card, background: msg.startsWith('Error') ? '#fef3f2' : '#f0f9ff' }}><p style={{ fontSize: 13, margin: 0 }}>{msg}</p>
-        {avisos.length > 0 && <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, cursor: 'pointer' }}>{avisos.length} aviso(s) para revisar</summary><ul style={{ fontSize: 12, color: '#92400e' }}>{avisos.slice(0, 50).map((a, i) => <li key={i}>{a}</li>)}</ul></details>}
+      {!cargando && ms.length > 0 && <div style={card}>
+        <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Costo por cuenta y mes</h2>
+        <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta</th>{ms.map(x => <th key={x} style={{ ...th, textAlign: 'right' }}>{nombreMes(x)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
+          <tbody>{filasCta.map(f => <tr key={f.k}><td style={{ ...td, whiteSpace: 'nowrap' }}>{f.nombre}</td>{ms.map(x => <td key={x} style={der}>{f.v[x] ? $(f.v[x]) : '·'}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(f.total)}</td></tr>)}
+            <tr><td style={{ ...td, fontWeight: 600 }}>Total</td>{totMes.map((v, i) => <td key={i} style={{ ...der, fontWeight: 600 }}>{$(v)}</td>)}<td style={{ ...der, fontWeight: 600 }}>{$(totMes.reduce((t, v) => t + v, 0))}</td></tr></tbody></table></div>
       </div>}
-      <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Últimas importaciones</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Tipo</th><th style={th}>Archivo</th><th style={th}>Docs</th><th style={th}>Nuevos</th></tr></thead>
-          <tbody>{lotes.map(l => <tr key={l.id}><td style={td}>{new Date(l.creado_en).toLocaleString('es-CL')}</td><td style={td}>{TIPOS.find(t => t.id === l.tipo)?.label}</td><td style={td}>{l.archivo}</td><td style={td}>{l.docs}</td><td style={td}>{l.nuevos}</td></tr>)}</tbody></table>
-      </div>
     </>
   )
 }
@@ -466,14 +463,13 @@ function docsVenta(ventas: any[], links: any[]) {
 
 // Datos de ingresos de un proyecto. Calza solo las facturas cuya glosa trae el número de EDP.
 function useIngresos(uid: string) {
-  const vacio = { contratos: [] as any[], edps: [] as any[], links: [] as any[], ordenes: [] as any[], ventas: [] as any[] }
+  const vacio = { contratos: [] as any[], edps: [] as any[], links: [] as any[], ventas: [] as any[] }
   const [d, setD] = useState(vacio); const [auto, setAuto] = useState(0)
   const cargar = useCallback(async () => {
     if (!uid) { setD(vacio); return }
-    const [c, e, o, v] = await Promise.all([
+    const [c, e, v] = await Promise.all([
       supabase.from('fin_contratos').select('*').eq('unidad_id', uid).order('creado_en'),
       supabase.from('fin_edp').select('*').eq('unidad_id', uid).order('creado_en'),
-      supabase.from('fin_ordenes_cliente').select('*').eq('unidad_id', uid).order('creado_en'),
       supabase.from('fin_asientos').select('kame_id,fecha,cuenta,debe,haber,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario,comentario_det').eq('unidad_id', uid).like('cuenta', '3.%').order('fecha').limit(5000),
     ])
     const ventas = v.data || []; let links: any[] = []
@@ -484,7 +480,7 @@ function useIngresos(uid: string) {
     const nuevos: any[] = []
     docsVenta(ventas, links).filter(x => !x.edp_id && !x.forzado).forEach(x => { const c = porNum.get(numEdp(x.texto)); if (c && c.length === 1) x.ids.forEach((k: number) => nuevos.push({ kame_id: k, edp_id: c[0].id, manual: false })) })
     if (nuevos.length) { const { error } = await supabase.from('fin_edp_asientos').upsert(nuevos, { onConflict: 'kame_id' }); if (!error) { links = links.concat(nuevos); setAuto(nuevos.length) } }
-    setD({ contratos: c.data || [], edps, links, ordenes: o.data || [], ventas })
+    setD({ contratos: c.data || [], edps, links, ventas })
   }, [uid]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { cargar() }, [cargar])
   const docs = useMemo(() => docsVenta(d.ventas, d.links), [d.ventas, d.links])
@@ -495,8 +491,7 @@ function useIngresos(uid: string) {
   const sinEdp = docs.filter(x => !x.edp_id)
   const porAprobar = d.edps.filter(x => x.estado === 'presentado').reduce((t, x) => t + Math.max(0, Number(x.monto) - facturadoDe(x.id)), 0)
   const porFacturar = d.edps.filter(x => x.estado === 'aprobado').reduce((t, x) => t + Math.max(0, Number(x.monto) - facturadoDe(x.id)), 0)
-  const ocPend = d.ordenes.filter(x => x.estado === 'pendiente').reduce((t, x) => t + Number(x.monto), 0)
-  return { ...d, docs, cargar, auto, facturadoDe, contratado, edpTot, facturadoTot, sinEdp, porAprobar, porFacturar, ocPend, sinPresentar: contratado - edpTot }
+  return { ...d, docs, cargar, auto, facturadoDe, contratado, edpTot, facturadoTot, sinEdp, porAprobar, porFacturar, sinPresentar: contratado - edpTot }
 }
 
 function Tarjeta({ t, v, s, color }: { t: string, v: string, s?: string, color?: string }) {
@@ -534,13 +529,6 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
     const { error } = await supabase.from('fin_edp_asientos').upsert(doc.ids.map((k: number) => ({ kame_id: k, edp_id: edpId, manual: true })), { onConflict: 'kame_id' })
     if (!err(error)) { setMsg(edpId ? 'Factura asignada al EDP.' : 'Factura sacada del EDP: volvió a «3. Facturas de venta sin EDP» (no se vuelve a calzar sola; ahí puedes asignarla a otro EDP).'); I.cargar() }
   }
-  // Órdenes de compra
-  const oVacio = { numero: '', descripcion: '', monto: '', fecha: hoyISO() }; const [fo, setFo] = useState(oVacio)
-  const guardarOc = async () => {
-    if (!Number(fo.monto)) { setMsg('Escribe el monto de la orden de compra.'); return }
-    const { error } = await supabase.from('fin_ordenes_cliente').insert({ unidad_id: uid, numero: fo.numero, descripcion: fo.descripcion, monto: Number(fo.monto), fecha: fo.fecha || null })
-    if (!err(error)) { setFo(oVacio); setMsg('Orden de compra registrada.'); I.cargar() }
-  }
   useEffect(() => { setMsg(''); setCEdit(null); setEEdit(null); setFc(cVacio); setFe(eVacio) }, [uid]) // eslint-disable-line react-hooks/exhaustive-deps
   const ep = (x: any) => ({ presentado: ['Presentado', '#92400e', '#fef3c7'], aprobado: ['Aprobado', '#065f46', '#d1fae5'] } as any)[x.estado]
   const rojo = (v: number) => v < 0 ? '#b42318' : undefined
@@ -563,7 +551,6 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
             <Tarjeta t="3. EDP por aprobar" v={'$' + $(I.porAprobar)} s="presentados, esperando al cliente" />
             <Tarjeta t="4. EDP por facturar" v={'$' + $(I.porFacturar)} s="aprobados, sin factura aún" />
             <Tarjeta t="5. Facturado (Kame)" v={'$' + $(I.facturadoTot)} s={I.contratado > 0 ? Math.round(I.facturadoTot / I.contratado * 100) + '% del contrato' : ''} />
-            <Tarjeta t="Aparte: OC del cliente" v={'$' + $(I.ocPend)} s="pedidos aún sin EDP ni factura" />
           </div>
         </div>
 
@@ -628,22 +615,6 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>{I.edps.length === 0 ? <span style={{ fontSize: 12, color: '#667085' }}>Crea primero el EDP</span> : <><select value={sel[d.key] || ''} onChange={e => setSel(s => ({ ...s, [d.key]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">EDP…</option>{I.edps.map(x => <option key={x.id} value={x.id}>N°{x.numero}{x.descripcion ? ' · ' + x.descripcion.slice(0, 25) : ''}</option>)}</select> <button disabled={!sel[d.key]} onClick={() => asignarDoc(d, sel[d.key])} style={{ ...btn(true, !sel[d.key]), padding: '3px 8px', fontSize: 12 }}>Asignar</button></>}</td></tr>)}</tbody></table>}
         </div>
 
-        <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Órdenes de compra del cliente (aún sin EDP ni factura)</h2>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 4px' }}><b>Para qué sirve:</b> es una lista aparte, solo informativa, de pedidos que el cliente ya nos hizo (su orden de compra) y que todavía no hemos convertido en EDP ni facturado. Sirve para ver cuánto viene en camino. <b>No se mezcla</b> con los EDP de arriba.</p>
-          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}><b>Qué hacer:</b> registra la OC (N°, monto, fecha). Cuando ya la cobres con un EDP o la factures, cámbiala a «Facturada» y deja de contar como pendiente.</p>
-          {I.ordenes.length > 0 && <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}><thead><tr><th style={th}>N° OC</th><th style={th}>Descripción</th><th style={th}>Fecha</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Estado</th><th style={th} /></tr></thead>
-            <tbody>{I.ordenes.map(o => <tr key={o.id} style={{ opacity: o.estado === 'facturada' ? 0.55 : 1 }}><td style={td}>{o.numero || '—'}</td><td style={td}>{o.descripcion || '—'}</td><td style={td}>{fechaCL(o.fecha)}</td><td style={der}>{$(Number(o.monto))}</td>
-              <td style={td}><select value={o.estado} onChange={async e => { await supabase.from('fin_ordenes_cliente').update({ estado: e.target.value }).eq('id', o.id); I.cargar() }} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="pendiente">Por facturar</option><option value="facturada">Facturada</option></select></td>
-              <td style={td}><button onClick={async () => { if (confirm('¿Borrar esta orden de compra?')) { await supabase.from('fin_ordenes_cliente').delete().eq('id', o.id); I.cargar() } }} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Borrar</button></td></tr>)}</tbody></table>}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input value={fo.numero} onChange={e => setFo({ ...fo, numero: e.target.value })} placeholder="N° OC" style={{ ...inp, width: 140 }} />
-            <input value={fo.descripcion} onChange={e => setFo({ ...fo, descripcion: e.target.value })} placeholder="Descripción" style={{ ...inp, width: 260 }} />
-            <input type="date" value={fo.fecha} onChange={e => setFo({ ...fo, fecha: e.target.value })} style={inp} />
-            <MontoInput value={fo.monto} onChange={v => setFo({ ...fo, monto: v })} placeholder="Monto neto $" style={{ ...inp, width: 150, textAlign: 'right' }} />
-            <button onClick={guardarOc} style={btn()}>Agregar</button>
-          </div>
-        </div>
       </>}
     </>
   )
@@ -662,62 +633,82 @@ const COLS = 'minmax(240px,1fr) 190px 105px 105px'
 
 function Resultado({ unidades, proyecto, setProyecto }: { unidades: Unidad[], proyecto: string, setProyecto: (id: string) => void }) {
   const [mes, setMes] = useState('')
-  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [contr, setContr] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([])
-  const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([])
+  const [rem, setRem] = useState<any[]>([]); const [contr, setContr] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([]); const [asig, setAsig] = useState<any[]>([])
+  const [cargando, setCargando] = useState(true)
   useEffect(() => {
     (async () => {
       setCargando(true)
-      const [l, r, v, a] = await Promise.all([
-        traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
+      const [r, v, a, g] = await Promise.all([
         traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,rut,nombre,cargo,costo_empresa,abierta'),
         traerTodo('fin_contratos', 'id,unidad_id,monto'),
         traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario,tipo_comprobante,folio_comprobante', 'kame_id'),
+        traerTodo('fin_asignaciones', 'id,kame_id,monto'),
       ])
-      setLineas(l); setRem(r); setContr(v); setAsi(a)
-      setTardias(l.filter(x => x.documento?.periodo_tributario && x.documento?.fecha_doc && x.documento.fecha_doc.slice(0, 7) !== x.documento.periodo_tributario))
+      setRem(r); setContr(v); setAsi(a); setAsig(g)
       setCargando(false)
     })()
   }, [])
-  const hayKame = asi.length > 0
-  const meses = useMemo(() => [...new Set([...(hayKame ? asi.map(a => String(a.fecha).slice(0, 7)) : lineas.map(l => l.documento?.fecha_doc?.slice(0, 7))), ...rem.map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [lineas, rem, asi, hayKame])
+  const ids = useMemo(() => new Set(unidades.map(u => u.id)), [unidades])
+  const meses = useMemo(() => [...new Set([...asi.filter(a => ids.has(a.unidad_id)).map(a => String(a.fecha).slice(0, 7)), ...rem.filter(r => ids.has(r.unidad_id)).map(r => r.periodo)].filter(Boolean))].sort().reverse() as string[], [rem, asi, ids])
 
   const mesesAbiertos = useMemo(() => new Set(rem.filter(r => r.abierta && (!proyecto || r.unidad_id === proyecto)).map(r => r.periodo as string)), [rem, proyecto])
   const hayProyeccion = mes ? mesesAbiertos.has(mes) : mesesAbiertos.size > 0
   const filas = unidades.map(u => {
-    const ls = lineas.filter(l => l.unidad_id === u.id && (!mes || (l.documento?.periodo_tributario || l.documento?.fecha_doc?.slice(0, 7)) === mes))
     const as = asi.filter(a => a.unidad_id === u.id && (!mes || String(a.fecha).slice(0, 7) === mes))
-    const ventas = hayKame ? as.filter(a => a.cuenta.startsWith('3.')).reduce((t, a) => t + Number(a.haber) - Number(a.debe), 0) : ls.filter(l => l.documento?.sentido === 'venta').reduce((a, l) => a + Number(l.monto), 0)
-    const compras = hayKame ? as.filter(a => a.cuenta.startsWith('4.')).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0) : ls.filter(l => l.documento?.sentido === 'compra').reduce((a, l) => a + Number(l.monto), 0)
+    const ventas = as.filter(a => a.cuenta.startsWith('3.')).reduce((t, a) => t + Number(a.haber) - Number(a.debe), 0)
+    const compras = as.filter(a => a.cuenta.startsWith('4.')).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0)
     const sueldos = rem.filter(r => r.unidad_id === u.id && (!mes || r.periodo === mes)).reduce((a, r) => a + Number(r.costo_empresa), 0)
     const contrato = contr.filter(v => v.unidad_id === u.id).reduce((a, v) => a + Number(v.monto), 0)
-    const margen = ventas - compras - (hayKame ? 0 : sueldos)
+    const margen = ventas - compras
     return { u, ventas, compras, sueldos, margen, pct: ventas ? (margen / ventas) * 100 : null, contrato }
   }).filter(f => f.ventas || f.compras || f.sueldos || f.contrato)
   const tot = filas.reduce((a, f) => ({ v: a.v + f.ventas, c: a.c + f.compras, s: a.s + f.sueldos }), { v: 0, c: 0, s: 0 })
   const uSel = unidades.find(u => u.id === proyecto)
+
+  // Cuadre con Kame y control de calidad (sobre el proyecto elegido, o todos)
+  const alcance = useMemo(() => asi.filter(a => (uSel ? a.unidad_id === uSel.id : ids.has(a.unidad_id)) && (!mes || String(a.fecha).slice(0, 7) === mes)), [asi, uSel, ids, mes])
+  const costosK = useMemo(() => alcance.filter(a => a.cuenta.startsWith('4.') && !a.cuenta.startsWith(CUENTA_REM)), [alcance])
+  const cuadre = useMemo(() => {
+    const por = new Map<number, number>(); asig.forEach(x => por.set(Number(x.kame_id), (por.get(Number(x.kame_id)) || 0) + Number(x.monto)))
+    const total = costosK.reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0)
+    const asignado = costosK.reduce((t, a) => t + (por.get(Number(a.kame_id)) || 0), 0)
+    return { total, asignado, pendiente: total - asignado }
+  }, [costosK, asig])
+  const calidad = useMemo(() => {
+    const sinProv = costosK.filter(a => !a.doc_rut)
+    const manuales = costosK.filter(a => !a.doc_tipo)
+    const g = new Map<string, any[]>(); costosK.filter(a => a.doc_tipo && a.doc_folio).forEach(a => { const k = [a.doc_rut, a.doc_tipo, a.doc_folio, a.cuenta, Math.round(Number(a.debe) - Number(a.haber))].join('|'); g.set(k, [...(g.get(k) || []), a]) })
+    const dup = [...g.values()].filter(x => x.length > 1)
+    return { sinProv, manuales, dup }
+  }, [costosK])
+  const sum = (l: any[]) => l.reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0)
+  const nProb = calidad.sinProv.length + calidad.manuales.length + calidad.dup.length
+  const lista = (titulo: string, l: any[], nombre: (a: any) => string) => l.length === 0 ? null : <details style={{ marginBottom: 6 }}><summary style={{ cursor: 'pointer', fontSize: 13 }}><b>{titulo}</b>: {l.length} · ${$(sum(l))}</summary>
+    <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 12, color: '#475467' }}>{l.slice(0, 8).map((a, i) => <li key={a.kame_id + '-' + i}>{String(a.fecha).slice(0, 10)} · {nombre(a)} · ${$(Number(a.debe) - Number(a.haber))}</li>)}{l.length > 8 && <li>… y {l.length - 8} más</li>}</ul></details>
 
   return (
     <>
       <div style={card}>
         <span style={{ fontSize: 13, marginRight: 8 }}>Período:</span>
         <select value={mes} onChange={e => setMes(e.target.value)} style={inp}><option value="">Acumulado</option>{meses.map(m => <option key={m} value={m}>{m}{mesesAbiertos.has(m) ? ' (proyectado)' : ''}</option>)}</select>
-        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>{hayKame ? 'Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x (esta tabla incluye los sueldos que Kame tenga contabilizados). Elige un centro de costo arriba (o haz clic en un proyecto de la tabla) para ver su detalle.' : 'Fuente: archivos importados. Los documentos con libro del SII cargado se ubican en su período tributario; los demás, en el mes de su fecha. Montos netos.'}</p>
+        <p style={{ fontSize: 12, color: '#667085', margin: '8px 0 0' }}>Fuente: contabilidad de Kame (Libro Diario), por fecha del asiento. Ingresos = cuentas 3.x, costos = cuentas 4.x (esta tabla incluye los sueldos que Kame tenga contabilizados). Elige un centro de costo arriba (o haz clic en un proyecto de la tabla) para ver su detalle.</p>
+        {!cargando && costosK.length > 0 && <p style={{ fontSize: 12, margin: '8px 0 0', color: Math.abs(cuadre.pendiente) < 1 ? '#067647' : '#475467' }}><b>Cuadre con Kame:</b> costos de Kame ${$(cuadre.total)} = asignado a subpartidas ${$(cuadre.asignado)} + por asignar ${$(cuadre.pendiente)} {Math.abs(cuadre.asignado + cuadre.pendiente - cuadre.total) < 1 ? '✓' : '⚠'}{' '}<span style={{ color: '#98a2b3' }}>(sin remuneraciones, que vienen de BUK)</span></p>}
       </div>
+      {!cargando && nProb > 0 && <div style={card}>
+        <h2 style={{ fontSize: 15, margin: '0 0 6px' }}>Control de calidad <span style={{ fontSize: 12, fontWeight: 400, color: '#92400e' }}>· {nProb} por revisar{uSel ? '' : ' (todos los proyectos)'}</span></h2>
+        {lista('Costos sin proveedor (sin RUT)', calidad.sinProv, a => a.comentario_det || a.comentario || 'sin glosa')}
+        {lista('Asientos manuales (sin factura)', calidad.manuales, a => a.comentario_det || a.comentario || 'sin glosa')}
+        {lista('Posibles duplicados (mismo proveedor, folio, cuenta y monto)', calidad.dup.flat(), a => `${a.doc_nombre || a.doc_rut} · ${a.doc_tipo} ${a.doc_folio}`)}
+      </div>}
       {hayProyeccion && <div style={{ ...card, background: '#fff7ed' }}><p style={{ fontSize: 13, margin: 0 }}>⚠ {mes ? `Las remuneraciones de ${mes}` : `Las remuneraciones de ${[...mesesAbiertos].sort().join(', ')}`} son una <b>proyección de BUK</b>: las liquidaciones aún no están cerradas y los montos pueden cambiar hasta el cierre.</p></div>}
-      {(!uSel || !hayKame) && <div style={card}>
+      {!uSel && <div style={card}>
         {cargando ? <p style={{ fontSize: 13, color: '#999' }}>Cargando…</p> : filas.length === 0 ? <p style={{ fontSize: 13 }}>Aún no hay datos. Sincroniza con Kame en «Conexión Kame» y marca las unidades activas.</p> :
-          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Costos (contabilidad)' : 'Compras'}</th><th style={{ ...th, textAlign: 'right' }}>{hayKame ? 'Rem. planilla (ref.)' : 'Remuneraciones'}</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
+          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proyecto</th><th style={{ ...th, textAlign: 'right' }}>Contrato</th><th style={{ ...th, textAlign: 'right' }}>Ventas</th><th style={{ ...th, textAlign: 'right' }}>Costos (contabilidad)</th><th style={{ ...th, textAlign: 'right' }}>Rem. BUK (ref.)</th><th style={{ ...th, textAlign: 'right' }}>Margen</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
             <tbody>{filas.map(f => <tr key={f.u.id} onClick={() => setProyecto(f.u.id)} style={{ cursor: 'pointer', background: f.u.id === proyecto ? '#eef4ff' : undefined }}><td style={td}>{f.u.nombre}</td><td style={der}>{f.contrato ? $(f.contrato) : '—'}</td><td style={der}>{$(f.ventas)}</td><td style={der}>{$(f.compras)}</td><td style={der}>{$(f.sueldos)}</td>
               <td style={{ ...der, color: f.margen < 0 ? '#b42318' : '#067647', fontWeight: 600 }}>{$(f.margen)}</td><td style={der}>{f.pct == null ? '—' : f.pct.toFixed(1) + '%'}</td></tr>)}
-              <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c - (hayKame ? 0 : tot.s))}</td><td style={der} /></tr></tbody></table></div>}
+              <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c)}</td><td style={der} /></tr></tbody></table></div>}
       </div>}
-      {uSel && hayKame && <DetalleProyecto key={uSel.id} unidad={uSel} mes={mes} asiU={asi.filter(a => a.unidad_id === uSel.id)} remU={rem.filter(r => r.unidad_id === uSel.id)} />}
-      {!uSel && tardias.length > 0 && <div style={card}>
-        <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Documentos que caen en otro mes ({tardias.length} líneas)</h2>
-        <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>La fecha del documento y el período en que se declaró al SII no coinciden.</p>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Proveedor / cliente</th><th style={th}>Folio</th><th style={th}>Fecha doc.</th><th style={th}>Período SII</th></tr></thead>
-          <tbody>{tardias.slice(0, 30).map(t => <tr key={t.id}><td style={td}>{t.documento.razon_social}</td><td style={td}>{t.documento.folio}</td><td style={td}>{t.documento.fecha_doc}</td><td style={td}>{t.documento.periodo_tributario}</td></tr>)}</tbody></table>
-      </div>}
+      {uSel && <DetalleProyecto key={uSel.id} unidad={uSel} mes={mes} asiU={asi.filter(a => a.unidad_id === uSel.id)} remU={rem.filter(r => r.unidad_id === uSel.id)} />}
     </>
   )
 }
@@ -920,7 +911,6 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12, color: '#475467', marginTop: 6 }}>
             <span>EDP aprobados por facturar: <b>${$(I.porFacturar)}</b></span><span>EDP por aprobar: <b>${$(I.porAprobar)}</b></span>
             <span>Contrato aún sin EDP: <b style={{ color: I.sinPresentar < 0 ? '#b42318' : undefined }}>${$(I.sinPresentar)}</b></span>
-            <span>Órdenes de compra del cliente por facturar: <b>${$(I.ocPend)}</b>{I.ordenes.filter(o => o.estado === 'pendiente').length ? ` (${I.ordenes.filter(o => o.estado === 'pendiente').map(o => o.numero || 's/n').join(', ')})` : ''}</span>
           </div></div>}
 
       <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Costos: presupuesto vs real</h3>
@@ -1110,8 +1100,8 @@ function ConexionKame() {
           <button disabled={ocupado} onClick={sincronizarBuk} style={btn(true, ocupado)}>Sincronizar desde BUK</button>
         </div>
         {logB.length > 0 && <pre style={{ fontSize: 12, margin: '8px 0 12px', whiteSpace: 'pre-wrap' }}>{logB.join('\n')}</pre>}
-        <hr style={{ border: 0, borderTop: '1px solid #fed7aa', margin: '12px 0' }} />
-        <b style={{ fontSize: 14 }}>BUK (herramientas de diagnóstico)</b>
+        <details style={{ marginTop: 12 }}><summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#475467' }}>Avanzado · diagnóstico de BUK</summary>
+        <b style={{ fontSize: 14, display: 'block', marginTop: 8 }}>BUK (herramientas de diagnóstico)</b>
         <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 8px' }}>Usa la variable BUK_API_TOKEN del servidor. Solo muestra la estructura de los datos (nombres de campos), nunca sueldos ni datos personales.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_descubrir' })} style={btn(true, ocupado)}>Descubrir endpoints BUK</button>
@@ -1123,7 +1113,10 @@ function ConexionKame() {
           <button disabled={ocupado} onClick={() => llamar({ accion: 'buk_conciliar', mes: mesBuk })} style={btn(true, ocupado)}>Conciliar mes con la planilla</button>
           <span style={{ fontSize: 12, color: '#667085' }}>Suma todo el mes en BUK y lo compara con la planilla (solo totales).</span>
         </div>
+        </details>
       </div>
+      <details><summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#475467' }}>Avanzado · diagnóstico de Kame</summary>
+      <div style={{ marginTop: 8 }}>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'token' })} style={btn(true, ocupado)}>1. Probar conexión (token)</button>
       <button disabled={ocupado} onClick={() => llamar({ accion: 'descubrir', prefijos: pref.split(',').map(x => x.trim()), nombres: nom.split(',').map(x => x.trim()) })} style={{ ...btn(false, ocupado), marginLeft: 8 }}>Descubrir endpoints</button>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
@@ -1142,6 +1135,7 @@ function ConexionKame() {
         <label style={{ fontSize: 12 }}>Parámetros URL (JSON)<br /><input value={query} onChange={e => setQuery(e.target.value)} style={{ ...inp, width: 340 }} /></label>
         <label style={{ fontSize: 12 }}>Cuerpo POST (JSON)<br /><input value={cuerpo} onChange={e => setCuerpo(e.target.value)} style={{ ...inp, width: 340 }} /></label>
       </div>
+      </div></details>
       {salida && <pre style={{ marginTop: 12, background: '#101828', color: '#e4e7ec', padding: 12, borderRadius: 8, fontSize: 12, maxHeight: 420, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{salida}</pre>}
     </div>
   )

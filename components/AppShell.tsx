@@ -34,7 +34,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { clave: 'contabilidad', href: '/contabilidad', icon: '🧾', label: 'Contabilidad', visible: esAdmin || usuario.accesoContabilidad, rutas: ['/contabilidad', '/rendiciones', '/guias'] },
     { clave: 'hsec', href: '/hsec', icon: '🦺', label: 'Departamento Prevención de Riesgo', visible: esAdmin || usuario.accesoHsec || !!usuario.cargoPrograma, rutas: ['/hsec'] },
     { clave: 'operaciones', href: '/operaciones', icon: '🛠️', label: 'Operaciones', visible: esAdmin || usuario.accesoOperaciones, rutas: ['/operaciones'] },
-    { clave: 'finanzas', href: '/finanzas', icon: '📊', label: 'Finanzas', visible: esAdmin, rutas: ['/finanzas'] },
+    { clave: 'finanzas', href: '/finanzas', icon: '📊', label: 'Finanzas', visible: esAdmin || usuario.rol === 'gerente_general', rutas: ['/finanzas'] },
     { clave: 'administracion', href: '/administracion', icon: '⚙️', label: 'Administración', visible: esAdmin, rutas: ['/administracion', '/usuarios'] },
   ].filter(m => m.visible)
 

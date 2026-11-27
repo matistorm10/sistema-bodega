@@ -23,7 +23,7 @@ const td: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderBottom
 const der: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 
 type Unidad = { id: string, nombre: string, grupo: string | null, activa: boolean, monto_contrato_base: number, presupuesto_desde?: string | null, presupuesto_hasta?: string | null }
-type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'resultado' | 'kame'
+type Pestana = 'importar' | 'unidades' | 'presupuesto' | 'ingresos' | 'resultado' | 'kame'
 
 export default function Finanzas() {
   const { usuario, cargando } = useUsuarioActual()
@@ -46,7 +46,7 @@ export default function Finanzas() {
   if (cargando) return <main style={fondoPagina}><div style={{ padding: '1.5rem' }}><p style={{ fontSize: 13, color: '#999' }}>Cargando...</p></div></main>
   if (!esAdmin) return <main style={fondoPagina}><div style={{ padding: '1.5rem', maxWidth: 600, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>{cab}<div style={card}><p style={{ fontSize: 14 }}>Este módulo está en desarrollo y solo está habilitado para administradores.</p></div></div></main>
 
-  const tabs: [Pestana, string][] = [['resultado', 'Resultado por proyecto'], ['presupuesto', 'Presupuesto'], ['importar', 'Importar'], ['unidades', 'Unidades'], ['kame', 'Conexión Kame']]
+  const tabs: [Pestana, string][] = [['resultado', 'Resultado por proyecto'], ['ingresos', 'Ingresos'], ['presupuesto', 'Presupuesto'], ['importar', 'Importar'], ['unidades', 'Unidades'], ['kame', 'Conexión Kame']]
   return (
     <main style={fondoPagina}>
       <div style={{ padding: '1.5rem', fontFamily: 'system-ui,sans-serif', maxWidth: 1100, margin: '0 auto' }}>
@@ -57,6 +57,7 @@ export default function Finanzas() {
         {tab === 'importar' && <Importar onListo={cargarUnidades} />}
         {tab === 'unidades' && <Unidades unidades={unidades} recargar={cargarUnidades} />}
         {tab === 'presupuesto' && <Presupuesto unidades={unidades.filter(u => u.activa)} recargar={cargarUnidades} />}
+        {tab === 'ingresos' && <Ingresos unidades={unidades.filter(u => u.activa)} />}
         {tab === 'kame' && <ConexionKame />}
         {tab === 'resultado' && <Resultado unidades={unidades.filter(u => u.activa)} />}
       </div>
@@ -148,11 +149,10 @@ function Unidades({ unidades, recargar }: { unidades: Unidad[], recargar: () => 
       <div style={card}>
         <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Unidades de negocio (centros de costo)</h2>
         <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Las sincronizaciones con Kame y BUK solo guardan las unidades registradas aquí. Para sumar un proyecto nuevo, créalo con el mismo nombre que tiene en Kame como unidad de negocio. Deja activas solo las que quieres controlar; las demás no aparecen en Presupuesto ni en Resultado.</p>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Activa</th><th style={th}>Nombre en Kame</th><th style={th}>Contrato base ($ neto)</th></tr></thead>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Activa</th><th style={th}>Nombre en Kame</th></tr></thead>
           <tbody>{unidades.map(u => <tr key={u.id} style={{ opacity: u.activa ? 1 : 0.5 }}>
             <td style={td}><input type="checkbox" checked={u.activa} onChange={e => cambiar(u.id, { activa: e.target.checked })} /></td>
             <td style={td}>{u.nombre}</td>
-            <td style={td}><input type="number" defaultValue={u.monto_contrato_base} onBlur={e => Number(e.target.value) !== u.monto_contrato_base && cambiar(u.id, { monto_contrato_base: Number(e.target.value) })} style={{ ...inp, width: 150 }} /></td>
           </tr>)}</tbody></table>
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <input value={nombreU} onChange={e => setNombreU(e.target.value)} placeholder="Nueva unidad (nombre exacto de Kame)" style={{ ...inp, width: 320 }} />
@@ -226,7 +226,8 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
   const [versiones, setVersiones] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [elegida, setElegida] = useState('')
-  const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContrato, setVContrato] = useState(''); const [draft, setDraft] = useState<Record<string, string>>({})
+  const [vTipo, setVTipo] = useState<'base' | 'adicional'>('base'); const [vDesc, setVDesc] = useState(''); const [vContratoId, setVContratoId] = useState(''); const [draft, setDraft] = useState<Record<string, string>>({})
+  const [contratos, setContratos] = useState<any[]>([]); const [editId, setEditId] = useState<string | null>(null); const [abSub, setAbSub] = useState(false); const [abPer, setAbPer] = useState(false)
   const [msg, setMsg] = useState(''); const [guardando, setGuardando] = useState(false)
   const unidad = unidades.find(u => u.id === uid)
   const meses = useMemo(() => rangoMeses(unidad?.presupuesto_desde, unidad?.presupuesto_hasta), [unidad])
@@ -239,11 +240,12 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
 
   const cargar = useCallback(async () => {
     if (!uid) return
-    const [p, v] = await Promise.all([
+    const [p, v, ct] = await Promise.all([
       supabase.from('fin_partidas').select('*, catalogo:fin_catalogo_partidas(nombre,cuenta,fuente)').eq('unidad_id', uid).order('orden').order('nombre'),
       supabase.from('fin_versiones').select('*').eq('unidad_id', uid).order('numero'),
+      supabase.from('fin_contratos').select('*').eq('unidad_id', uid).order('creado_en'),
     ])
-    setPartidas(p.data || []); setVersiones(v.data || [])
+    setPartidas(p.data || []); setVersiones(v.data || []); setContratos(ct.data || [])
     const ids = (v.data || []).map(x => x.id)
     if (ids.length) { const { data } = await supabase.from('fin_version_items').select('*').in('version_id', ids).limit(20000); setItems(data || []) } else setItems([])
   }, [uid])
@@ -251,7 +253,7 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
 
   const pres = useMemo(() => { const m: Record<string, number> = {}; items.forEach(i => { const k = i.partida_id + '|' + i.mes; m[k] = (m[k] || 0) + Number(i.delta) }); return m }, [items])
   const grupos = useMemo(() => agruparPorCuenta(partidas), [partidas])
-  const contrato = (unidad?.monto_contrato_base || 0) + versiones.reduce((a, v) => a + Number(v.delta_contrato), 0)
+  const contrato = contratos.reduce((a, c) => a + Number(c.monto), 0)
   const totPres = items.reduce((a, i) => a + Number(i.delta), 0)
   const sinMes = items.filter(i => !meses.includes(i.mes)).reduce((a, i) => a + Number(i.delta), 0)
 
@@ -266,17 +268,37 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
     if (!confirm(`¿Quitar «${p.nombre}» de este proyecto? Se borra su presupuesto${count ? ` y ${count} asignaciones de costos (esos costos vuelven a «por asignar»)` : ''}.`)) return
     await supabase.from('fin_partidas').delete().eq('id', p.id); cargar()
   }
+  const limpiarEdicion = () => { setEditId(null); setDraft({}); setVDesc(''); setVContratoId(''); setVTipo('base') }
+  const editarVersion = (v: any) => {
+    const d: Record<string, string> = {}
+    items.filter(i => i.version_id === v.id).forEach(i => { d[i.partida_id + '|' + i.mes] = String(Math.round(Number(i.delta))) })
+    setEditId(v.id); setVTipo(v.tipo); setVDesc(v.descripcion || ''); setDraft(d); setVContratoId(contratos.find(c => c.version_id === v.id)?.id || ''); setMsg('')
+    setTimeout(() => document.getElementById('grilla-ppto')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
   const guardarVersion = async () => {
     const celdas = Object.entries(draft).filter(([, v]) => v !== '' && !isNaN(Number(v)) && Number(v) !== 0)
-    if (!celdas.length && !Number(vContrato)) { setMsg('Escribe al menos un monto en la grilla o una variación del contrato.'); return }
-    if (vTipo === 'base' && versiones.some(v => v.tipo === 'base') && !confirm('Este proyecto ya tiene un presupuesto base. Si guardas otro, los montos se SUMAN. ¿Es lo que quieres? (Para modificar usa «Adicional», con montos positivos o negativos).')) return
+    if (!celdas.length) { setMsg('Escribe al menos un monto en la grilla.'); return }
+    if (!editId && vTipo === 'base' && versiones.some(v => v.tipo === 'base') && !confirm('Este proyecto ya tiene un presupuesto base. Si guardas otro, los montos se SUMAN. ¿Es lo que quieres? (Para modificar uno existente, púlsalo en el historial de versiones; para un adicional usa «Adicional», con montos positivos o negativos).')) return
     setGuardando(true)
-    const numero = (versiones[versiones.length - 1]?.numero || 0) + 1
-    const { data: v, error } = await supabase.from('fin_versiones').insert({ unidad_id: uid, numero, tipo: vTipo, descripcion: vDesc || (vTipo === 'base' ? 'Presupuesto base' : 'Adicional'), delta_contrato: Number(vContrato) || 0 }).select('id').single()
-    if (error || !v) { setMsg('No se pudo guardar: ' + error?.message); setGuardando(false); return }
-    const rows = celdas.map(([k, x]) => { const [partida_id, mes] = k.split('|'); return { version_id: v.id, partida_id, mes, delta: Number(x) } })
-    if (rows.length) { const { error: e2 } = await supabase.from('fin_version_items').insert(rows); if (e2) { setMsg('No se pudieron guardar los montos: ' + e2.message); setGuardando(false); return } }
-    setDraft({}); setVDesc(''); setVContrato(''); setMsg('Versión guardada.'); setGuardando(false); cargar(); recargar()
+    const desc = vDesc || (vTipo === 'base' ? 'Presupuesto base' : 'Adicional')
+    let versionId = editId
+    if (editId) {
+      const { error } = await supabase.from('fin_versiones').update({ tipo: vTipo, descripcion: desc }).eq('id', editId)
+      if (error) { setMsg('No se pudo guardar: ' + error.message); setGuardando(false); return }
+      const { error: eD } = await supabase.from('fin_version_items').delete().eq('version_id', editId)
+      if (eD) { setMsg('No se pudieron reemplazar los montos: ' + eD.message); setGuardando(false); return }
+    } else {
+      const numero = (versiones[versiones.length - 1]?.numero || 0) + 1
+      const { data: v, error } = await supabase.from('fin_versiones').insert({ unidad_id: uid, numero, tipo: vTipo, descripcion: desc, delta_contrato: 0 }).select('id').single()
+      if (error || !v) { setMsg('No se pudo guardar: ' + error?.message); setGuardando(false); return }
+      versionId = v.id
+    }
+    const rows = celdas.map(([k, x]) => { const [partida_id, mes] = k.split('|'); return { version_id: versionId, partida_id, mes, delta: Number(x) } })
+    const { error: e2 } = await supabase.from('fin_version_items').insert(rows); if (e2) { setMsg('No se pudieron guardar los montos: ' + e2.message); setGuardando(false); return }
+    // Vínculo con el adicional de contrato (se crea en la pestaña Ingresos)
+    await supabase.from('fin_contratos').update({ version_id: null }).eq('version_id', versionId)
+    if (vTipo === 'adicional' && vContratoId) await supabase.from('fin_contratos').update({ version_id: versionId }).eq('id', vContratoId)
+    limpiarEdicion(); setMsg(editId ? 'Versión actualizada.' : 'Versión guardada.'); setGuardando(false); cargar(); recargar()
   }
   const borrarVersion = async (v: any) => { if (!confirm(`¿Borrar la versión #${v.numero} («${v.descripcion}»)? Se quitan sus montos del presupuesto.`)) return; await supabase.from('fin_versiones').delete().eq('id', v.id); cargar(); recargar() }
 
@@ -288,41 +310,28 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
     <>
       <div style={card}>
         <select value={uid} onChange={e => { setUid(e.target.value); setDraft({}); setMsg('') }} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
-        {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente: <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
+        {unidad && <span style={{ marginLeft: 16, fontSize: 13 }}>Contrato vigente (ver pestaña Ingresos): <b>${$(contrato)}</b> · Presupuesto de costos: <b>${$(totPres)}</b>{contrato > 0 && totPres > 0 && <> · Margen presupuestado: <b>{(((contrato - totPres) / contrato) * 100).toFixed(1)}%</b></>}</span>}
         {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       </div>
 
       {unidad && <>
-        <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>1. Período del proyecto</h2>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+        <details style={card} open={abPer || meses.length === 0} onToggle={e => setAbPer((e.target as HTMLDetailsElement).open)}>
+          <summary style={{ fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Período del proyecto{meses.length ? ` · ${meses.length} meses` : ''}</summary>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, marginTop: 8 }}>
             Inicio <input type="date" defaultValue={(unidad.presupuesto_desde || '').length === 10 ? unidad.presupuesto_desde! : ''} onBlur={e => e.target.value !== (unidad.presupuesto_desde || '') && guardarPeriodo('presupuesto_desde', e.target.value)} style={inp} />
             Término <input type="date" defaultValue={(unidad.presupuesto_hasta || '').length === 10 ? unidad.presupuesto_hasta! : ''} onBlur={e => e.target.value !== (unidad.presupuesto_hasta || '') && guardarPeriodo('presupuesto_hasta', e.target.value)} style={inp} />
             <span style={{ color: '#667085', fontSize: 12 }}>{meses.length ? `${meses.length} meses de presupuesto` : 'Elige fecha de inicio y de término para generar las columnas de meses.'}</span>
           </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>2. Subpartidas de este proyecto</h2>
-          {grupos.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Aún no hay subpartidas. Agrega las que necesitas desde el catálogo (si falta alguna, créala en la pestaña Unidades).</p>}
-          {grupos.map(([c, ps]) => <div key={c} style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#344054' }}>{c} · {nomCuenta(cuentas, c)}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>{ps.map(p => <span key={p.id} style={{ background: '#eef4ff', borderRadius: 99, padding: '4px 10px', fontSize: 13 }}>{p.nombre} <button onClick={() => quitarPartida(p)} title="Quitar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#667085' }}>✕</button></span>)}</div>
-          </div>)}
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <select value={elegida} onChange={e => setElegida(e.target.value)} style={{ ...inp, minWidth: 300 }}><option value="">Agregar subpartida del catálogo…</option>{dispo.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.cuenta}</option>)}</select>
-            <button onClick={agregarPartida} disabled={!elegida} style={btn(true, !elegida)}>Agregar</button>
-          </div>
-        </div>
+        </details>
 
         {partidas.length > 0 && meses.length > 0 && <>
-          <div style={card}>
-            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>3. Ingresar presupuesto por mes</h2>
-            <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Escribe el monto neto de cada subpartida en cada mes; la cuenta contable suma sola. Primero guarda el <b>presupuesto base</b>. Si el proyecto gana un adicional (ej. +$500.000 de fierro), guarda una versión <b>adicional</b> con la <b>variación</b> en la subpartida y mes que corresponda, y la variación del contrato.</p>
+          <div style={{ ...card, border: editId ? '2px solid #f79009' : undefined }} id="grilla-ppto">
+            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>{editId ? `Editando la versión #${versiones.find(v => v.id === editId)?.numero ?? ''}` : 'Ingresar presupuesto por mes'}</h2>
+            <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>{editId ? 'Corrige los montos y guarda: esta versión se reemplaza (no se crea otra). ' : ''}Escribe el monto neto de cada subpartida en cada mes; la cuenta contable suma sola. Primero guarda el <b>presupuesto base</b>. Si el proyecto gana un adicional, regístralo antes en la pestaña <b>Ingresos</b> (con su monto de venta) y aquí guarda una versión <b>adicional</b> con el costo por subpartida y mes. El contrato y los EDP se manejan en Ingresos.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               <select value={vTipo} onChange={e => setVTipo(e.target.value as any)} style={inp}><option value="base">Presupuesto base</option><option value="adicional">Adicional / nota de venta</option></select>
               <input value={vDesc} onChange={e => setVDesc(e.target.value)} placeholder="Descripción (ej. Adicional fierro)" style={{ ...inp, width: 280 }} />
-              <MontoInput value={vContrato} onChange={setVContrato} placeholder={vTipo === 'base' ? 'Valor del contrato $' : 'Variación del contrato $'} style={{ ...inp, width: 220, textAlign: 'right' }} />
+              {vTipo === 'adicional' && <select value={vContratoId} onChange={e => { setVContratoId(e.target.value); const c = contratos.find(x => x.id === e.target.value); if (c && !vDesc) setVDesc(c.descripcion) }} style={{ ...inp, maxWidth: 320 }}><option value="">Adicional de contrato asociado…</option>{contratos.filter(c => c.tipo === 'adicional' && (!c.version_id || c.version_id === editId)).map(c => <option key={c.id} value={c.id}>{c.descripcion || 'Adicional'} · ${$(Number(c.monto))}</option>)}</select>}
             </div>
             <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta / subpartida</th>{meses.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{nombreMes(m)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
               <tbody>{grupos.flatMap(([c, ps]) => [
@@ -331,11 +340,14 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
                   <MontoInput value={draft[p.id + '|' + m] ?? ''} onChange={v => setDraft(d => ({ ...d, [p.id + '|' + m]: v }))} style={{ ...inp, width: 110, padding: '5px 6px', textAlign: 'right' }} /></td>)}
                   <td style={celda}>{$(meses.reduce((b, m) => b + (Number(draft[p.id + '|' + m]) || 0), 0))}</td></tr>),
               ])}</tbody></table></div>
-            <button onClick={guardarVersion} disabled={guardando} style={{ ...btn(true, guardando), marginTop: 12 }}>{guardando ? 'Guardando…' : `Guardar ${vTipo === 'base' ? 'presupuesto base' : 'adicional'}`}</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={guardarVersion} disabled={guardando} style={btn(true, guardando)}>{guardando ? 'Guardando…' : editId ? 'Guardar cambios de la versión' : `Guardar ${vTipo === 'base' ? 'presupuesto base' : 'adicional'}`}</button>
+              {editId && <button onClick={limpiarEdicion} style={btn(false)}>Cancelar edición</button>}
+            </div>
           </div>
 
           <div style={card}>
-            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Presupuesto vigente (base + adicionales)</h2>
+            <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Presupuesto vigente (base + adicionales)</h2>
             <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>El avance contra el costo real está en <b>Resultado por proyecto</b>.</p>
             <div style={{ overflowX: 'auto' }}><table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead><tr><th style={th}>Cuenta / subpartida</th>{meses.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{nombreMes(m)}</th>)}<th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
@@ -351,13 +363,221 @@ function Presupuesto({ unidades, recargar }: { unidades: Unidad[], recargar: () 
             {Math.abs(sinMes) > 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '8px 0 0' }}>Hay ${$(sinMes)} presupuestados en meses fuera del período (o sin mes) que no aparecen en las columnas.</p>}
           </div>
         </>}
+        {!(partidas.length > 0 && meses.length > 0) && <div style={card}><p style={{ fontSize: 13, margin: 0 }}>Para ingresar presupuesto falta {meses.length === 0 ? 'definir el <b>período</b>' : ''}{meses.length === 0 && partidas.length === 0 ? ' y ' : ''}{partidas.length === 0 ? 'agregar las <b>subpartidas</b> del proyecto' : ''}: están en las secciones desplegables de esta pantalla.</p></div>}
 
         {versiones.length > 0 && <div style={card}>
-          <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Historial de versiones</h2>
-          {versiones.map(v => <div key={v.id} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f2f4f7', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ flex: 1 }}>#{v.numero} · {v.tipo === 'base' ? 'Base' : 'Adicional'} · {v.descripcion} · {new Date(v.fecha + 'T12:00').toLocaleDateString('es-CL')} · contrato {Number(v.delta_contrato) >= 0 ? '+' : ''}{$(Number(v.delta_contrato))} · montos {$(items.filter(i => i.version_id === v.id).reduce((a, i) => a + Number(i.delta), 0))}</span>
-            <button onClick={() => borrarVersion(v)} style={btn(false)}>Borrar</button></div>)}
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Historial de versiones</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Pincha una versión para cargarla en la grilla y corregirla.</p>
+          {versiones.map(v => <div key={v.id} onClick={() => editarVersion(v)} title="Pincha para editar" style={{ fontSize: 13, padding: '6px 8px', borderBottom: '1px solid #f2f4f7', display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', background: v.id === editId ? '#fff7ed' : undefined }}>
+            <span style={{ flex: 1 }}>#{v.numero} · {v.tipo === 'base' ? 'Base' : 'Adicional'} · {v.descripcion} · {new Date(v.fecha + 'T12:00').toLocaleDateString('es-CL')} · montos ${$(items.filter(i => i.version_id === v.id).reduce((a, i) => a + Number(i.delta), 0))}{v.id === editId ? ' · (editando)' : ''}</span>
+            <button onClick={e => { e.stopPropagation(); editarVersion(v) }} style={btn(false)}>Editar</button>
+            <button onClick={e => { e.stopPropagation(); if (editId === v.id) limpiarEdicion(); borrarVersion(v) }} style={btn(false)}>Borrar</button></div>)}
         </div>}
+
+        <details style={card} open={abSub || partidas.length === 0} onToggle={e => setAbSub((e.target as HTMLDetailsElement).open)}>
+          <summary style={{ fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Subpartidas de este proyecto ({partidas.length})</summary>
+          <div style={{ marginTop: 8 }}>
+            {grupos.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Aún no hay subpartidas. Agrega las que necesitas desde el catálogo (si falta alguna, créala en la pestaña Unidades).</p>}
+            {grupos.map(([c, ps]) => <div key={c} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#344054' }}>{c} · {nomCuenta(cuentas, c)}</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>{ps.map(p => <span key={p.id} style={{ background: '#eef4ff', borderRadius: 99, padding: '4px 10px', fontSize: 13 }}>{p.nombre} <button onClick={() => quitarPartida(p)} title="Quitar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#667085' }}>✕</button></span>)}</div>
+            </div>)}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <select value={elegida} onChange={e => setElegida(e.target.value)} style={{ ...inp, minWidth: 300 }}><option value="">Agregar subpartida del catálogo…</option>{dispo.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.cuenta}</option>)}</select>
+              <button onClick={agregarPartida} disabled={!elegida} style={btn(true, !elegida)}>Agregar</button>
+            </div>
+          </div>
+        </details>
+      </>}
+    </>
+  )
+}
+
+// ───────────────────────── Ingresos (contratos, EDP, órdenes de compra) ─────────────────────────
+// Número de EDP dentro de la glosa de una factura: «EDP N°1», «EDP N1», «EDP de 3 rev 0», «EDP 2»
+const numEdp = (t: string) => { const m = String(t || '').match(/\bEDP\s*(?:n\s*[°º.o]?\s*|nro\.?\s*|de\s+)?0*(\d+)/i); return m ? m[1] : '' }
+const soloNum = (t: string) => { const m = String(t || '').match(/\d+/); return m ? m[0].replace(/^0+(?=\d)/, '') : '' }
+const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const fechaCL = (f?: string | null) => f ? new Date(String(f).slice(0, 10) + 'T12:00').toLocaleDateString('es-CL') : '—'
+
+// Agrupa las líneas de venta de Kame por documento (rut + tipo + folio) y les pone su EDP, si ya calzó
+function docsVenta(ventas: any[], links: any[]) {
+  const lk = new Map(links.map(l => [Number(l.kame_id), l]))
+  const m = new Map<string, any>()
+  ventas.forEach(a => {
+    const k = a.doc_folio ? `${a.doc_rut}|${a.doc_tipo}|${a.doc_folio}` : `k${a.kame_id}`
+    const o = m.get(k) || { key: k, fecha: String(a.fecha).slice(0, 10), tipo: a.doc_tipo, folio: a.doc_folio, nombre: a.doc_nombre, glosa: String(a.comentario_det || a.comentario || ''), texto: `${a.comentario_det || ''} ${a.comentario || ''}`, monto: 0, ids: [] as number[] }
+    o.monto += Number(a.haber) - Number(a.debe); o.ids.push(Number(a.kame_id)); m.set(k, o)
+  })
+  return [...m.values()].map(o => { const l = lk.get(o.ids[0]); return { ...o, edp_id: (l?.edp_id as string) || null, forzado: !!l && !l.edp_id } }).sort((a, b) => a.fecha.localeCompare(b.fecha))
+}
+
+// Datos de ingresos de un proyecto. Calza solo las facturas cuya glosa trae el número de EDP.
+function useIngresos(uid: string) {
+  const vacio = { contratos: [] as any[], edps: [] as any[], links: [] as any[], ordenes: [] as any[], ventas: [] as any[] }
+  const [d, setD] = useState(vacio); const [auto, setAuto] = useState(0)
+  const cargar = useCallback(async () => {
+    if (!uid) { setD(vacio); return }
+    const [c, e, o, v] = await Promise.all([
+      supabase.from('fin_contratos').select('*').eq('unidad_id', uid).order('creado_en'),
+      supabase.from('fin_edp').select('*').eq('unidad_id', uid).order('creado_en'),
+      supabase.from('fin_ordenes_cliente').select('*').eq('unidad_id', uid).order('creado_en'),
+      supabase.from('fin_asientos').select('kame_id,fecha,cuenta,debe,haber,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario,comentario_det').eq('unidad_id', uid).like('cuenta', '3.%').order('fecha').limit(5000),
+    ])
+    const ventas = v.data || []; let links: any[] = []
+    const ids = ventas.map(x => Number(x.kame_id))
+    for (let i = 0; i < ids.length; i += 400) { const { data } = await supabase.from('fin_edp_asientos').select('*').in('kame_id', ids.slice(i, i + 400)); links = links.concat(data || []) }
+    // Calce automático: facturas sin vínculo previo cuya glosa nombra un EDP existente del proyecto
+    const edps = e.data || []; const porNum = new Map<string, any[]>(); edps.forEach(x => { const n = soloNum(x.numero); if (n) porNum.set(n, [...(porNum.get(n) || []), x]) })
+    const nuevos: any[] = []
+    docsVenta(ventas, links).filter(x => !x.edp_id && !x.forzado).forEach(x => { const c = porNum.get(numEdp(x.texto)); if (c && c.length === 1) x.ids.forEach((k: number) => nuevos.push({ kame_id: k, edp_id: c[0].id, manual: false })) })
+    if (nuevos.length) { const { error } = await supabase.from('fin_edp_asientos').upsert(nuevos, { onConflict: 'kame_id' }); if (!error) { links = links.concat(nuevos); setAuto(nuevos.length) } }
+    setD({ contratos: c.data || [], edps, links, ordenes: o.data || [], ventas })
+  }, [uid]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { cargar() }, [cargar])
+  const docs = useMemo(() => docsVenta(d.ventas, d.links), [d.ventas, d.links])
+  const facturadoDe = (edpId: string) => docs.filter(x => x.edp_id === edpId).reduce((t, x) => t + x.monto, 0)
+  const contratado = d.contratos.reduce((t, c) => t + Number(c.monto), 0)
+  const edpTot = d.edps.reduce((t, x) => t + Number(x.monto), 0)
+  const facturadoTot = docs.reduce((t, x) => t + x.monto, 0)
+  const sinEdp = docs.filter(x => !x.edp_id)
+  const porAprobar = d.edps.filter(x => x.estado === 'presentado').reduce((t, x) => t + Math.max(0, Number(x.monto) - facturadoDe(x.id)), 0)
+  const porFacturar = d.edps.filter(x => x.estado === 'aprobado').reduce((t, x) => t + Math.max(0, Number(x.monto) - facturadoDe(x.id)), 0)
+  const ocPend = d.ordenes.filter(x => x.estado === 'pendiente').reduce((t, x) => t + Number(x.monto), 0)
+  return { ...d, docs, cargar, auto, facturadoDe, contratado, edpTot, facturadoTot, sinEdp, porAprobar, porFacturar, ocPend, sinPresentar: contratado - edpTot }
+}
+
+function Tarjeta({ t, v, s, color }: { t: string, v: string, s?: string, color?: string }) {
+  return <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: '#667085' }}>{t}</div><div style={{ fontSize: 18, fontWeight: 600, color }}>{v}</div><div style={{ fontSize: 11, color: '#667085' }}>{s || ' '}</div></div>
+}
+
+function Ingresos({ unidades }: { unidades: Unidad[] }) {
+  const [uid, setUid] = useState(''); const unidad = unidades.find(u => u.id === uid)
+  const I = useIngresos(uid)
+  const [msg, setMsg] = useState(''); const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({})
+  const err = (e: any) => { if (e) { setMsg('No se pudo guardar: ' + e.message); return true } return false }
+  // Contratos
+  const [cEdit, setCEdit] = useState<string | null>(null); const cVacio = { tipo: 'original', descripcion: '', oc: '', monto: '', fecha: '' }; const [fc, setFc] = useState(cVacio)
+  const guardarContrato = async () => {
+    if (!Number(fc.monto)) { setMsg('Escribe el monto del contrato.'); return }
+    const fila = { unidad_id: uid, tipo: fc.tipo, descripcion: fc.descripcion || (fc.tipo === 'original' ? 'Contrato original' : 'Adicional'), orden_compra: fc.oc, monto: Number(fc.monto), fecha: fc.fecha || null }
+    const { error } = cEdit ? await supabase.from('fin_contratos').update(fila).eq('id', cEdit) : await supabase.from('fin_contratos').insert(fila)
+    if (err(error)) return; setCEdit(null); setFc(cVacio); setMsg('Contrato guardado.'); I.cargar()
+  }
+  const borrarContrato = async (c: any) => { if (!confirm(`¿Borrar «${c.descripcion}»? Los EDP asociados quedan sin contrato.`)) return; await supabase.from('fin_contratos').delete().eq('id', c.id); I.cargar() }
+  // EDP
+  const [eEdit, setEEdit] = useState<string | null>(null); const eVacio = { numero: '', descripcion: '', oc: '', contrato_id: '', monto: '', avance: '', fecha: hoyISO() }; const [fe, setFe] = useState(eVacio)
+  const guardarEdp = async () => {
+    if (!fe.numero.trim() || !Number(fe.monto)) { setMsg('Escribe el número del EDP y su valor neto.'); return }
+    if (!eEdit && I.edps.some(x => soloNum(x.numero) === soloNum(fe.numero))) { setMsg(`Ya existe el EDP N°${fe.numero}.`); return }
+    const fila: any = { unidad_id: uid, numero: fe.numero.trim(), descripcion: fe.descripcion, orden_compra: fe.oc, contrato_id: fe.contrato_id || null, monto: Number(fe.monto), avance_pct: fe.avance === '' ? null : Number(fe.avance), fecha_presentacion: fe.fecha || null }
+    const { error } = eEdit ? await supabase.from('fin_edp').update(fila).eq('id', eEdit) : await supabase.from('fin_edp').insert(fila)
+    if (err(error)) return; setEEdit(null); setFe(eVacio); setMsg('EDP guardado. Si una factura de Kame nombra este EDP en su glosa, calza sola.'); I.cargar()
+  }
+  const cambiarEstado = async (x: any, estado: string) => { await supabase.from('fin_edp').update({ estado, fecha_aprobacion: estado === 'aprobado' ? (x.fecha_aprobacion || hoyISO()) : null }).eq('id', x.id); I.cargar() }
+  const borrarEdp = async (x: any) => { if (!confirm(`¿Borrar el EDP N°${x.numero}? Sus facturas quedan «sin EDP».`)) return; await supabase.from('fin_edp').delete().eq('id', x.id); I.cargar() }
+  const asignarDoc = async (doc: any, edpId: string | null) => {
+    const { error } = await supabase.from('fin_edp_asientos').upsert(doc.ids.map((k: number) => ({ kame_id: k, edp_id: edpId, manual: true })), { onConflict: 'kame_id' })
+    if (!err(error)) { setMsg(edpId ? 'Factura asignada al EDP.' : 'Factura desvinculada (queda sin EDP y no se vuelve a calzar sola).'); I.cargar() }
+  }
+  // Órdenes de compra
+  const oVacio = { numero: '', descripcion: '', monto: '', fecha: hoyISO() }; const [fo, setFo] = useState(oVacio)
+  const guardarOc = async () => {
+    if (!Number(fo.monto)) { setMsg('Escribe el monto de la orden de compra.'); return }
+    const { error } = await supabase.from('fin_ordenes_cliente').insert({ unidad_id: uid, numero: fo.numero, descripcion: fo.descripcion, monto: Number(fo.monto), fecha: fo.fecha || null })
+    if (!err(error)) { setFo(oVacio); setMsg('Orden de compra registrada.'); I.cargar() }
+  }
+  const ep = (x: any) => ({ presentado: ['Presentado', '#92400e', '#fef3c7'], aprobado: ['Aprobado', '#065f46', '#d1fae5'] } as any)[x.estado]
+  const rojo = (v: number) => v < 0 ? '#b42318' : undefined
+
+  return (
+    <>
+      <div style={card}>
+        <select value={uid} onChange={e => { setUid(e.target.value); setMsg(''); setCEdit(null); setEEdit(null); setFc(cVacio); setFe(eVacio) }} style={{ ...inp, minWidth: 320 }}><option value="">Elegir proyecto…</option>{unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+        {msg && <p style={{ fontSize: 12, margin: '8px 0 0', color: /^(No|Ya|Escribe)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
+        {I.auto > 0 && <p style={{ fontSize: 12, margin: '8px 0 0', color: '#067647' }}>{I.auto} línea(s) de factura de Kame se calzaron solas con su EDP.</p>}
+      </div>
+
+      {unidad && <>
+        <div style={{ ...card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+          <Tarjeta t="Contrato vigente" v={'$' + $(I.contratado)} s={`${I.contratos.length} contrato(s) y adicionales`} />
+          <Tarjeta t="EDP presentados" v={'$' + $(I.edpTot)} s={I.contratado > 0 ? Math.round(I.edpTot / I.contratado * 100) + '% del contrato' : ''} />
+          <Tarjeta t="Facturado (Kame)" v={'$' + $(I.facturadoTot)} s={I.contratado > 0 ? Math.round(I.facturadoTot / I.contratado * 100) + '% del contrato' : ''} />
+          <Tarjeta t="EDP por facturar" v={'$' + $(I.porFacturar)} s="aprobados, aún sin factura" />
+          <Tarjeta t="EDP por aprobar" v={'$' + $(I.porAprobar)} s="presentados al cliente" />
+          <Tarjeta t="Contrato sin EDP" v={'$' + $(I.sinPresentar)} s="aún no presentado" color={rojo(I.sinPresentar)} />
+          <Tarjeta t="OC cliente por facturar" v={'$' + $(I.ocPend)} s={`${I.ordenes.filter(x => x.estado === 'pendiente').length} pendiente(s)`} />
+        </div>
+
+        <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>1. Contrato y adicionales</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>El valor de venta (neto) del contrato original y de cada adicional. Al registrar un adicional, ve a <b>Presupuesto</b> y carga su costo por subpartida; aquí queda marcado si ya lo hiciste.</p>
+          {I.contratos.length > 0 && <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}><thead><tr><th style={th}>Tipo</th><th style={th}>Descripción</th><th style={th}>N° OC</th><th style={th}>Fecha</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Costos (Presupuesto)</th><th style={th} /></tr></thead>
+            <tbody>{I.contratos.map(c => <tr key={c.id}><td style={td}>{c.tipo === 'original' ? 'Original' : 'Adicional'}</td><td style={td}>{c.descripcion}</td><td style={td}>{c.orden_compra || '—'}</td><td style={td}>{fechaCL(c.fecha)}</td><td style={der}>{$(Number(c.monto))}</td>
+              <td style={td}>{c.tipo === 'adicional' ? (c.version_id ? <span style={{ color: '#067647' }}>✔ cargado</span> : <span style={{ color: '#b54708' }}>pendiente: ve a Presupuesto</span>) : ''}</td>
+              <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => { setCEdit(c.id); setFc({ tipo: c.tipo, descripcion: c.descripcion, oc: c.orden_compra || '', monto: String(Math.round(Number(c.monto))), fecha: c.fecha || '' }) }} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Editar</button> <button onClick={() => borrarContrato(c)} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Borrar</button></td></tr>)}
+              <tr><td style={{ ...td, fontWeight: 600 }} colSpan={4}>Total vigente</td><td style={{ ...der, fontWeight: 600 }}>{$(I.contratado)}</td><td style={td} colSpan={2} /></tr></tbody></table>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: cEdit ? '#fff7ed' : undefined, padding: cEdit ? 8 : 0, borderRadius: 8 }}>
+            <select value={fc.tipo} onChange={e => setFc({ ...fc, tipo: e.target.value })} style={inp}><option value="original">Contrato original</option><option value="adicional">Adicional</option></select>
+            <input value={fc.descripcion} onChange={e => setFc({ ...fc, descripcion: e.target.value })} placeholder="Descripción" style={{ ...inp, width: 220 }} />
+            <input value={fc.oc} onChange={e => setFc({ ...fc, oc: e.target.value })} placeholder="N° OC" style={{ ...inp, width: 130 }} />
+            <input type="date" value={fc.fecha} onChange={e => setFc({ ...fc, fecha: e.target.value })} style={inp} />
+            <MontoInput value={fc.monto} onChange={v => setFc({ ...fc, monto: v })} placeholder="Monto neto $" style={{ ...inp, width: 160, textAlign: 'right' }} />
+            <button onClick={guardarContrato} style={btn()}>{cEdit ? 'Guardar cambios' : 'Agregar'}</button>
+            {cEdit && <button onClick={() => { setCEdit(null); setFc(cVacio) }} style={btn(false)}>Cancelar</button>}
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>2. Estados de pago (EDP)</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Cada EDP se <b>presenta</b> al cliente, él lo <b>aprueba</b> y recién ahí se factura (ahora, o en otro mes). Cuando Kame trae una factura cuya glosa dice «EDP N°…», calza sola con el EDP del mismo número y descuenta lo «por facturar». Las que no calzan aparecen más abajo para asignarlas a mano.</p>
+          {I.edps.length > 0 && <div style={{ overflowX: 'auto', marginBottom: 8 }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>N°</th><th style={th}>Descripción</th><th style={th}>N° OC</th><th style={th}>Presentado</th><th style={{ ...th, textAlign: 'right' }}>Avance acum.</th><th style={{ ...th, textAlign: 'right' }}>Valor neto</th><th style={th}>Estado</th><th style={{ ...th, textAlign: 'right' }}>Facturado</th><th style={{ ...th, textAlign: 'right' }}>Por facturar</th><th style={th} /></tr></thead>
+            <tbody>{I.edps.map(x => {
+              const fac = I.facturadoDe(x.id); const dif = Number(x.monto) - fac; const e = ep(x); const docsX = I.docs.filter(d => d.edp_id === x.id)
+              return [<tr key={x.id}><td style={td}>{docsX.length > 0 && <span onClick={() => setAbiertos(a => ({ ...a, [x.id]: !a[x.id] }))} style={{ cursor: 'pointer', color: '#98a2b3' }}>{abiertos[x.id] ? '▾' : '▸'} </span>}{x.numero}</td><td style={td}>{x.descripcion || '—'}</td><td style={td}>{x.orden_compra || '—'}</td><td style={td}>{fechaCL(x.fecha_presentacion)}</td><td style={der}>{x.avance_pct != null ? Number(x.avance_pct) + '%' : '—'}</td><td style={der}>{$(Number(x.monto))}</td>
+                <td style={td}><select value={x.estado} onChange={ev => cambiarEstado(x, ev.target.value)} style={{ ...inp, padding: '3px 6px', fontSize: 12, background: e[2], color: e[1] }}><option value="presentado">Presentado</option><option value="aprobado">Aprobado</option></select>{x.fecha_aprobacion && <div style={{ fontSize: 11, color: '#667085' }}>aprob. {fechaCL(x.fecha_aprobacion)}</div>}</td>
+                <td style={der}>{fac ? $(fac) : '—'}</td><td style={{ ...der, color: Math.abs(dif) < 1 ? '#067647' : undefined }}>{Math.abs(dif) < 1 ? 'Facturado' : $(dif)}</td>
+                <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => { setEEdit(x.id); setFe({ numero: x.numero, descripcion: x.descripcion || '', oc: x.orden_compra || '', contrato_id: x.contrato_id || '', monto: String(Math.round(Number(x.monto))), avance: x.avance_pct != null ? String(x.avance_pct) : '', fecha: x.fecha_presentacion || '' }) }} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Editar</button> <button onClick={() => borrarEdp(x)} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Borrar</button></td></tr>,
+                ...(abiertos[x.id] ? docsX.map(d => <tr key={x.id + d.key} style={{ background: '#fafafa' }}><td style={td} /><td style={{ ...td, fontSize: 12 }} colSpan={3}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'} · {d.nombre || ''} · {d.glosa.slice(0, 70)}</td><td style={{ ...td, fontSize: 12 }}>{fechaCL(d.fecha)}</td><td style={{ ...der, fontSize: 12 }} colSpan={3}>{$(d.monto)}</td><td style={td} colSpan={2}><button onClick={() => asignarDoc(d, null)} style={{ ...btn(false), padding: '2px 8px', fontSize: 12 }}>Desvincular</button></td></tr>) : [])]
+            })}
+              <tr><td style={{ ...td, fontWeight: 600 }} colSpan={5}>Total</td><td style={{ ...der, fontWeight: 600 }}>{$(I.edpTot)}</td><td style={td} /><td style={{ ...der, fontWeight: 600 }}>{$(I.docs.filter(d => d.edp_id).reduce((t, d) => t + d.monto, 0))}</td><td style={{ ...der, fontWeight: 600 }}>{$(I.porFacturar + I.porAprobar)}</td><td style={td} /></tr></tbody></table></div>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: eEdit ? '#fff7ed' : undefined, padding: eEdit ? 8 : 0, borderRadius: 8 }}>
+            <input value={fe.numero} onChange={e => setFe({ ...fe, numero: e.target.value })} placeholder="N° EDP" style={{ ...inp, width: 80 }} />
+            <input value={fe.descripcion} onChange={e => setFe({ ...fe, descripcion: e.target.value })} placeholder="Descripción (ej. Anticipo)" style={{ ...inp, width: 220 }} />
+            <input value={fe.oc} onChange={e => setFe({ ...fe, oc: e.target.value })} placeholder="N° OC" style={{ ...inp, width: 120 }} />
+            {I.contratos.length > 0 && <select value={fe.contrato_id} onChange={e => setFe({ ...fe, contrato_id: e.target.value })} style={{ ...inp, maxWidth: 220 }}><option value="">Contrato / adicional…</option>{I.contratos.map(c => <option key={c.id} value={c.id}>{c.descripcion}</option>)}</select>}
+            <input type="date" value={fe.fecha} onChange={e => setFe({ ...fe, fecha: e.target.value })} title="Fecha de presentación" style={inp} />
+            <input type="number" value={fe.avance} onChange={e => setFe({ ...fe, avance: e.target.value })} placeholder="% avance acum." style={{ ...inp, width: 110 }} />
+            <MontoInput value={fe.monto} onChange={v => setFe({ ...fe, monto: v })} placeholder="Valor neto $" style={{ ...inp, width: 150, textAlign: 'right' }} />
+            <button onClick={guardarEdp} style={btn()}>{eEdit ? 'Guardar cambios' : 'Agregar EDP'}</button>
+            {eEdit && <button onClick={() => { setEEdit(null); setFe(eVacio) }} style={btn(false)}>Cancelar</button>}
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>3. Facturas de venta de Kame sin EDP ({I.sinEdp.length})</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Ventas ya contabilizadas en Kame que no calzaron con ningún EDP (la glosa no trae su número, o el EDP aún no está creado). Asígnalas a mano.</p>
+          {I.sinEdp.length === 0 ? <p style={{ fontSize: 13, color: '#067647', margin: 0 }}>Todas las ventas de Kame están asignadas a un EDP.</p> :
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Documento</th><th style={th}>Cliente / glosa</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Asignar a EDP</th></tr></thead>
+              <tbody>{I.sinEdp.map(d => <tr key={d.key}><td style={td}>{fechaCL(d.fecha)}</td><td style={td}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'}</td><td style={{ ...td, fontSize: 12 }}>{d.nombre || ''}<div style={{ color: '#667085' }}>{d.glosa.slice(0, 80)}</div></td><td style={der}>{$(d.monto)}</td>
+                <td style={{ ...td, whiteSpace: 'nowrap' }}>{I.edps.length === 0 ? <span style={{ fontSize: 12, color: '#667085' }}>Crea primero el EDP</span> : <><select value={sel[d.key] || ''} onChange={e => setSel(s => ({ ...s, [d.key]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">EDP…</option>{I.edps.map(x => <option key={x.id} value={x.id}>N°{x.numero}{x.descripcion ? ' · ' + x.descripcion.slice(0, 25) : ''}</option>)}</select> <button disabled={!sel[d.key]} onClick={() => asignarDoc(d, sel[d.key])} style={{ ...btn(true, !sel[d.key]), padding: '3px 8px', fontSize: 12 }}>Asignar</button></>}</td></tr>)}</tbody></table>}
+        </div>
+
+        <div style={card}>
+          <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>4. Órdenes de compra del cliente por facturar</h2>
+          <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Compromisos del cliente que aún no se facturan. Márcalas como facturadas cuando corresponda.</p>
+          {I.ordenes.length > 0 && <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}><thead><tr><th style={th}>N° OC</th><th style={th}>Descripción</th><th style={th}>Fecha</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th><th style={th}>Estado</th><th style={th} /></tr></thead>
+            <tbody>{I.ordenes.map(o => <tr key={o.id} style={{ opacity: o.estado === 'facturada' ? 0.55 : 1 }}><td style={td}>{o.numero || '—'}</td><td style={td}>{o.descripcion || '—'}</td><td style={td}>{fechaCL(o.fecha)}</td><td style={der}>{$(Number(o.monto))}</td>
+              <td style={td}><select value={o.estado} onChange={async e => { await supabase.from('fin_ordenes_cliente').update({ estado: e.target.value }).eq('id', o.id); I.cargar() }} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="pendiente">Por facturar</option><option value="facturada">Facturada</option></select></td>
+              <td style={td}><button onClick={async () => { if (confirm('¿Borrar esta orden de compra?')) { await supabase.from('fin_ordenes_cliente').delete().eq('id', o.id); I.cargar() } }} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Borrar</button></td></tr>)}</tbody></table>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={fo.numero} onChange={e => setFo({ ...fo, numero: e.target.value })} placeholder="N° OC" style={{ ...inp, width: 140 }} />
+            <input value={fo.descripcion} onChange={e => setFo({ ...fo, descripcion: e.target.value })} placeholder="Descripción" style={{ ...inp, width: 260 }} />
+            <input type="date" value={fo.fecha} onChange={e => setFo({ ...fo, fecha: e.target.value })} style={inp} />
+            <MontoInput value={fo.monto} onChange={v => setFo({ ...fo, monto: v })} placeholder="Monto neto $" style={{ ...inp, width: 150, textAlign: 'right' }} />
+            <button onClick={guardarOc} style={btn()}>Agregar</button>
+          </div>
+        </div>
       </>}
     </>
   )
@@ -376,7 +596,7 @@ const COLS = 'minmax(240px,1fr) 190px 105px 105px'
 
 function Resultado({ unidades }: { unidades: Unidad[] }) {
   const [mes, setMes] = useState('')
-  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [vers, setVers] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([])
+  const [lineas, setLineas] = useState<any[]>([]); const [rem, setRem] = useState<any[]>([]); const [contr, setContr] = useState<any[]>([]); const [asi, setAsi] = useState<any[]>([])
   const [cargando, setCargando] = useState(true); const [tardias, setTardias] = useState<any[]>([]); const [proyecto, setProyecto] = useState('')
   useEffect(() => {
     (async () => {
@@ -384,10 +604,10 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
       const [l, r, v, a] = await Promise.all([
         traerTodo('fin_lineas', 'id,monto,unidad_id,documento:fin_documentos(sentido,fecha_doc,periodo_tributario,razon_social,folio,tipo_doc)'),
         traerTodo('fin_remuneraciones', 'id,periodo,unidad_id,rut,nombre,cargo,costo_empresa,abierta'),
-        traerTodo('fin_versiones', 'id,unidad_id,delta_contrato'),
+        traerTodo('fin_contratos', 'id,unidad_id,monto'),
         traerTodo('fin_asientos', 'kame_id,fecha,cuenta,nombre_cuenta,debe,haber,unidad_id,doc_tipo,doc_folio,doc_rut,doc_nombre,comentario_det,comentario', 'kame_id'),
       ])
-      setLineas(l); setRem(r); setVers(v); setAsi(a)
+      setLineas(l); setRem(r); setContr(v); setAsi(a)
       setTardias(l.filter(x => x.documento?.periodo_tributario && x.documento?.fecha_doc && x.documento.fecha_doc.slice(0, 7) !== x.documento.periodo_tributario))
       setCargando(false)
     })()
@@ -403,7 +623,7 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
     const ventas = hayKame ? as.filter(a => a.cuenta.startsWith('3.')).reduce((t, a) => t + Number(a.haber) - Number(a.debe), 0) : ls.filter(l => l.documento?.sentido === 'venta').reduce((a, l) => a + Number(l.monto), 0)
     const compras = hayKame ? as.filter(a => a.cuenta.startsWith('4.')).reduce((t, a) => t + Number(a.debe) - Number(a.haber), 0) : ls.filter(l => l.documento?.sentido === 'compra').reduce((a, l) => a + Number(l.monto), 0)
     const sueldos = rem.filter(r => r.unidad_id === u.id && (!mes || r.periodo === mes)).reduce((a, r) => a + Number(r.costo_empresa), 0)
-    const contrato = Number(u.monto_contrato_base) + vers.filter(v => v.unidad_id === u.id).reduce((a, v) => a + Number(v.delta_contrato), 0)
+    const contrato = contr.filter(v => v.unidad_id === u.id).reduce((a, v) => a + Number(v.monto), 0)
     const margen = ventas - compras - (hayKame ? 0 : sueldos)
     return { u, ventas, compras, sueldos, margen, pct: ventas ? (margen / ventas) * 100 : null, contrato }
   }).filter(f => f.ventas || f.compras || f.sueldos || f.contrato)
@@ -425,7 +645,7 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
               <td style={{ ...der, color: f.margen < 0 ? '#b42318' : '#067647', fontWeight: 600 }}>{$(f.margen)}</td><td style={der}>{f.pct == null ? '—' : f.pct.toFixed(1) + '%'}</td></tr>)}
               <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={der} /><td style={{ ...der, fontWeight: 600 }}>{$(tot.v)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.c)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.s)}</td><td style={{ ...der, fontWeight: 600 }}>{$(tot.v - tot.c - (hayKame ? 0 : tot.s))}</td><td style={der} /></tr></tbody></table></div>}
       </div>
-      {uSel && hayKame && <DetalleProyecto key={uSel.id} unidad={uSel} mes={mes} asiU={asi.filter(a => a.unidad_id === uSel.id)} remU={rem.filter(r => r.unidad_id === uSel.id)} contratoDeltas={vers.filter(v => v.unidad_id === uSel.id).reduce((a, v) => a + Number(v.delta_contrato), 0)} />}
+      {uSel && hayKame && <DetalleProyecto key={uSel.id} unidad={uSel} mes={mes} asiU={asi.filter(a => a.unidad_id === uSel.id)} remU={rem.filter(r => r.unidad_id === uSel.id)} />}
       {tardias.length > 0 && <div style={card}>
         <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Documentos que caen en otro mes ({tardias.length} líneas)</h2>
         <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>La fecha del documento y el período en que se declaró al SII no coinciden.</p>
@@ -437,7 +657,8 @@ function Resultado({ unidades }: { unidades: Unidad[] }) {
 }
 
 // Dashboard de un proyecto: cuenta contable → subpartidas → proveedores → documentos, con asignación y reasignación de costos
-function DetalleProyecto({ unidad, mes, asiU, remU, contratoDeltas }: { unidad: Unidad, mes: string, asiU: any[], remU: any[], contratoDeltas: number }) {
+function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: string, asiU: any[], remU: any[] }) {
+  const I = useIngresos(unidad.id)
   const [partidas, setPartidas] = useState<any[]>([]); const [items, setItems] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({})
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({}); const [monto, setMonto] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [ocupado, setOcupado] = useState(false)
@@ -486,7 +707,7 @@ function DetalleProyecto({ unidad, mes, asiU, remU, contratoDeltas }: { unidad: 
   const realTot = grupos.reduce((t, g) => t + g.real, 0) + remReal
   const pendTot = grupos.reduce((t, g) => t + g.pendTotal, 0)
   const ventas = asiU.filter(a => a.cuenta.startsWith('3.') && inMes(a.fecha)).reduce((t, a) => t + Number(a.haber) - Number(a.debe), 0)
-  const contrato = Number(unidad.monto_contrato_base) + contratoDeltas
+  const contrato = I.contratado
 
   const toggle = (k: string) => setAbiertos(a => ({ ...a, [k]: !a[k] }))
   const nombreDoc = (a: any) => a.doc_tipo ? `${a.doc_tipo} ${a.doc_folio || ''}` : (a.comentario_det || a.comentario || 'Asiento manual')
@@ -537,14 +758,36 @@ function DetalleProyecto({ unidad, mes, asiU, remU, contratoDeltas }: { unidad: 
       <h2 style={{ fontSize: 17, margin: '0 0 4px' }}>{unidad.nombre}</h2>
       <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>{mes ? `Mes ${mes}: presupuesto del mes vs costo del mes.` : 'Acumulado: presupuesto total vs costo a la fecha.'} Montos netos.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 }}>
-        {[
-          ['Contrato vigente', $(contrato), ''],
-          ['Facturado', $(ventas), contrato > 0 ? Math.round(ventas / contrato * 100) + '% del contrato' : ''],
-          ['Presupuesto de costos', $(pptoTot), contrato > 0 && pptoTot > 0 ? 'Margen presup. ' + ((contrato - pptoTot) / contrato * 100).toFixed(1) + '%' : ''],
-          ['Costo real', $(realTot), pptoTot > 0 ? Math.round(realTot / pptoTot * 100) + '% del presupuesto' : ''],
-          ['Margen a la fecha', $(ventas - realTot), ventas > 0 ? ((ventas - realTot) / ventas * 100).toFixed(1) + '% de lo facturado' : ''],
-        ].map(([t, v, s]) => <div key={t} style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: '#667085' }}>{t}</div><div style={{ fontSize: 18, fontWeight: 600 }}>${v}</div><div style={{ fontSize: 11, color: '#667085' }}>{s}</div></div>)}
+        <Tarjeta t="Contrato vigente" v={'$' + $(contrato)} s={contrato > 0 ? `${I.contratos.length} contrato(s) y adicionales` : 'Regístralo en Ingresos'} />
+        <Tarjeta t="Facturado (Kame)" v={'$' + $(ventas)} s={contrato > 0 ? Math.round(ventas / contrato * 100) + '% del contrato' : ''} />
+        <Tarjeta t="EDP por cobrar" v={'$' + $(I.porFacturar + I.porAprobar)} s={`${'$' + $(I.porFacturar)} aprobados · ${'$' + $(I.porAprobar)} por aprobar`} />
+        <Tarjeta t="Presupuesto de costos" v={'$' + $(pptoTot)} s={contrato > 0 && pptoTot > 0 ? 'Margen presup. ' + ((contrato - pptoTot) / contrato * 100).toFixed(1) + '%' : ''} />
+        <Tarjeta t="Costo real" v={'$' + $(realTot)} s={pptoTot > 0 ? Math.round(realTot / pptoTot * 100) + '% del presupuesto' : ''} />
+        <Tarjeta t="Margen a la fecha" v={'$' + $(ventas - realTot)} s={ventas > 0 ? ((ventas - realTot) / ventas * 100).toFixed(1) + '% de lo facturado' : ''} color={ventas - realTot < 0 ? '#b42318' : undefined} />
       </div>
+
+      <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Contratos</h3>
+      {I.contratos.length === 0 ? <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Aún no hay contrato registrado: ingrésalo en la pestaña Ingresos.</p> :
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 14 }}><tbody>
+          {I.contratos.map(c => <tr key={c.id}><td style={td}>{c.tipo === 'original' ? 'Contrato original' : 'Adicional'}{c.descripcion && c.tipo === 'adicional' ? ` · ${c.descripcion}` : ''}{c.orden_compra ? ` · OC ${c.orden_compra}` : ''}</td><td style={der}>{$(Number(c.monto))}</td></tr>)}
+          <tr><td style={{ ...td, fontWeight: 600 }}>Total contrato vigente</td><td style={{ ...der, fontWeight: 600 }}>{$(contrato)}</td></tr></tbody></table>}
+
+      <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Ingresos <span style={{ fontWeight: 400, fontSize: 12, color: '#667085' }}>(acumulado, desde los EDP y las ventas reales de Kame)</span></h3>
+      {I.edps.length === 0 && I.docs.length === 0 ? <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>Aún no hay EDP ni ventas en Kame para este proyecto.</p> :
+        <div style={{ overflowX: 'auto', marginBottom: 14 }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>EDP</th><th style={th}>Estado</th><th style={{ ...th, textAlign: 'right' }}>Valor neto</th><th style={{ ...th, textAlign: 'right' }}>Facturado (Kame)</th><th style={{ ...th, textAlign: 'right' }}>Por facturar</th></tr></thead>
+          <tbody>{I.edps.map(x => { const fac = I.facturadoDe(x.id); const dif = Number(x.monto) - fac; const docsX = I.docs.filter(d => d.edp_id === x.id); const k = 'edp:' + x.id
+            return [<tr key={x.id} onClick={() => docsX.length && toggle(k)} style={{ cursor: docsX.length ? 'pointer' : 'default' }}><td style={td}>{docsX.length > 0 && <span style={{ color: '#98a2b3' }}>{abiertos[k] ? '▾' : '▸'} </span>}N°{x.numero}{x.descripcion ? ` · ${x.descripcion}` : ''}{x.avance_pct != null ? <span style={{ color: '#98a2b3' }}> · {Number(x.avance_pct)}% avance</span> : null}</td>
+              <td style={td}><span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: x.estado === 'aprobado' ? '#d1fae5' : '#fef3c7', color: x.estado === 'aprobado' ? '#065f46' : '#92400e' }}>{x.estado === 'aprobado' ? 'Aprobado' : 'Presentado'}</span></td><td style={der}>{$(Number(x.monto))}</td><td style={der}>{fac ? $(fac) : '—'}</td><td style={der}>{Math.abs(dif) < 1 ? <span style={{ color: '#067647' }}>Facturado</span> : $(dif)}</td></tr>,
+              ...(abiertos[k] ? docsX.map(d => <tr key={x.id + d.key} style={{ background: '#fafafa' }}><td style={{ ...td, fontSize: 12, paddingLeft: 24 }} colSpan={3}>{d.tipo ? `${d.tipo} ${d.folio || ''}` : 'Asiento sin documento'} · {fechaCL(d.fecha)} · {d.nombre || ''}</td><td style={{ ...der, fontSize: 12 }}>{$(d.monto)}</td><td style={td} /></tr>) : [])] })}
+            {I.sinEdp.length > 0 && <tr><td style={{ ...td, color: '#92400e' }}>Ventas de Kame sin EDP ({I.sinEdp.length} doc.)</td><td style={td} /><td style={der} /><td style={{ ...der, color: '#92400e' }}>{$(I.sinEdp.reduce((t, d) => t + d.monto, 0))}</td><td style={td} /></tr>}
+            <tr><td style={{ ...td, fontWeight: 600 }}>Total</td><td style={td} /><td style={{ ...der, fontWeight: 600 }}>{$(I.edpTot)}</td><td style={{ ...der, fontWeight: 600 }}>{$(I.facturadoTot)}</td><td style={{ ...der, fontWeight: 600 }}>{$(I.porFacturar + I.porAprobar)}</td></tr></tbody></table>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12, color: '#475467', marginTop: 6 }}>
+            <span>EDP aprobados por facturar: <b>${$(I.porFacturar)}</b></span><span>EDP por aprobar: <b>${$(I.porAprobar)}</b></span>
+            <span>Contrato aún sin EDP: <b style={{ color: I.sinPresentar < 0 ? '#b42318' : undefined }}>${$(I.sinPresentar)}</b></span>
+            <span>Órdenes de compra del cliente por facturar: <b>${$(I.ocPend)}</b>{I.ordenes.filter(o => o.estado === 'pendiente').length ? ` (${I.ordenes.filter(o => o.estado === 'pendiente').map(o => o.numero || 's/n').join(', ')})` : ''}</span>
+          </div></div>}
+
+      <h3 style={{ fontSize: 14, margin: '4px 0 6px' }}>Costos: presupuesto vs real</h3>
       {pendTot !== 0 && <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 8px' }}>Hay ${$(pendTot)} de costos por asignar a una subpartida (se ven en cada cuenta, fila «Por asignar»).</p>}
       {msg && <p style={{ fontSize: 12, margin: '0 0 8px', color: /^(No|El|Elige)/.test(msg) ? '#b42318' : '#067647' }}>{msg}</p>}
       {partidas.length === 0 && <p style={{ fontSize: 12, color: '#667085', margin: '0 0 8px' }}>Este proyecto aún no tiene subpartidas ni presupuesto: defínelos en la pestaña Presupuesto. Mientras tanto ves el costo por cuenta contable.</p>}
@@ -608,6 +851,26 @@ function DetalleProyecto({ unidad, mes, asiU, remU, contratoDeltas }: { unidad: 
         </div>}
         <Fila nivel={0} fuerte nombre="TOTAL COSTOS: real vs proyectado" real={realTot} ppto={pptoTot} />
       </div>
+
+      {(() => {
+        const costoFinal = realTot + Math.max(0, pptoTot - realTot)   // lo ya gastado + lo que falta del presupuesto (si hay sobregasto, es lo gastado)
+        const fila = (n: string, a: number | null, b: number, pct: boolean) => {
+          const dif = a == null ? null : b - a
+          return <tr key={n}><td style={td}>{n}</td><td style={der}>{a == null ? '—' : pct ? a.toFixed(1) + '%' : $(a)}</td><td style={der}>{pct ? b.toFixed(1) + '%' : $(b)}</td><td style={{ ...der, color: dif == null ? undefined : dif < 0 ? '#b42318' : '#067647' }}>{dif == null ? '' : pct ? (dif >= 0 ? '+' : '') + dif.toFixed(1) + ' pts' : (dif >= 0 ? '+' : '') + $(dif)}</td></tr>
+        }
+        const mp = contrato - pptoTot, mr = ventas - realTot
+        return <div style={{ marginTop: 16 }}>
+          <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Márgenes: presupuestado vs real{mes ? ` (${mes})` : ''}</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th} /><th style={{ ...th, textAlign: 'right' }}>Presupuestado</th><th style={{ ...th, textAlign: 'right' }}>Real a la fecha</th><th style={{ ...th, textAlign: 'right' }}>Diferencia</th></tr></thead>
+            <tbody>
+              {fila('Ingresos (contrato vs facturado)', mes ? null : contrato, ventas, false)}
+              {fila('Costos', pptoTot, realTot, false)}
+              {fila('Margen $', mes ? null : mp, mr, false)}
+              {fila('Margen %', mes || contrato <= 0 ? null : mp / contrato * 100, ventas > 0 ? mr / ventas * 100 : 0, true)}
+            </tbody></table>
+          {!mes && contrato > 0 && <p style={{ fontSize: 12, color: '#475467', margin: '8px 0 0' }}>Proyección al término del proyecto: costo final estimado <b>${$(costoFinal)}</b> (lo gastado más lo que falta del presupuesto) · margen proyectado <b style={{ color: contrato - costoFinal < 0 ? '#b42318' : undefined }}>${$(contrato - costoFinal)} ({((contrato - costoFinal) / contrato * 100).toFixed(1)}%)</b>.</p>}
+        </div>
+      })()}
     </div>
   )
 }

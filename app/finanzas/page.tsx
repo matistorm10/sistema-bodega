@@ -728,6 +728,7 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   const [partidas, setPartidas] = useState<any[]>([]); const [items, setItems] = useState<any[]>([]); const [asigs, setAsigs] = useState<any[]>([]); const [cuentas, setCuentas] = useState<Record<string, string>>({}); const [mapaGrupo, setMapaGrupo] = useState<Record<string, string>>({})
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({}); const [sel, setSel] = useState<Record<string, string>>({}); const [monto, setMonto] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState(''); const [ocupado, setOcupado] = useState(false)
+  const [docVer, setDocVer] = useState<any>(null)
   const [reglas, setReglas] = useState<Record<string, string>>({}); const [recordar, setRecordar] = useState<Record<string, boolean>>({})
 
   const cargar = useCallback(async () => {
@@ -841,6 +842,32 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
   return (
     <div style={card}>
       <h2 style={{ fontSize: 17, margin: '0 0 4px' }}>{unidad.nombre}</h2>
+      {docVer && (() => {
+        const a = docVer; const mismo = (x: any) => a.doc_tipo ? (x.doc_tipo === a.doc_tipo && String(x.doc_folio) === String(a.doc_folio) && (x.doc_rut || '') === (a.doc_rut || '')) : Number(x.kame_id) === Number(a.kame_id)
+        const lineas = asiU.filter(mismo).sort((x, y) => String(x.cuenta).localeCompare(String(y.cuenta)))
+        const total = lineas.reduce((t, x) => t + (x.cuenta.startsWith('4.') ? monto$(x) : 0), 0)
+        const fila = (l: string, v: React.ReactNode) => <div style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 13 }}><span style={{ width: 130, color: '#667085', flexShrink: 0 }}>{l}</span><span style={{ flex: 1 }}>{v}</span></div>
+        return <div onClick={() => setDocVer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(16,24,40,.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 18, width: 560, maxWidth: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+              <h3 style={{ fontSize: 16, margin: 0 }}>{a.doc_tipo ? `${a.doc_tipo} ${a.doc_folio || ''}` : 'Asiento sin documento'}</h3>
+              <button onClick={() => setDocVer(null)} style={{ ...btn(false), padding: '2px 10px' }}>Cerrar</button></div>
+            {fila('Proveedor', <b>{a.doc_nombre || '—'}</b>)}
+            {fila('RUT', a.doc_rut || '—')}
+            {fila('Fecha', fechaCL(String(a.fecha).slice(0, 10)))}
+            {fila('Comprobante Kame', `${a.tipo_comprobante || '—'} ${a.folio_comprobante || ''}`)}
+            {fila('Glosa', a.comentario_det || a.comentario || '(sin glosa)')}
+            {a.comentario_det && a.comentario && a.comentario !== a.comentario_det && fila('Glosa general', a.comentario)}
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#344054', margin: '10px 0 4px' }}>Cómo quedó registrada en este proyecto</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Cuenta Kame</th><th style={th}>Subpartida asignada</th><th style={{ ...th, textAlign: 'right' }}>Monto neto</th></tr></thead>
+              <tbody>{lineas.map(l => { const as = (porKame.get(Number(l.kame_id)) || []).map(x => partidas.find(p => p.id === x.partida_id)?.nombre).filter(Boolean)
+                const pend = l.cuenta.startsWith('4.') ? pendiente(l) : 0
+                return <tr key={l.kame_id}><td style={td}>{l.cuenta} {cuentas[l.cuenta] || l.nombre_cuenta || ''}</td><td style={td}>{l.cuenta.startsWith('4.') ? (as.length ? as.join(', ') : <span style={{ color: '#92400e' }}>Por asignar</span>) : 'Ingreso'}{Math.abs(pend) > 0.5 && as.length ? <span style={{ color: '#92400e' }}> (queda ${$(pend)} por asignar)</span> : null}</td><td style={der}>{$(l.cuenta.startsWith('4.') ? monto$(l) : Number(l.haber) - Number(l.debe))}</td></tr> })}
+                {lineas.filter(l => l.cuenta.startsWith('4.')).length > 1 && <tr><td style={{ ...td, fontWeight: 600 }} colSpan={2}>Total costo</td><td style={{ ...der, fontWeight: 600 }}>{$(total)}</td></tr>}</tbody></table>
+            <p style={{ fontSize: 11, color: '#667085', margin: '10px 0 0' }}>El libro diario de Kame no incluye el PDF de la factura; con el folio y el RUT puedes buscarla en Kame.</p>
+          </div></div>
+      })()}
+
       <p style={{ fontSize: 12, color: '#667085', margin: '0 0 12px' }}>{mes ? `Mes ${mes}: presupuesto del mes vs costo del mes.` : 'Acumulado: presupuesto total vs costo a la fecha.'} Montos netos.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 }}>
         <Tarjeta t="Contrato vigente" v={'$' + $(contrato)} s={contrato > 0 ? `${I.contratos.length} contrato(s) y adicionales` : 'Regístralo en Ingresos'} />
@@ -891,7 +918,7 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
                   return <div key={vk}>
                     <Fila nivel={2} k={vk} nombre={pv.n} real={pv.rows.reduce((t: number, r: any) => t + Number(r.x.monto), 0)} ppto={null} extra={<span style={{ color: '#98a2b3' }}> · {pv.rows.length} doc.</span>} />
                     {abiertos[vk] && pv.rows.sort((r: any, s: any) => String(r.a.fecha).localeCompare(String(s.a.fecha))).map((r: any) => <div key={r.x.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', paddingLeft: 8 + 3 * 22, fontSize: 12, color: '#475467', borderBottom: '1px solid #f9fafb' }}>
-                      <span style={{ width: 80 }}>{String(r.a.fecha).slice(0, 10)}</span><span style={{ flex: 1 }}>{nombreDoc(r.a)}</span><span style={{ width: 100, textAlign: 'right' }}>{$(Number(r.x.monto))}</span>
+                      <span style={{ width: 80 }}>{String(r.a.fecha).slice(0, 10)}</span><span style={{ flex: 1 }}><span onClick={() => setDocVer(r.a)} style={{ cursor: 'pointer', textDecoration: 'underline dotted' }} title="Ver el detalle de este documento">{nombreDoc(r.a)}</span>{(r.a.comentario_det || r.a.comentario) && <span style={{ color: '#98a2b3' }}> · {String(r.a.comentario_det || r.a.comentario).slice(0, 70)}</span>}</span><span style={{ width: 100, textAlign: 'right' }}>{$(Number(r.x.monto))}</span>
                       <select value="" onChange={e => reasignar(r.x, e.target.value)} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Cambiar a…</option>{g.ps.filter(q => q.id !== p.id).map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
                       <button onClick={() => quitar(r.x)} style={{ ...btn(false), padding: '3px 8px', fontSize: 12 }}>Quitar</button></div>)}
                   </div>
@@ -920,14 +947,8 @@ function DetalleProyecto({ unidad, mes, asiU, remU }: { unidad: Unidad, mes: str
                         const dk = 'sel|d|' + a.kame_id
                         return <div key={a.kame_id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', paddingLeft: 8 + 3 * 22, fontSize: 12, color: '#475467', borderBottom: '1px solid #f9fafb' }}>
                           <span style={{ width: 80 }}>{String(a.fecha).slice(0, 10)}</span>
-                          <span style={{ flex: 1 }}><span onClick={() => toggle('det|' + a.kame_id)} style={{ cursor: 'pointer', textDecoration: 'underline dotted' }} title="Ver el detalle de este documento">{nombreDoc(a)}</span>
-                            {(a.comentario_det || a.comentario) && <span style={{ color: '#98a2b3' }}> · {String(a.comentario_det || a.comentario).slice(0, 70)}</span>}
-                            {abiertos['det|' + a.kame_id] && <div style={{ margin: '4px 0', padding: '6px 8px', background: '#f9fafb', borderRadius: 6, color: '#344054', lineHeight: 1.5 }}>
-                              <div><b>Proveedor:</b> {a.doc_nombre || '—'} · RUT {a.doc_rut || '—'}</div>
-                              <div><b>Documento:</b> {a.doc_tipo || '—'} {a.doc_folio || ''} · <b>Comprobante Kame:</b> {a.tipo_comprobante || ''} {a.folio_comprobante || ''}</div>
-                              <div><b>Fecha:</b> {String(a.fecha).slice(0, 10)} · <b>Cuenta Kame:</b> {a.cuenta} {cuentas[a.cuenta] || ''} · <b>Monto:</b> ${$(monto$(a))}</div>
-                              <div><b>Glosa:</b> {a.comentario_det || a.comentario || '(sin glosa)'}{a.comentario_det && a.comentario && a.comentario !== a.comentario_det ? ` — ${a.comentario}` : ''}</div>
-                              <div style={{ color: '#667085' }}>El libro diario de Kame no incluye el PDF de la factura; con el folio y el RUT puedes buscarla en Kame.</div></div>}</span>
+                          <span style={{ flex: 1 }}><span onClick={() => setDocVer(a)} style={{ cursor: 'pointer', textDecoration: 'underline dotted' }} title="Ver el detalle de este documento">{nombreDoc(a)}</span>
+                            {(a.comentario_det || a.comentario) && <span style={{ color: '#98a2b3' }}> · {String(a.comentario_det || a.comentario).slice(0, 70)}</span>}</span>
                           <input type="number" value={monto[dk] ?? ''} placeholder={String(Math.round(pendiente(a)))} onChange={e => setMonto(m => ({ ...m, [dk]: e.target.value }))} style={{ ...inp, width: 100, padding: '3px 6px', fontSize: 12, textAlign: 'right' }} />
                           <select value={sel[dk] || elegidaProv} onChange={e => setSel(s => ({ ...s, [dk]: e.target.value }))} style={{ ...inp, padding: '3px 6px', fontSize: 12 }}><option value="">Subpartida…</option>{g.ps.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</select>
                           <button disabled={ocupado} onClick={() => asignar(a, sel[dk] || elegidaProv, monto[dk] ?? '')} style={{ ...btn(true, ocupado), padding: '3px 8px', fontSize: 12 }}>Asignar</button></div>

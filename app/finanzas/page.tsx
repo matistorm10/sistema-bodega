@@ -484,10 +484,12 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
   const borrarContrato = async (c: any) => { if (!confirm(`¿Borrar «${c.descripcion}»? Los EDP asociados quedan sin contrato.`)) return; await supabase.from('fin_contratos').delete().eq('id', c.id); I.cargar() }
   // EDP
   const [eEdit, setEEdit] = useState<string | null>(null); const eVacio = { numero: '', descripcion: '', oc: '', contrato_id: '', monto: '', avance: '', fecha: hoyISO() }; const [fe, setFe] = useState(eVacio)
+  const cDefecto = I.contratos.find(c => c.tipo === 'original')?.id || I.contratos[0]?.id || ''
+  const cSel = fe.contrato_id || cDefecto
   const guardarEdp = async () => {
     if (!fe.numero.trim() || !Number(fe.monto)) { setMsg('Escribe el número del EDP y su valor neto.'); return }
     if (!eEdit && I.edps.some(x => soloNum(x.numero) === soloNum(fe.numero))) { setMsg(`Ya existe el EDP N°${fe.numero}.`); return }
-    const fila: any = { unidad_id: uid, numero: fe.numero.trim(), descripcion: fe.descripcion, orden_compra: fe.oc, contrato_id: fe.contrato_id || null, monto: Number(fe.monto), avance_pct: fe.avance === '' ? null : Number(fe.avance), fecha_presentacion: fe.fecha || null }
+    const fila: any = { unidad_id: uid, numero: fe.numero.trim(), descripcion: fe.descripcion, orden_compra: fe.oc, contrato_id: cSel || null, monto: Number(fe.monto), avance_pct: fe.avance === '' ? null : Number(fe.avance), fecha_presentacion: fe.fecha || null }
     const { error } = eEdit ? await supabase.from('fin_edp').update(fila).eq('id', eEdit) : await supabase.from('fin_edp').insert(fila)
     if (err(error)) return; setEEdit(null); setFe(eVacio); setMsg('EDP guardado. Si una factura de Kame nombra este EDP en su glosa, calza sola.'); I.cargar()
   }
@@ -563,7 +565,7 @@ function Ingresos({ unidades, uid }: { unidades: Unidad[], uid: string }) {
             <input value={fe.numero} onChange={e => setFe({ ...fe, numero: e.target.value })} placeholder="N° EDP" style={{ ...inp, width: 80 }} />
             <input value={fe.descripcion} onChange={e => setFe({ ...fe, descripcion: e.target.value })} placeholder="Descripción (ej. Anticipo)" style={{ ...inp, width: 220 }} />
             <input value={fe.oc} onChange={e => setFe({ ...fe, oc: e.target.value })} placeholder="N° OC" style={{ ...inp, width: 120 }} />
-            {I.contratos.length > 0 && <select value={fe.contrato_id} onChange={e => setFe({ ...fe, contrato_id: e.target.value })} style={{ ...inp, maxWidth: 220 }}><option value="">Contrato / adicional…</option>{I.contratos.map(c => <option key={c.id} value={c.id}>{c.descripcion}</option>)}</select>}
+            {I.contratos.length > 0 && <select value={cSel} onChange={e => setFe({ ...fe, contrato_id: e.target.value })} style={{ ...inp, maxWidth: 240 }}>{[...I.contratos].sort((a, b) => (a.tipo === 'original' ? 0 : 1) - (b.tipo === 'original' ? 0 : 1)).map(c => <option key={c.id} value={c.id}>{c.tipo === 'original' ? 'Contrato original' : c.descripcion}</option>)}</select>}
             <input type="date" value={fe.fecha} onChange={e => setFe({ ...fe, fecha: e.target.value })} title="Fecha de presentación" style={inp} />
             <input type="number" value={fe.avance} onChange={e => setFe({ ...fe, avance: e.target.value })} placeholder="% avance acum." style={{ ...inp, width: 110 }} />
             <MontoInput value={fe.monto} onChange={v => setFe({ ...fe, monto: v })} placeholder="Valor neto $" style={{ ...inp, width: 150, textAlign: 'right' }} />
